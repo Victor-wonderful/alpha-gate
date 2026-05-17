@@ -18,13 +18,23 @@ const base: TradeInput = {
     volume_confirm: true,
     aligned_with_btc: true,
   },
-  psych: {
-    stop_predefined: true,
-    loss_affordable: true,
-    not_revenge: true,
-    not_fomo: true,
+  trigger: {
+    trigger_confirmed: true,
+    within_entry_band: true,
+    candle_closed: true,
   },
-  flags: { newsRecent: false, losingStreak: false },
+  money: {
+    todayCumulativeR: 0,
+    todayClosedCount: 0,
+    openPositions: [],
+    openExposurePct: 0,
+  },
+  marketCtx: {
+    btcPrice: null,
+    btc24hChangePct: null,
+    fundingRate: null,
+    minutesToFunding: null,
+  },
 };
 
 describe("calcRR", () => {
@@ -55,14 +65,14 @@ describe("gradeTrade", () => {
     expect(["C", "D"]).toContain(r.grade);
   });
 
-  it("losing streak + wide stop drops to D", () => {
+  it("daily loss limit + wide stop drops to D", () => {
     const r = gradeTrade({
       ...base,
       entry: 100,
       stop: 95, // 5% wide
       target: 110,
       market: { ...base.market, aligned_with_btc: false, not_box_middle: false },
-      flags: { newsRecent: true, losingStreak: true },
+      money: { ...base.money, todayCumulativeR: -2.5, todayClosedCount: 3 },
     });
     expect(r.grade).toBe("D");
     expect(r.actions.some((a) => a.includes("멈"))).toBe(true);

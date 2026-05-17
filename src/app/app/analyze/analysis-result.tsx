@@ -41,7 +41,7 @@ import type { TradingStyle } from "@/lib/analysis/style";
 import {
   MARKET_CHECK_KEYS,
   MARKET_CHECK_LABELS,
-  PSYCH_CHECK_KEYS,
+  TRIGGER_CHECK_KEYS,
   type MarketCheckKey,
   type TradeInput,
 } from "@/types/trade";
@@ -61,6 +61,7 @@ function tradeFormHref(symbol: string, scenario: AnalysisReport["scenarios"][num
     entry: entry.toString(),
     stop: scenario.invalidation.toString(),
     target: scenario.target.toString(),
+    trigger: scenario.trigger,
   });
   for (const key of MARKET_CHECK_KEYS) {
     if (scenario.marketAssessment[key]) p.set(`m_${key}`, "1");
@@ -76,7 +77,9 @@ function evaluateScenario(
   mtfTimeframe: TradeInput["timeframe"],
 ) {
   const entry = (scenario.entryZone.low + scenario.entryZone.high) / 2;
-  const psych = Object.fromEntries(PSYCH_CHECK_KEYS.map((k) => [k, true])) as TradeInput["psych"];
+  // 분석 페이지의 빠른 등급 미리보기 — 트리거/자금/시장 컨텍스트는 낙관적 기본값으로 계산.
+  // 실제 등급은 거래 평가 페이지에서 사용자 입력 + 서버 fetch로 다시 계산됨.
+  const trigger = Object.fromEntries(TRIGGER_CHECK_KEYS.map((k) => [k, true])) as TradeInput["trigger"];
   const input: TradeInput = {
     symbol,
     direction: scenario.direction,
@@ -87,8 +90,9 @@ function evaluateScenario(
     accountSize,
     allowedLossPct: riskPct,
     market: scenario.marketAssessment,
-    psych,
-    flags: { newsRecent: false, losingStreak: false },
+    trigger,
+    money: { todayCumulativeR: 0, todayClosedCount: 0, openPositions: [], openExposurePct: 0 },
+    marketCtx: { btcPrice: null, btc24hChangePct: null, fundingRate: null, minutesToFunding: null },
   };
   const grade = gradeTrade(input);
   const sizing = sizePosition({

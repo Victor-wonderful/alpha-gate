@@ -31,8 +31,17 @@ export async function saveTradeAction(args: {
       allowed_loss_pct: input.allowedLossPct,
       position_quantity: sizing.quantity,
       market_checks: input.market,
-      psych_checks: input.psych,
-      context_flags: input.flags,
+      psych_checks: {}, // deprecated, kept for NOT NULL constraint
+      context_flags: {
+        trigger: input.trigger,
+        money: {
+          todayCumulativeR: input.money.todayCumulativeR,
+          todayClosedCount: input.money.todayClosedCount,
+          openExposurePct: input.money.openExposurePct,
+          openSymbols: input.money.openPositions.map((p) => p.symbol),
+        },
+        marketCtx: input.marketCtx,
+      },
       pre_grade: grade.grade,
       pre_score: grade.score,
       pre_score_breakdown: grade.reasons,
@@ -52,10 +61,10 @@ export async function saveTradeAction(args: {
       tradeId: data.id,
     });
   }
-  if (input.flags.losingStreak) {
+  if (input.money.todayCumulativeR <= -2) {
     await dispatch(user.id, "losing_streak", {
-      title: "연속 손실 경고",
-      body: `연속 손실 상태에서 ${grade.grade}급 거래를 저장했습니다. 오늘은 거래 중단을 권장합니다.`,
+      title: "일일 손실 한도 경고",
+      body: `오늘 누적 ${input.money.todayCumulativeR.toFixed(2)}R 손실 상태에서 ${grade.grade}급 거래를 저장했습니다. 오늘은 거래 중단을 권장합니다.`,
       tradeId: data.id,
     });
   }

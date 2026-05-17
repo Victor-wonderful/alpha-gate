@@ -1,7 +1,12 @@
 import { TradeForm } from "@/components/trade/trade-form";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getMoneyContext } from "@/lib/money-management";
 
-export default async function TradePage() {
+export default async function TradePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ symbol?: string }>;
+}) {
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -14,6 +19,17 @@ export default async function TradePage() {
         .maybeSingle()
     : { data: null };
 
+  const accountSize = Number(profile?.default_account_size) || 10000;
+  const sp = await searchParams;
+  const symbol = (sp.symbol && /^[A-Z0-9]{2,15}USDT$/i.test(sp.symbol)
+    ? sp.symbol.toUpperCase()
+    : "BTCUSDT");
+
+  // Market context는 클라이언트에서 심볼 변경 시 다시 갱신될 수 있도록
+  // 초기값만 서버에서 fetch. (form 안에서 심볼이 바뀌면 그 시점엔 stale이지만,
+  // 펀딩비/BTC는 분 단위로만 의미 있어 페이지 진입 시점 스냅샷으로 충분.)
+  const [money] = await Promise.all([getMoneyContext(accountSize)]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -23,9 +39,11 @@ export default async function TradePage() {
         </p>
       </div>
       <TradeForm
-        initialAccountSize={Number(profile?.default_account_size) || 10000}
+        initialAccountSize={accountSize}
         initialRiskPct={Number(profile?.default_risk_pct) || 1}
         currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
+        initialSymbol={symbol}
+        money={money}
       />
     </div>
   );

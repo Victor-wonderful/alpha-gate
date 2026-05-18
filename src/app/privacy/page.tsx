@@ -39,7 +39,6 @@ export default function PrivacyPage() {
       <h3>선택 항목</h3>
       <ul>
         <li>Telegram chat ID, Discord 웹훅 URL(알림 사용 시)</li>
-        <li>거래소 read-only API 키(자동 저널 사용 시, 암호화 보관)</li>
       </ul>
 
       <h2>2. 수집 및 이용 목적</h2>
@@ -98,7 +97,6 @@ export default function PrivacyPage() {
       <ul>
         <li>비밀번호 단방향 해시 저장(bcrypt 등)</li>
         <li>데이터베이스 Row-Level Security로 사용자별 데이터 격리</li>
-        <li>거래소 API 키 암호화 저장</li>
         <li>HTTPS 전 구간 적용</li>
         <li>접근 권한 최소화 및 접근 기록 보관</li>
       </ul>

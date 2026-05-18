@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, Sparkles, X } from "lucide-react";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
-import { Eyebrow } from "@/components/marketing/eyebrow";
+import { SectionShell, SectionHeader, GradientText } from "@/components/marketing/section";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -97,52 +97,50 @@ const PLANS: Plan[] = [
 
 export default function PricingPage() {
   return (
-    <main className="flex min-h-screen flex-col bg-black text-white">
+    <main className="flex min-h-screen flex-col bg-[#02060f] text-white">
       <MarketingHeader />
 
-      <section className="relative isolate overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_30%,rgba(56,189,248,0.15),transparent_70%)]" />
-        <div className="relative mx-auto max-w-5xl px-6 py-32 text-center sm:px-10">
-          <Eyebrow>Pricing</Eyebrow>
-          <h1 className="mt-6 text-5xl font-bold leading-[1.1] sm:text-6xl lg:text-7xl">
-            필요할 때만
-            <br />
-            <span className="text-primary">업그레이드</span>하세요
-          </h1>
-          <p className="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-white/60">
-            무료로 시작해서 도구가 필요해지면 그때 결정. 신용카드 없이 가입.
-          </p>
-        </div>
-      </section>
+      <SectionShell glowPosition="top" className="border-t-0">
+        <SectionHeader
+          eyebrow="Pricing"
+          title={
+            <>
+              필요할 때만{" "}
+              <GradientText>업그레이드</GradientText>
+              <br />
+              하세요
+            </>
+          }
+          body="무료로 시작해서 도구가 필요해지면 그때 결정. 신용카드 없이 가입."
+        />
+      </SectionShell>
 
       {/* Plans */}
-      <section className="border-b border-white/10 bg-black py-24">
-        <div className="mx-auto max-w-6xl px-6 sm:px-10">
-          <div className="grid gap-4 lg:grid-cols-3">
-            {PLANS.map((p) => (
-              <PlanCard key={p.id} plan={p} />
-            ))}
-          </div>
-          <p className="mt-12 text-center text-xs uppercase tracking-[0.2em] text-white/40">
-            모든 플랜 · 7일 환불 보장 · 언제든 해지
-          </p>
+      <SectionShell glowPosition="top-right">
+        <div className="grid gap-5 lg:grid-cols-3">
+          {PLANS.map((p) => (
+            <PlanCard key={p.id} plan={p} />
+          ))}
         </div>
-      </section>
+        <p className="mt-12 text-center text-xs uppercase tracking-[0.2em] text-white/40">
+          모든 플랜 · 7일 환불 보장 · 언제든 해지
+        </p>
+      </SectionShell>
 
       {/* Comparison table */}
-      <section className="border-b border-white/10 bg-zinc-950 py-32">
-        <div className="mx-auto max-w-6xl px-6 sm:px-10">
-          <div className="text-center">
-            <Eyebrow>플랜 비교</Eyebrow>
-            <h2 className="mt-6 text-4xl font-bold leading-[1.15] sm:text-5xl">
-              한눈에 비교
-            </h2>
-          </div>
-
-          <div className="mt-16 overflow-hidden rounded-2xl border border-white/10">
+      <SectionShell glowPosition="bottom-left">
+        <SectionHeader
+          eyebrow="플랜 비교"
+          title={
+            <>
+              <GradientText>한눈에</GradientText> 비교
+            </>
+          }
+        />
+        <div className="mt-16 overflow-hidden rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-[#091632]/60 via-[#06112a]/50 to-[#040b1d]/75 backdrop-blur-xl">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 bg-white/[0.02]">
+                <tr className="border-b border-cyan-500/15 bg-cyan-500/[0.04]">
                   <th className="p-5 text-left text-xs font-semibold uppercase tracking-wider text-white/40">
                     기능
                   </th>
@@ -166,7 +164,7 @@ export default function PricingPage() {
                     <td
                       className={cn(
                         "p-4 text-white/70",
-                        row.section && "font-semibold uppercase tracking-wider text-primary text-[10px]",
+                        row.section && "font-semibold uppercase tracking-wider text-cyan-400 text-[10px]",
                       )}
                     >
                       {row.label}
@@ -182,7 +180,7 @@ export default function PricingPage() {
                         <td key={j} className="p-4 text-center">
                           {typeof v === "boolean" ? (
                             v ? (
-                              <CheckCircle2 className="mx-auto h-4 w-4 text-grade-a" />
+                              <CheckCircle2 className="mx-auto h-4 w-4 text-cyan-300" />
                             ) : (
                               <X className="mx-auto h-4 w-4 text-white/20" />
                             )
@@ -197,49 +195,81 @@ export default function PricingPage() {
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
+      </SectionShell>
 
       {/* FAQ */}
-      <section id="faq" className="scroll-mt-24 border-b border-white/10 bg-black py-32">
-        <div className="mx-auto max-w-3xl px-6 sm:px-10">
-          <div className="text-center">
-            <Eyebrow>FAQ</Eyebrow>
-            <h2 className="mt-6 text-4xl font-bold leading-[1.15] sm:text-5xl">
-              자주 묻는 질문
-            </h2>
-          </div>
+      <SectionShell glowPosition="right" innerClassName="max-w-3xl py-32">
+        <div id="faq" className="scroll-mt-24">
+          <SectionHeader
+            eyebrow="FAQ"
+            title={
+              <>
+                자주 <GradientText>묻는 질문</GradientText>
+              </>
+            }
+            body={
+              <>
+                전체 FAQ는{" "}
+                <Link href="/faq" className="text-cyan-300 underline-offset-4 hover:underline">
+                  /faq
+                </Link>{" "}
+                에서 카테고리별로 확인할 수 있습니다.
+              </>
+            }
+          />
 
-          <div className="mt-16 space-y-4">
+          <div className="mt-16 space-y-3">
             {FAQS.map((q) => (
-              <div key={q.q} className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-sm">
-                <h3 className="text-base font-bold">{q.q}</h3>
+              <details
+                key={q.q}
+                className="group rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-[#091632]/60 via-[#06112a]/50 to-[#040b1d]/75 p-6 backdrop-blur-xl transition-colors hover:border-cyan-400/30"
+              >
+                <summary className="cursor-pointer list-none marker:hidden">
+                  <span className="flex items-center justify-between gap-4">
+                    <span className="text-base font-semibold">{q.q}</span>
+                    <span className="font-mono text-xs text-cyan-300/70 transition-transform group-open:rotate-45">
+                      +
+                    </span>
+                  </span>
+                </summary>
                 <p className="mt-3 text-sm leading-relaxed text-white/70">{q.a}</p>
-              </div>
+              </details>
             ))}
           </div>
         </div>
-      </section>
+      </SectionShell>
 
       {/* CTA */}
-      <section className="relative isolate overflow-hidden bg-black py-32">
+      <section className="relative isolate overflow-hidden border-t border-white/[0.06]">
         <div
           aria-hidden
-          className="absolute left-1/2 top-1/2 h-[400px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/15 blur-3xl"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.22),transparent_70%)] blur-3xl"
         />
-        <div className="relative mx-auto max-w-3xl px-6 text-center sm:px-10">
-          <h2 className="text-4xl font-bold leading-[1.15] sm:text-5xl">
-            먼저 무료로 써보세요
-          </h2>
-          <p className="mt-6 text-base text-white/60">필요해지면 그때 업그레이드.</p>
-          <div className="mt-10">
-            <Link
-              href="/login?mode=signup"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-4 text-base font-semibold text-black transition-all hover:gap-3 hover:bg-white/90"
-            >
-              무료 회원가입
-              <ArrowRight className="h-5 w-5" />
-            </Link>
+        <div className="relative mx-auto max-w-4xl px-6 py-32 sm:px-10">
+          <div className="relative overflow-hidden rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-[#0b1e44]/80 via-[#071534]/60 to-[#04102a]/80 p-12 text-center shadow-[0_40px_120px_-30px_rgba(56,189,248,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:p-16">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-x-20 -top-32 h-64 bg-gradient-to-b from-cyan-400/15 to-transparent blur-2xl"
+            />
+            <div className="relative">
+              <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
+                <Sparkles className="h-3 w-3" />
+                먼저 무료로
+              </div>
+              <h2 className="mt-5 text-4xl font-bold leading-[1.15] sm:text-5xl">
+                <GradientText>먼저 무료로</GradientText> 써보세요
+              </h2>
+              <p className="mt-6 text-base text-white/60">필요해지면 그때 업그레이드.</p>
+              <div className="mt-10">
+                <Link
+                  href="/login?mode=signup"
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-8 py-4 text-base font-semibold text-[#02060f] shadow-[0_0_32px_rgba(56,189,248,0.55)] transition-all hover:gap-3 hover:shadow-[0_0_44px_rgba(56,189,248,0.75)]"
+                >
+                  무료 회원가입
+                  <ArrowRight className="h-5 w-5" />
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -317,34 +347,44 @@ function PlanCard({ plan }: { plan: Plan }) {
   return (
     <div
       className={cn(
-        "relative flex flex-col rounded-3xl border p-8 transition-all",
+        "relative flex flex-col overflow-hidden rounded-2xl border p-8 backdrop-blur-xl transition-all",
         plan.featured
-          ? "border-primary/50 bg-gradient-to-br from-primary/10 via-zinc-950 to-black shadow-2xl shadow-primary/20"
-          : "border-white/10 bg-white/[0.02] hover:border-white/20",
+          ? "border-cyan-400/40 bg-gradient-to-br from-[#0b1e44]/85 via-[#071534]/70 to-[#04102a]/90 shadow-[0_40px_120px_-30px_rgba(56,189,248,0.55),inset_0_1px_0_rgba(255,255,255,0.06)]"
+          : "border-cyan-500/15 bg-gradient-to-br from-[#091632]/60 via-[#06112a]/50 to-[#040b1d]/75 hover:border-cyan-400/30 hover:shadow-[0_30px_80px_-20px_rgba(56,189,248,0.3)]",
       )}
     >
+      {plan.featured && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -inset-x-20 -top-32 h-64 bg-gradient-to-b from-cyan-400/15 to-transparent blur-2xl"
+        />
+      )}
       {plan.featured ? (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <div className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.5)]">
+          <div className="inline-flex items-center gap-1 rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#02060f] shadow-[0_0_24px_rgba(56,189,248,0.6)]">
             <Sparkles className="h-3 w-3" />
             Most Popular
           </div>
         </div>
       ) : null}
-      <div>
-        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">{plan.tagline}</div>
+      <div className="relative">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-300/80">
+          {plan.tagline}
+        </div>
         <h3 className="mt-3 text-2xl font-bold">{plan.name}</h3>
         <div className="mt-5 flex items-baseline gap-1.5">
-          <div className="font-mono text-4xl font-bold">{plan.price}</div>
+          <div className="bg-gradient-to-br from-white via-white to-cyan-200 bg-clip-text font-mono text-4xl font-bold text-transparent">
+            {plan.price}
+          </div>
           <div className="text-sm text-white/40">{plan.priceNote}</div>
         </div>
       </div>
 
-      <ul className="mt-8 flex-1 space-y-3">
+      <ul className="relative mt-8 flex-1 space-y-3">
         {plan.features.map((f) => (
           <li key={f.label} className="flex items-start gap-2.5 text-sm">
             {f.included ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-grade-a" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
             ) : (
               <X className="mt-0.5 h-4 w-4 flex-none text-white/20" />
             )}
@@ -356,9 +396,9 @@ function PlanCard({ plan }: { plan: Plan }) {
       <Link
         href={plan.ctaHref}
         className={cn(
-          "mt-10 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-all",
+          "relative mt-10 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-all",
           plan.featured
-            ? "bg-primary text-primary-foreground shadow-[0_0_24px_rgba(56,189,248,0.45)] hover:gap-3"
+            ? "bg-gradient-to-br from-sky-400 to-cyan-500 text-[#02060f] shadow-[0_0_24px_rgba(56,189,248,0.5)] hover:gap-3 hover:shadow-[0_0_36px_rgba(56,189,248,0.7)]"
             : "border border-white/20 bg-white/5 text-white hover:bg-white/10",
         )}
       >

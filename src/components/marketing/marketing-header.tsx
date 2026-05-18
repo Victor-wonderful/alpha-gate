@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/app/logo";
 import { cn } from "@/lib/utils";
 
@@ -10,12 +11,14 @@ const NAV: Array<{ href: string; label: string; external?: boolean }> = [
   { href: "/features", label: "기능" },
   { href: "/how-it-works", label: "작동 방식" },
   { href: "/pricing", label: "가격" },
-  { href: "/pricing#faq", label: "FAQ" },
-  { href: "mailto:hello@alphagate.app", label: "문의", external: true },
+  { href: "/faq", label: "FAQ" },
+  { href: "/contact", label: "문의" },
 ];
 
 export function MarketingHeader() {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
   return (
     <header className="relative z-30">
       <div className="flex items-center justify-between px-6 py-6 sm:px-10">
@@ -57,19 +60,65 @@ export function MarketingHeader() {
           </Link>
           <Link
             href="/login?mode=signup"
-            className="rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 px-4 py-1.5 text-xs font-semibold text-white shadow-[0_0_20px_rgba(192,38,211,0.4)] transition-all hover:shadow-[0_0_28px_rgba(192,38,211,0.6)]"
+            className="rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-[0_0_20px_rgba(56,189,248,0.4)] transition-all hover:shadow-[0_0_28px_rgba(56,189,248,0.6)]"
           >
             회원가입
           </Link>
           <button
             type="button"
-            aria-label="메뉴"
+            aria-label="메뉴 열기"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
             className="flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:text-white md:hidden"
           >
-            <Menu className="h-5 w-5" />
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
+
+      {/* Mobile drawer */}
+      {open && (
+        <div
+          className="absolute inset-x-0 top-full z-50 border-b border-white/10 bg-black/95 backdrop-blur md:hidden"
+          role="dialog"
+        >
+          <nav className="flex flex-col px-6 py-4 sm:px-10">
+            {NAV.map((n) => {
+              const active = pathname === n.href;
+              const cls = cn(
+                "rounded-md px-2 py-3 text-sm transition-colors",
+                active ? "bg-white/5 text-white" : "text-white/70 hover:bg-white/5 hover:text-white",
+              );
+              const onClick = () => setOpen(false);
+              return n.external ? (
+                <a key={n.href} href={n.href} onClick={onClick} className={cls}>
+                  {n.label}
+                </a>
+              ) : (
+                <Link key={n.href} href={n.href} onClick={onClick} className={cls}>
+                  {n.label}
+                </Link>
+              );
+            })}
+            <div className="mt-3 flex gap-2 border-t border-white/10 pt-4">
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="flex-1 rounded-full border border-white/15 px-4 py-2.5 text-center text-xs font-semibold text-white/80 hover:bg-white/5 hover:text-white"
+              >
+                로그인
+              </Link>
+              <Link
+                href="/login?mode=signup"
+                onClick={() => setOpen(false)}
+                className="flex-1 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-[0_0_20px_rgba(56,189,248,0.4)]"
+              >
+                회원가입
+              </Link>
+            </div>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

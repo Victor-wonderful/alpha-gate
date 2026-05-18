@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
-import { Eyebrow } from "@/components/marketing/eyebrow";
+import { SectionShell, SectionHeader, GradientText } from "@/components/marketing/section";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -21,27 +21,28 @@ export const metadata = {
 
 export default function FeaturesPage() {
   return (
-    <main className="flex min-h-screen flex-col bg-black text-white">
+    <main className="flex min-h-screen flex-col bg-[#02060f] text-white">
       <MarketingHeader />
 
-      <section className="relative isolate overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_30%,rgba(56,189,248,0.15),transparent_70%)]" />
-        <div className="relative mx-auto max-w-5xl px-6 py-32 text-center sm:px-10">
-          <Eyebrow>Features</Eyebrow>
-          <h1 className="mt-6 text-5xl font-bold leading-[1.1] sm:text-6xl lg:text-7xl">
-            차트가 아닌
-            <br />
-            <span className="text-primary">결정</span>을 다룹니다
-          </h1>
-          <p className="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-white/60">
-            4가지 핵심 기능. 진입 전 분석부터 청산 후 복기까지 한 플랫폼에서.
-          </p>
-        </div>
-      </section>
+      {/* Hero */}
+      <SectionShell glowPosition="top" className="border-t-0">
+        <SectionHeader
+          eyebrow="Features"
+          title={
+            <>
+              차트가 아닌{" "}
+              <GradientText>결정</GradientText>
+              <br />
+              을 다룹니다
+            </>
+          }
+          body="4가지 핵심 기능. 진입 전 분석부터 청산 후 복기까지 한 플랫폼에서."
+        />
+      </SectionShell>
 
       {/* Feature deep dives */}
-      <section className="border-b border-white/10 bg-black py-32">
-        <div className="mx-auto max-w-6xl space-y-32 px-6 sm:px-10">
+      <SectionShell glowPosition="bottom-left">
+        <div className="space-y-28">
           {FEATURES.map((f, i) => (
             <div
               key={f.title}
@@ -52,18 +53,20 @@ export default function FeaturesPage() {
               )}
             >
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/[0.06] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-300">
                   <f.icon className="h-3 w-3" />
                   {f.tag}
                 </div>
                 <h2 className="mt-6 text-3xl font-bold leading-[1.15] sm:text-4xl">
-                  {f.title}
+                  <span className="bg-gradient-to-br from-white via-white to-cyan-200 bg-clip-text text-transparent">
+                    {f.title}
+                  </span>
                 </h2>
-                <p className="mt-5 text-base leading-relaxed text-white/70">{f.body}</p>
+                <p className="mt-5 text-base leading-relaxed text-white/65">{f.body}</p>
                 <ul className="mt-8 space-y-3">
                   {f.bullets.map((b) => (
                     <li key={b} className="flex items-start gap-3 text-sm">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-grade-a" />
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
                       <span className="text-white/80">{b}</span>
                     </li>
                   ))}
@@ -73,32 +76,44 @@ export default function FeaturesPage() {
             </div>
           ))}
         </div>
-      </section>
+      </SectionShell>
 
       {/* CTA */}
-      <section className="relative isolate overflow-hidden bg-black py-32">
+      <section className="relative isolate overflow-hidden border-t border-white/[0.06]">
         <div
           aria-hidden
-          className="absolute left-1/2 top-1/2 h-[400px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/15 blur-3xl"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.22),transparent_70%)] blur-3xl"
         />
-        <div className="relative mx-auto max-w-3xl px-6 text-center sm:px-10">
-          <h2 className="text-4xl font-bold leading-[1.15] sm:text-5xl">
-            지금 사용해보세요
-          </h2>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/login?mode=signup"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold text-black transition-all hover:gap-3 hover:bg-white/90"
-            >
-              무료 회원가입
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/pricing"
-              className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/10"
-            >
-              가격 보기
-            </Link>
+        <div className="relative mx-auto max-w-4xl px-6 py-32 sm:px-10">
+          <div className="relative overflow-hidden rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-[#0b1e44]/80 via-[#071534]/60 to-[#04102a]/80 p-12 text-center shadow-[0_40px_120px_-30px_rgba(56,189,248,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:p-16">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-x-20 -top-32 h-64 bg-gradient-to-b from-cyan-400/15 to-transparent blur-2xl"
+            />
+            <div className="relative">
+              <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
+                <Sparkles className="h-3 w-3" />
+                지금 시작
+              </div>
+              <h2 className="mt-5 text-4xl font-bold leading-[1.15] sm:text-5xl">
+                지금 <GradientText>사용해보세요</GradientText>
+              </h2>
+              <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  href="/login?mode=signup"
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-7 py-3.5 text-sm font-semibold text-[#02060f] shadow-[0_0_32px_rgba(56,189,248,0.55)] transition-all hover:gap-3 hover:shadow-[0_0_44px_rgba(56,189,248,0.75)]"
+                >
+                  무료 회원가입
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white/80 backdrop-blur transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  가격 보기
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -178,9 +193,9 @@ const FEATURES: FeatureItem[] = [
 function FeatureMockup({ feature }: { feature: FeatureItem["id"] }) {
   if (feature === "analyze") {
     return (
-      <MockupFrame>
+      <MockupFrame caption="분석 결과 — 시나리오 카드">
         <div className="mb-4 flex items-center gap-2 text-xs">
-          <span className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono font-semibold text-primary">
+          <span className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 font-mono font-semibold text-cyan-300">
             4H
           </span>
           <span className="font-mono font-medium text-white">BTCUSDT</span>
@@ -190,7 +205,7 @@ function FeatureMockup({ feature }: { feature: FeatureItem["id"] }) {
           <ScenarioRow letter="A" dir="long" trigger="78,500 sweep 후 1H 종가 회복" rr="2.4R" />
           <ScenarioRow letter="B" dir="short" trigger="79,200 거부 + 거래량 동반 하락" rr="2.1R" />
         </div>
-        <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-[11px] text-white/70">
+        <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3 text-[11px] text-white/75">
           ⚡ 지금: 진입 보류, A 시나리오 트리거 대기
         </div>
       </MockupFrame>
@@ -198,14 +213,14 @@ function FeatureMockup({ feature }: { feature: FeatureItem["id"] }) {
   }
   if (feature === "trade") {
     return (
-      <MockupFrame>
+      <MockupFrame caption="주문 검토 — 등급 결과">
         <div className="mb-5 flex items-center justify-between">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-grade-d text-2xl font-bold text-white shadow-[0_0_40px_rgba(239,68,68,0.4)]">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-rose-400/40 bg-gradient-to-br from-rose-500/25 to-rose-700/10 text-2xl font-black text-rose-300 shadow-[0_0_24px_rgba(244,63,94,0.4)]">
             D
           </div>
           <div className="text-right">
-            <div className="text-base font-bold text-grade-d">매매 금지</div>
-            <div className="text-xs text-white/40">점수 0점</div>
+            <div className="text-base font-bold text-rose-300">매매 금지</div>
+            <div className="font-mono text-xs text-white/40">점수 0점</div>
           </div>
         </div>
         <div className="space-y-2 text-xs">
@@ -219,43 +234,51 @@ function FeatureMockup({ feature }: { feature: FeatureItem["id"] }) {
   }
   if (feature === "journal") {
     return (
-      <MockupFrame>
-        <div className="mb-4 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-white">AI 복기 코멘트</span>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-black/40 p-4 text-xs leading-relaxed text-white/70">
-          <p>
-            진입 시 B등급(점수 6)으로 합리적이었습니다. 다만{" "}
-            <strong className="text-white">목표 도달 80% 지점에서 익절</strong>은 좋은 결정입니다.
-          </p>
-          <p className="mt-3">
-            다음에는{" "}
-            <strong className="text-white">트리거 캔들 종가 확정 후 진입</strong>을 엄격히 적용하시면 평균 R이 한 단계 올라갈 것입니다.
-          </p>
+      <MockupFrame caption="AI 복기 코멘트">
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div className="flex-1 space-y-3 text-xs leading-relaxed text-white/75">
+            <p>
+              진입 시 B등급(점수 6)으로 합리적이었습니다. 다만{" "}
+              <strong className="text-white">목표 도달 80% 지점에서 익절</strong>은 좋은 결정입니다.
+            </p>
+            <p>
+              다음에는{" "}
+              <strong className="text-white">트리거 캔들 종가 확정 후 진입</strong>을 엄격히 적용하시면 평균 R이 한 단계
+              올라갈 것입니다.
+            </p>
+          </div>
         </div>
       </MockupFrame>
     );
   }
   return (
-    <MockupFrame>
-      <div className="mb-4 text-sm font-semibold text-white">등급별 평균 R</div>
-      <div className="grid grid-cols-4 gap-2">
+    <MockupFrame caption="등급별 평균 R">
+      <div className="grid grid-cols-4 gap-3">
         {[
-          { g: "A", avg: 1.4, n: 12, color: "bg-grade-a" },
-          { g: "B", avg: 0.6, n: 28, color: "bg-grade-b" },
-          { g: "C", avg: -0.4, n: 15, color: "bg-grade-c" },
-          { g: "D", avg: -1.8, n: 5, color: "bg-grade-d" },
+          { g: "A", avg: 1.4, n: 12, tone: "good" as const },
+          { g: "B", avg: 0.6, n: 28, tone: "good" as const },
+          { g: "C", avg: -0.4, n: 15, tone: "bad" as const },
+          { g: "D", avg: -1.8, n: 5, tone: "bad" as const },
         ].map((r) => (
-          <div key={r.g} className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
-            <div className={cn("mx-auto h-7 w-7 rounded-md text-xs font-bold leading-7 text-white", r.color)}>
-              {r.g}
-            </div>
-            <div className={cn("mt-2 font-mono text-sm font-bold", r.avg >= 0 ? "text-grade-a" : "text-grade-d")}>
+          <div
+            key={r.g}
+            className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-center"
+          >
+            <div className="font-mono text-xs text-cyan-400/80">{r.g}</div>
+            <div
+              className={cn(
+                "mt-2 font-mono text-xl font-bold tabular-nums",
+                r.tone === "good" ? "text-cyan-200" : "text-rose-300/80",
+              )}
+            >
               {r.avg >= 0 ? "+" : ""}
-              {r.avg}R
+              {r.avg}
+              <span className="text-xs text-white/40">R</span>
             </div>
-            <div className="text-[10px] text-white/40">{r.n}건</div>
+            <div className="mt-1 text-[10px] text-white/30">{r.n}건</div>
           </div>
         ))}
       </div>
@@ -263,15 +286,21 @@ function FeatureMockup({ feature }: { feature: FeatureItem["id"] }) {
   );
 }
 
-function MockupFrame({ children }: { children: React.ReactNode }) {
+function MockupFrame({ caption, children }: { caption: string; children: React.ReactNode }) {
   return (
     <div className="relative">
       <div
         aria-hidden
-        className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/30 via-transparent to-transparent opacity-50"
+        className="pointer-events-none absolute -inset-8 rounded-3xl bg-[radial-gradient(circle_at_50%_50%,rgba(56,189,248,0.16),transparent_70%)] blur-2xl"
       />
-      <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900 to-black p-6 shadow-2xl shadow-primary/10">
-        {children}
+      <div className="relative overflow-hidden rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-[#091632]/85 via-[#06112a]/80 to-[#040b1d]/90 shadow-[0_30px_80px_-20px_rgba(56,189,248,0.3),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-xl">
+        <div className="flex items-center justify-between border-b border-cyan-500/10 bg-cyan-500/[0.03] px-5 py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-300/80">
+            {caption}
+          </span>
+          <span className="font-mono text-[10px] text-white/30">●●●</span>
+        </div>
+        <div className="p-5">{children}</div>
       </div>
     </div>
   );
@@ -289,19 +318,21 @@ function ScenarioRow({
   rr: string;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs">
-      <span className="flex h-6 w-6 items-center justify-center rounded bg-primary/15 font-mono font-bold text-primary">
+    <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs">
+      <span className="flex h-6 w-6 items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 font-mono font-bold text-cyan-300">
         {letter}
       </span>
       <span
         className={cn(
           "rounded px-1.5 py-0.5 text-[10px] font-semibold",
-          dir === "long" ? "bg-grade-a/15 text-grade-a" : "bg-grade-d/15 text-grade-d",
+          dir === "long"
+            ? "bg-emerald-500/15 text-emerald-300"
+            : "bg-rose-500/15 text-rose-300",
         )}
       >
         {dir === "long" ? "롱" : "숏"}
       </span>
-      <span className="flex-1 truncate text-white/60">{trigger}</span>
+      <span className="flex-1 truncate text-white/65">{trigger}</span>
       <span className="font-mono text-white">{rr}</span>
     </div>
   );
@@ -309,12 +340,12 @@ function ScenarioRow({
 
 function ScoreRow({ label, pts }: { label: string; pts: number }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/40 px-3 py-2">
+    <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
       <span className="text-white/70">{label}</span>
       <span
         className={cn(
           "font-mono font-bold",
-          pts > 0 ? "text-grade-a" : pts < 0 ? "text-grade-d" : "text-white/40",
+          pts > 0 ? "text-cyan-300" : pts < 0 ? "text-rose-300" : "text-white/40",
         )}
       >
         {pts > 0 ? "+" : ""}

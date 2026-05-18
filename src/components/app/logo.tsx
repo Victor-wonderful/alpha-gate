@@ -14,9 +14,9 @@ export function Logo({ size = 28, className }: { size?: number; className?: stri
     >
       <defs>
         <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="hsl(292 91% 73%)" />
-          <stop offset="55%" stopColor="hsl(285 85% 60%)" />
-          <stop offset="100%" stopColor="hsl(272 80% 45%)" />
+          <stop offset="0%" stopColor="hsl(199 92% 78%)" />
+          <stop offset="55%" stopColor="hsl(199 89% 56%)" />
+          <stop offset="100%" stopColor="hsl(217 91% 50%)" />
         </linearGradient>
       </defs>
 

@@ -5,10 +5,13 @@ import { Download, TrendingDown, TrendingUp } from "lucide-react";
 import {
   CandlestickSeries,
   createChart,
+  createSeriesMarkers,
   CrosshairMode,
   LineStyle,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
+  type SeriesMarker,
   type Time,
 } from "lightweight-charts";
 import { toast } from "sonner";
@@ -32,11 +35,31 @@ const SWING_COLOR = "hsl(240 5% 64.9%)";
 
 type ChartRole = "HTF" | "MTF" | "LTF";
 
+/** 캔들 배열에서 주어진 Unix 초 시각에 가장 가까운(≤) 봉 찾기 */
+function findNearestBar<T extends { time: number }>(bars: readonly T[], target: number): T | null {
+  if (bars.length === 0) return null;
+  // 시간순 정렬됐다고 가정 — 이진 탐색
+  let lo = 0;
+  let hi = bars.length - 1;
+  let best: T | null = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (bars[mid].time <= target) {
+      best = bars[mid];
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return best;
+}
+
 export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
   const captureRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [role, setRole] = useState<ChartRole>("MTF");
 
@@ -170,6 +193,119 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
       }
     };
   }, [snapshot, sc]);
+
+  // 백테스트 시뮬 결과 마커 — 진입/청산 시점을 차트 위에 표시
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    // 기존 마커 정리
+    if (markersRef.current) {
+      try {
+        markersRef.current.detach();
+      } catch {
+        // already disposed
+      }
+      markersRef.current = null;
+    }
+
+    const sim = sc?.simulation;
+    const boundary = snapshot.mtfChart?.boundaryTime;
+    const candles = activeChart.candles;
+
+    const markers: SeriesMarker<Time>[] = [];
+
+    // 분석 ↔ forward 경계 마커 (백테스트만)
+    if (boundary && candles.length > 0) {
+      // 경계 시각에 가장 가까운 봉을 찾기 (≤ boundary)
+      let boundaryBar: typeof candles[number] | null = null;
+      for (let i = candles.length - 1; i >= 0; i--) {
+        if (candles[i].time <= boundary) {
+          boundaryBar = candles[i];
+          break;
+        }
+      }
+      if (boundaryBar) {
+        markers.push({
+          time: boundaryBar.time as Time,
+          position: "inBar",
+          color: "hsl(199 89% 56%)",
+          shape: "circle",
+          text: "📍 분석 시점",
+          size: 1,
+        });
+      }
+    }
+
+    if (sim && sim.entryAt) {
+      const isLongDir = sc!.direction === "long";
+      const isWin = sim.resultR > 0;
+
+      // 진입 마커
+      const entryTimeMs = new Date(sim.entryAt).getTime();
+      const entryBar = findNearestBar(candles, Math.floor(entryTimeMs / 1000));
+      if (entryBar) {
+        markers.push({
+          time: entryBar.time as Time,
+          position: isLongDir ? "belowBar" : "aboveBar",
+          color: ENTRY_COLOR,
+          shape: isLongDir ? "arrowUp" : "arrowDown",
+          text: `진입 $${formatNumber(sim.entryFillPrice)}`,
+          size: 2,
+        });
+      }
+
+      // 청산 마커
+      if (sim.exitAt && sim.exitReason !== "no_entry") {
+        const exitTimeMs = new Date(sim.exitAt).getTime();
+        const exitBar = findNearestBar(candles, Math.floor(exitTimeMs / 1000));
+        if (exitBar) {
+          const exitColor =
+            sim.exitReason === "target"
+              ? TARGET_COLOR
+              : sim.exitReason === "stop"
+                ? STOP_COLOR
+                : "hsl(38 92% 50%)";
+          const exitLabel =
+            sim.exitReason === "target"
+              ? `🎯 목표 $${formatNumber(sim.exitPrice)}`
+              : sim.exitReason === "stop"
+                ? `✕ 손절 $${formatNumber(sim.exitPrice)}`
+                : `⏱ 시간 만료 $${formatNumber(sim.exitPrice)}`;
+          markers.push({
+            time: exitBar.time as Time,
+            position: isLongDir ? "aboveBar" : "belowBar",
+            color: exitColor,
+            shape: isWin ? "circle" : "square",
+            text: exitLabel,
+            size: 2,
+          });
+        }
+      }
+    }
+
+    if (markers.length === 0) return; // 보여줄 마커 없음
+
+    // 시간순 정렬 (lightweight-charts 요구사항)
+    markers.sort((a, b) => (a.time as number) - (b.time as number));
+
+    try {
+      markersRef.current = createSeriesMarkers(series, markers);
+    } catch {
+      // chart disposed
+    }
+
+    return () => {
+      if (markersRef.current) {
+        try {
+          markersRef.current.detach();
+        } catch {
+          // already disposed
+        }
+        markersRef.current = null;
+      }
+    };
+  }, [sc, snapshot.mtfChart?.boundaryTime, activeChart.candles]);
 
   async function downloadPng() {
     if (!captureRef.current) return;

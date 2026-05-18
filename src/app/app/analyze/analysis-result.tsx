@@ -7,12 +7,15 @@ import {
   TrendingDown,
   TrendingUp,
   AlertTriangle,
+  CheckCircle2,
   Clock,
   RefreshCw,
   Target,
+  Timer,
   Lightbulb,
   ChevronDown,
   Info,
+  XCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +57,12 @@ const GRADE_TEXT: Record<"A" | "B" | "C" | "D", string> = {
   D: "거래 금지",
 };
 
-function tradeFormHref(symbol: string, scenario: AnalysisReport["scenarios"][number]) {
+function tradeFormHref(
+  symbol: string,
+  scenario: AnalysisReport["scenarios"][number],
+  mode?: "live" | "backtest",
+  historicalAt?: string | null,
+) {
   const entry = (scenario.entryZone.low + scenario.entryZone.high) / 2;
   const p = new URLSearchParams({
     symbol,
@@ -66,6 +74,10 @@ function tradeFormHref(symbol: string, scenario: AnalysisReport["scenarios"][num
   });
   for (const key of MARKET_CHECK_KEYS) {
     if (scenario.marketAssessment[key]) p.set(`m_${key}`, "1");
+  }
+  if (mode === "backtest" && historicalAt) {
+    p.set("mode", "backtest");
+    p.set("at", historicalAt);
   }
   return `/app/trade?${p.toString()}`;
 }
@@ -132,7 +144,10 @@ export function AnalysisResult({
     }, 15_000);
     return () => clearInterval(id);
   }, [snapshot.generatedAt]);
-  const generatedKst = new Date(snapshot.generatedAt).toLocaleString("ko-KR", {
+  const isBacktest = snapshot.mode === "backtest";
+  // 백테스트: 사용자가 선택한 historicalAt을 표시. 라이브: 분석 실행 시각.
+  const referenceIso = isBacktest ? (snapshot.historicalAt ?? snapshot.generatedAt) : snapshot.generatedAt;
+  const generatedKst = new Date(referenceIso).toLocaleString("ko-KR", {
     timeZone: "Asia/Seoul",
     month: "short",
     day: "numeric",
@@ -140,7 +155,8 @@ export function AnalysisResult({
     minute: "2-digit",
     hour12: false,
   });
-  const isStale = elapsedSec >= 5 * 60;
+  // 백테스트 모드에서는 분석 시점 자체가 과거라 "오래됐다" 경고 불필요
+  const isStale = !isBacktest && elapsedSec >= 5 * 60;
 
   // Map LTF to TradeInput["timeframe"]
   const ltf = snapshot.multiTf.find((t) => t.role === "LTF")?.tf ?? "1h";
@@ -194,8 +210,19 @@ export function AnalysisResult({
               </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              <span>{generatedKst} · {formatElapsed(elapsedSec)} 전</span>
+              <Clock className={cn("h-3 w-3", isBacktest && "text-primary")} />
+              {isBacktest ? (
+                <span>
+                  <span className="font-semibold text-primary">분석 시점</span> {generatedKst}
+                  <span className="ml-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                    백테스트
+                  </span>
+                </span>
+              ) : (
+                <span>
+                  {generatedKst} · {formatElapsed(elapsedSec)} 전
+                </span>
+              )}
               <span>·</span>
               <a
                 href={`https://www.binance.com/en/futures/${snapshot.symbol}`}
@@ -302,6 +329,8 @@ export function AnalysisResult({
                 currency={currency}
                 isActive={activeScenario === i}
                 onHover={() => setActiveScenario(i)}
+                mode={snapshot.mode}
+                historicalAt={snapshot.historicalAt ?? null}
               />
             );
           })}
@@ -544,6 +573,8 @@ function SimpleScenarioCard({
   currency,
   isActive,
   onHover,
+  mode,
+  historicalAt,
 }: {
   index: number;
   symbol: string;
@@ -558,6 +589,8 @@ function SimpleScenarioCard({
   currency: "USD" | "KRW";
   isActive: boolean;
   onHover: () => void;
+  mode?: "live" | "backtest";
+  historicalAt?: string | null;
 }) {
   const isLong = scenario.direction === "long";
   const stopPct = (Math.abs(entry - scenario.invalidation) / entry) * 100;
@@ -722,8 +755,13 @@ function SimpleScenarioCard({
           </div>
         ) : null}
 
+        {/* 백테스트 시뮬 결과 — backtest 모드일 때만 */}
+        {scenario.simulation && (
+          <BacktestSimulationInline sim={scenario.simulation} />
+        )}
+
         {/* CTA */}
-        <Link href={tradeFormHref(symbol, scenario)}>
+        <Link href={tradeFormHref(symbol, scenario, mode, historicalAt)}>
           <Button className="w-full" size="lg">
             이 시나리오로 주문 검토
             <ArrowRight className="h-4 w-4" />
@@ -972,6 +1010,120 @@ function ScenarioExplainer({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ───── 백테스트 시뮬 결과 인라인 표시 ───── */
+function BacktestSimulationInline({
+  sim,
+}: {
+  sim: NonNullable<AnalysisReport["scenarios"][number]["simulation"]>;
+}) {
+  const isWin = sim.resultR > 0;
+  const isLoss = sim.resultR < 0;
+  const reasonInfo = {
+    target: { text: "목표 도달", tone: "good" as const, icon: CheckCircle2 },
+    stop: { text: "손절 체결", tone: "bad" as const, icon: XCircle },
+    time: { text: "시간 만료", tone: "warn" as const, icon: Timer },
+    no_entry: { text: "진입 미체결", tone: "warn" as const, icon: AlertTriangle },
+  }[sim.exitReason];
+  const ReasonIcon = reasonInfo.icon;
+
+  // 보유 시간 계산
+  let holdLabel = `${sim.barsHeld}봉 · ${sim.interval}`;
+  if (sim.entryAt && sim.exitAt) {
+    const ms = new Date(sim.exitAt).getTime() - new Date(sim.entryAt).getTime();
+    const hours = ms / (1000 * 60 * 60);
+    holdLabel = hours < 24 ? `${hours.toFixed(1)}시간` : `${(hours / 24).toFixed(1)}일`;
+  }
+
+  if (sim.exitReason === "no_entry") {
+    return (
+      <div className="rounded-lg border border-grade-b/40 bg-grade-b/10 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-grade-b">
+          <Clock className="h-4 w-4" />
+          백테스트 결과 · 진입 미체결
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          분석 시점 이후 가격이 진입 구간({(sim.entryFillPrice).toLocaleString()})에 도달하지 않았습니다 — 시나리오 트리거가 발생하지 않은 경우입니다.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-primary/30 bg-gradient-to-br from-primary/[0.07] via-card to-card p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+          <Clock className="h-3.5 w-3.5" />
+          백테스트 시뮬 결과
+        </div>
+        <div
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+            reasonInfo.tone === "good" && "border-grade-a/40 bg-grade-a/10 text-grade-a",
+            reasonInfo.tone === "bad" && "border-grade-d/40 bg-grade-d/10 text-grade-d",
+            reasonInfo.tone === "warn" && "border-grade-b/40 bg-grade-b/10 text-grade-b",
+          )}
+        >
+          <ReasonIcon className="h-3 w-3" />
+          {reasonInfo.text}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+        <SimMetric
+          label="실현 R"
+          value={`${sim.resultR >= 0 ? "+" : ""}${sim.resultR.toFixed(2)}R`}
+          tone={isWin ? "good" : isLoss ? "bad" : "neutral"}
+          big
+        />
+        <SimMetric label="청산가" value={`$${formatNumber(sim.exitPrice)}`} />
+        <SimMetric label="보유" value={holdLabel} sub={`${sim.barsHeld}봉`} />
+        <SimMetric
+          label="MFE / MAE"
+          value={`+${sim.mfePct.toFixed(2)}% / -${sim.maePct.toFixed(2)}%`}
+          sub="최대 유리/불리"
+        />
+      </div>
+
+      {sim.entryAt && sim.exitAt && (
+        <div className="mt-3 text-[10px] text-muted-foreground">
+          진입 {new Date(sim.entryAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} → 청산 {new Date(sim.exitAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SimMetric({
+  label,
+  value,
+  sub,
+  tone = "neutral",
+  big = false,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "good" | "bad" | "neutral";
+  big?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div
+        className={cn(
+          "mt-1 font-mono font-semibold",
+          big ? "text-lg" : "text-sm",
+          tone === "good" && "text-grade-a",
+          tone === "bad" && "text-grade-d",
+        )}
+      >
+        {value}
+      </div>
+      {sub && <div className="text-[10px] text-muted-foreground/80">{sub}</div>}
     </div>
   );
 }

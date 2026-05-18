@@ -22,10 +22,33 @@ async function jget<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function fetchKlines(symbol: string, interval: Interval, limit = 300): Promise<Candle[]> {
-  const raw = await jget<unknown[][]>(
-    `${FAPI}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
-  );
+export interface KlineRangeOptions {
+  /** 그 시점까지의 봉만 가져옴 (백테스트용). ms 단위 timestamp 또는 Date. */
+  endTime?: number | Date;
+  /** 시작 시점 — 일반적으로 endTime만 쓰지, 둘 다 쓰면 endTime 우선. */
+  startTime?: number | Date;
+}
+
+export async function fetchKlines(
+  symbol: string,
+  interval: Interval,
+  limit = 300,
+  range?: KlineRangeOptions,
+): Promise<Candle[]> {
+  const params = new URLSearchParams({
+    symbol,
+    interval,
+    limit: String(limit),
+  });
+  if (range?.endTime != null) {
+    const ms = range.endTime instanceof Date ? range.endTime.getTime() : range.endTime;
+    params.set("endTime", String(ms));
+  }
+  if (range?.startTime != null) {
+    const ms = range.startTime instanceof Date ? range.startTime.getTime() : range.startTime;
+    params.set("startTime", String(ms));
+  }
+  const raw = await jget<unknown[][]>(`${FAPI}/fapi/v1/klines?${params.toString()}`);
   return raw.map((r) => ({
     openTime: Number(r[0]),
     open: Number(r[1]),

@@ -163,6 +163,23 @@ export interface AnalysisReport {
       volume_confirm: boolean;
       aligned_with_btc: boolean;
     };
+    /**
+     * 백테스트 모드에서만 채워짐 — 분석 시점 이후 forward 캔들로 시뮬한 결과.
+     * 라이브 모드는 undefined.
+     */
+    simulation?: {
+      entryFillPrice: number;
+      exitPrice: number;
+      resultR: number;
+      exitReason: "target" | "stop" | "time" | "no_entry";
+      barsHeld: number;
+      barsToEntry: number;
+      mfePct: number;
+      maePct: number;
+      interval: string;
+      entryAt: string | null;
+      exitAt: string | null;
+    };
   }[];
   actionNow: string;
   warnings: string[];

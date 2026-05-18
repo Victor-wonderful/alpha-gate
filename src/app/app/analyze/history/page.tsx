@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock, Radio, Sparkles } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,8 @@ interface AnalysisRow {
   scenarios_count: number;
   current_price: number | null;
   created_at: string;
+  mode: "live" | "backtest" | null;
+  historical_at: string | null;
 }
 
 const STYLE_LABEL_SHORT: Record<string, string> = {
@@ -29,6 +31,8 @@ const STYLE_LABEL_SHORT: Record<string, string> = {
 
 const PAGE_SIZE = 50;
 
+type ModeFilter = "all" | "live" | "backtest";
+
 export default async function AnalysisHistoryPage({
   searchParams,
 }: {
@@ -36,6 +40,7 @@ export default async function AnalysisHistoryPage({
     symbol?: string;
     style?: string;
     strategy?: string;
+    mode?: string;
     page?: string;
   }>;
 }) {
@@ -43,13 +48,24 @@ export default async function AnalysisHistoryPage({
   const filterSymbol = (sp.symbol || "").toUpperCase().trim();
   const filterStyle = sp.style || "";
   const filterStrategy = sp.strategy || "";
+  const modeFilter: ModeFilter =
+    sp.mode === "live" || sp.mode === "backtest" ? sp.mode : "all";
   const page = Math.max(1, Number(sp.page) || 1);
 
   const supabase = await getSupabaseServer();
+
+  // 전체 카운트 (모드별 — 탭에 표시)
+  const { data: allModes } = await supabase.from("analyses").select("mode");
+  const counts = {
+    all: allModes?.length ?? 0,
+    live: allModes?.filter((a) => (a.mode ?? "live") === "live").length ?? 0,
+    backtest: allModes?.filter((a) => a.mode === "backtest").length ?? 0,
+  };
+
   let query = supabase
     .from("analyses")
     .select(
-      "id, symbol, style, primary_strategy, strategy_direction, strategy_confidence, scenarios_count, current_price, created_at",
+      "id, symbol, style, primary_strategy, strategy_direction, strategy_confidence, scenarios_count, current_price, created_at, mode, historical_at",
       { count: "exact" },
     )
     .order("created_at", { ascending: false });
@@ -57,6 +73,8 @@ export default async function AnalysisHistoryPage({
   if (filterSymbol) query = query.eq("symbol", filterSymbol);
   if (filterStyle) query = query.eq("style", filterStyle);
   if (filterStrategy) query = query.eq("primary_strategy", filterStrategy);
+  if (modeFilter === "live") query = query.or("mode.is.null,mode.eq.live");
+  else if (modeFilter === "backtest") query = query.eq("mode", "backtest");
 
   const { data, count } = await query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   const rows = (data ?? []) as AnalysisRow[];
@@ -69,6 +87,7 @@ export default async function AnalysisHistoryPage({
       symbol: filterSymbol || undefined,
       style: filterStyle || undefined,
       strategy: filterStrategy || undefined,
+      mode: modeFilter === "all" ? undefined : modeFilter,
       page,
       ...overrides,
     };
@@ -77,6 +96,16 @@ export default async function AnalysisHistoryPage({
     }
     const qs = params.toString();
     return qs ? `?${qs}` : "";
+  }
+
+  function modeTabHref(mode: ModeFilter) {
+    const params = new URLSearchParams();
+    if (filterSymbol) params.set("symbol", filterSymbol);
+    if (filterStyle) params.set("style", filterStyle);
+    if (filterStrategy) params.set("strategy", filterStrategy);
+    if (mode !== "all") params.set("mode", mode);
+    const qs = params.toString();
+    return qs ? `/app/analyze/history?${qs}` : "/app/analyze/history";
   }
 
   return (
@@ -104,10 +133,33 @@ export default async function AnalysisHistoryPage({
         </div>
       </div>
 
+      {/* 모드 필터 탭 */}
+      <div className="flex flex-wrap gap-1.5">
+        <ModeTab href={modeTabHref("all")} label="전체" count={counts.all} active={modeFilter === "all"} />
+        <ModeTab
+          href={modeTabHref("live")}
+          label="실시간 분석"
+          count={counts.live}
+          active={modeFilter === "live"}
+          icon={<Radio className="h-3 w-3 text-grade-a" />}
+        />
+        <ModeTab
+          href={modeTabHref("backtest")}
+          label="백테스트"
+          count={counts.backtest}
+          active={modeFilter === "backtest"}
+          icon={<Clock className="h-3 w-3 text-primary" />}
+        />
+      </div>
+
       {/* Filter bar */}
       <Card>
         <CardContent className="p-3">
           <form className="flex flex-wrap items-center gap-2 text-xs" action="/app/analyze/history">
+            {/* 현재 모드를 폼 제출 시 유지 */}
+            {modeFilter !== "all" ? (
+              <input type="hidden" name="mode" value={modeFilter} />
+            ) : null}
             <label className="flex items-center gap-1.5">
               <span className="text-muted-foreground">코인</span>
               <input
@@ -154,7 +206,7 @@ export default async function AnalysisHistoryPage({
             </button>
             {(filterSymbol || filterStyle || filterStrategy) ? (
               <Link
-                href="/app/analyze/history"
+                href={modeTabHref(modeFilter)}
                 className="h-8 inline-flex items-center rounded-md border border-border px-3 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               >
                 초기화
@@ -169,7 +221,9 @@ export default async function AnalysisHistoryPage({
         <CardContent className="p-0">
           {rows.length === 0 ? (
             <div className="p-10 text-center text-sm text-muted-foreground">
-              조건에 맞는 분석이 없습니다.{" "}
+              {modeFilter === "backtest"
+                ? "백테스트 분석 기록이 없습니다. "
+                : "조건에 맞는 분석이 없습니다. "}
               <Link href="/app/analyze" className="text-primary underline-offset-2 hover:underline">
                 새 분석 실행
               </Link>
@@ -180,13 +234,27 @@ export default async function AnalysisHistoryPage({
                 const isWait = a.primary_strategy === "wait";
                 const dirLabel =
                   a.strategy_direction === "long" ? "롱" : a.strategy_direction === "short" ? "숏" : null;
+                const isBacktest = a.mode === "backtest";
+                const refDate = isBacktest && a.historical_at ? a.historical_at : a.created_at;
                 return (
                   <li key={a.id} className="group">
                     <div className="flex items-center gap-2 px-5 py-3 transition-colors hover:bg-muted/30">
                       <Link
                         href={`/app/analyze?load=${a.id}`}
-                        className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1.5 text-sm"
+                        className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 text-sm"
                       >
+                        {/* 모드 배지 — 항상 첫 칸 */}
+                        {isBacktest ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                            <Clock className="h-2.5 w-2.5" />
+                            백테스트
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                            <Radio className="h-2.5 w-2.5 text-grade-a" />
+                            실시간
+                          </span>
+                        )}
                         <span className="font-mono font-medium">{a.symbol}</span>
                         <span className="text-xs text-muted-foreground">
                           {STYLE_LABEL_SHORT[a.style] ?? a.style}
@@ -216,13 +284,28 @@ export default async function AnalysisHistoryPage({
                           </span>
                         ) : null}
                         <span className="ml-auto text-xs text-muted-foreground">
-                          {new Date(a.created_at).toLocaleString("ko-KR", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          })}
+                          {isBacktest && a.historical_at ? (
+                            <span className="text-primary/80">
+                              {new Date(refDate).toLocaleString("ko-KR", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: false,
+                              })}
+                              <span className="ml-1 text-[9px] uppercase tracking-wider text-muted-foreground">
+                                시점
+                              </span>
+                            </span>
+                          ) : (
+                            new Date(refDate).toLocaleString("ko-KR", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            })
+                          )}
                         </span>
                       </Link>
                       <DeleteAnalysisButton id={a.id} label={a.symbol} />
@@ -273,5 +356,35 @@ export default async function AnalysisHistoryPage({
         </Link>
       </div>
     </div>
+  );
+}
+
+function ModeTab({
+  href,
+  label,
+  count,
+  active,
+  icon,
+}: {
+  href: string;
+  label: string;
+  count: number;
+  active: boolean;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+        active
+          ? "border-primary bg-primary/10 text-foreground"
+          : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+      )}
+    >
+      {icon}
+      {label}
+      <span className="font-mono text-[10px] text-muted-foreground/80">{count}</span>
+    </Link>
   );
 }

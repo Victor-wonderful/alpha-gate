@@ -6,11 +6,18 @@ import { synthesizeAnalysis, type AnalysisReport } from "@/lib/analysis/synthesi
 import { classifyStrategy, type StrategyResult } from "@/lib/analysis/strategy";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { saveAnalysis, loadAnalysis } from "@/lib/analysis/persist";
+import { simulateTrade } from "@/lib/backtest/simulator";
 import { revalidatePath } from "next/cache";
+
+export interface RunAnalysisOptions {
+  /** 백테스트 모드 — 이 시점까지의 데이터로만 분석. ISO 8601 문자열 (예: "2026-05-10T05:30:00.000Z"). */
+  at?: string | null;
+}
 
 export async function runAnalysisAction(
   symbol: string,
   style: TradingStyle = "swing",
+  options: RunAnalysisOptions = {},
 ): Promise<{
   snapshot?: AnalysisSnapshot;
   strategy?: StrategyResult;
@@ -28,10 +35,28 @@ export async function runAnalysisAction(
 
   if (!STYLE_PRESETS[style]) return { error: "지원하지 않는 트레이딩 스타일입니다." };
 
+  // 백테스트 시각 검증
+  let atDate: Date | undefined;
+  if (options.at) {
+    atDate = new Date(options.at);
+    if (Number.isNaN(atDate.getTime())) {
+      return { error: "분석 시점이 올바르지 않은 날짜 형식입니다." };
+    }
+    const now = Date.now();
+    if (atDate.getTime() >= now) {
+      return { error: "백테스트 시점은 과거여야 합니다." };
+    }
+    // Binance 무료 API는 최근 6개월 정도 — 6개월 이전은 거부 (안내 + 안전성)
+    const sixMonthsAgo = now - 1000 * 60 * 60 * 24 * 180;
+    if (atDate.getTime() < sixMonthsAgo) {
+      return { error: "백테스트는 최근 6개월 이내 시점만 지원합니다." };
+    }
+  }
+
   // Stage 1: Market Data (deterministic)
   let snapshot: AnalysisSnapshot;
   try {
-    snapshot = await buildSnapshot(symbol, style);
+    snapshot = await buildSnapshot(symbol, style, { at: atDate });
   } catch (e) {
     return { error: `시장 데이터 수집 실패: ${e instanceof Error ? e.message : "unknown"}` };
   }
@@ -59,6 +84,49 @@ export async function runAnalysisAction(
       snapshot,
       strategy,
       error: `시나리오 생성 실패: ${e instanceof Error ? e.message : "unknown"}`,
+    };
+  }
+
+  // Stage 4 (백테스트 전용): 각 시나리오에 대해 walk-forward 시뮬레이션 실행
+  // 사용자가 거래를 저장하지 않아도 시뮬 결과를 미리 볼 수 있게 함.
+  if (atDate) {
+    const sims = await Promise.allSettled(
+      report.scenarios.map(async (s) => {
+        const entry = (s.entryZone.low + s.entryZone.high) / 2;
+        return simulateTrade({
+          symbol,
+          direction: s.direction,
+          entry,
+          stop: s.invalidation,
+          target: s.target,
+          simulatedAt: atDate,
+          style,
+        });
+      }),
+    );
+    report = {
+      ...report,
+      scenarios: report.scenarios.map((s, i) => {
+        const r = sims[i];
+        if (r.status !== "fulfilled") return s;
+        const sim = r.value;
+        return {
+          ...s,
+          simulation: {
+            entryFillPrice: sim.entryFillPrice,
+            exitPrice: sim.exitPrice,
+            resultR: sim.resultR,
+            exitReason: sim.exitReason,
+            barsHeld: sim.meta.barsHeld,
+            barsToEntry: sim.meta.barsToEntry,
+            mfePct: sim.meta.mfePct,
+            maePct: sim.meta.maePct,
+            interval: sim.meta.interval,
+            entryAt: sim.meta.entryCandleTime,
+            exitAt: sim.meta.exitCandleTime,
+          },
+        };
+      }),
     };
   }
 

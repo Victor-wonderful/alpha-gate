@@ -28,6 +28,8 @@ export async function saveAnalysis(args: {
       strategy_confidence: strategy.confidence,
       scenarios_count: report.scenarios.length,
       current_price: snapshot.ticker.last,
+      mode: snapshot.mode ?? "live",
+      historical_at: snapshot.historicalAt ?? null,
       snapshot,
       strategy,
       report,

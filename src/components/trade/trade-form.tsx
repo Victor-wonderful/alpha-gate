@@ -25,6 +25,7 @@ import {
 import { gradeTrade } from "@/lib/grading";
 import { sizePosition } from "@/lib/sizing";
 import { ResultPanel } from "./result-panel";
+import { SizingPanel } from "./sizing-panel";
 import { saveTradeAction } from "@/app/app/_actions";
 import { cn, formatNumber } from "@/lib/utils";
 
@@ -111,6 +112,10 @@ function TradeFormInner({
 
   const triggerHint = params.get("trigger") ?? "";
 
+  // 백테스트 모드: 분석 페이지에서 ?mode=backtest&at=ISO 로 넘어옴
+  const backtestMode = params.get("mode") === "backtest";
+  const backtestAtIso = backtestMode ? params.get("at") : null;
+
   const [symbol, setSymbol] = useState(() => {
     const q = params.get("symbol");
     return q && SYMBOLS.includes(q) ? q : q && /^[A-Z0-9]{2,15}USDT$/i.test(q) ? q.toUpperCase() : initialSymbol;
@@ -196,12 +201,26 @@ function TradeFormInner({
       return;
     }
     startTransition(async () => {
-      const res = await saveTradeAction({ input, grade, sizing, leverage });
+      const res = await saveTradeAction({
+        input,
+        grade,
+        sizing,
+        leverage,
+        mode: backtestMode ? "backtest" : "live",
+        simulatedAt: backtestAtIso,
+      });
       if (res.error) {
         toast.error(res.error);
         return;
       }
-      toast.success("거래를 저널에 저장했습니다.");
+      if (backtestMode && res.backtest) {
+        const r = res.backtest.resultR;
+        toast.success(
+          `백테스트 완료 — ${r >= 0 ? "+" : ""}${r.toFixed(2)}R · ${res.backtest.exitReason === "target" ? "목표 도달" : res.backtest.exitReason === "stop" ? "손절" : "시간 만료"}`,
+        );
+      } else {
+        toast.success("거래를 저널에 저장했습니다.");
+      }
       router.push(`/app/journal/${res.id}`);
     });
   }
@@ -459,7 +478,21 @@ function TradeFormInner({
           </CardContent>
         </Card>
 
-        {/* 2. 시장 구조 체크리스트 */}
+        {/* 2. 포지션 사이징 — 실시간 계산기 */}
+        <SizingPanel
+          sizing={sizing}
+          currency={currency}
+          accountSize={Number(accountSize) || 0}
+          riskPct={Number(riskPct) || 0}
+          leverage={leverage}
+          entry={Number(entry) || 0}
+          stop={Number(stop) || 0}
+          target={Number(target) || undefined}
+          direction={direction}
+          onApplyLeverage={setLeverage}
+        />
+
+        {/* 3. 시장 구조 체크리스트 */}
         <Card>
           <CardHeader>
             <CardTitle>시장 구조 체크리스트</CardTitle>
@@ -583,6 +616,10 @@ function TradeFormInner({
           accountSize={Number(accountSize) || 0}
           riskPct={Number(riskPct) || 0}
           leverage={leverage}
+          entry={Number(entry) || 0}
+          stop={Number(stop) || 0}
+          target={Number(target) || undefined}
+          direction={direction}
           onApplyLeverage={setLeverage}
         />
         <Button className="w-full" size="lg" onClick={save} disabled={pending}>

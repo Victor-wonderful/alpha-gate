@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
-import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { GradeBadge } from "./grade-badge";
@@ -10,36 +10,20 @@ import type { GradeResult, SizingResult } from "@/types/trade";
 
 export function ResultPanel({
   grade,
-  sizing,
-  currency,
-  accountSize,
-  riskPct,
-  leverage,
-  onApplyLeverage,
 }: {
   grade: GradeResult;
-  sizing: SizingResult;
-  currency: "USD" | "KRW";
-  accountSize: number;
-  riskPct: number;
-  leverage: number;
+  sizing?: SizingResult;
+  currency?: "USD" | "KRW";
+  accountSize?: number;
+  riskPct?: number;
+  leverage?: number;
+  entry?: number;
+  stop?: number;
+  target?: number;
+  direction?: "long" | "short";
   onApplyLeverage?: (lev: number) => void;
 }) {
   const [open, setOpen] = useState(false);
-
-  const lev = Math.max(1, leverage);
-  const requiredMargin = sizing.valid ? sizing.positionSize / lev : 0;
-  const marginPctOfAccount =
-    accountSize > 0 ? (requiredMargin / accountSize) * 100 : 0;
-  const positionPctOfAccount =
-    accountSize > 0 ? (sizing.positionSize / accountSize) * 100 : 0;
-  const marginExceedsAccount = requiredMargin > accountSize;
-
-  // 마진 초과 시 권장 레버리지 계산 — 노출/계좌의 ceil + 여유 20%, 일반 거래소 스텝(3,5,10,20,50)에 스냅
-  const LEVERAGE_STEPS = [1, 3, 5, 10, 20, 50];
-  const minLev = accountSize > 0 ? Math.ceil(sizing.positionSize / accountSize) : 0;
-  const recommendedLev =
-    LEVERAGE_STEPS.find((lv) => lv >= Math.ceil(minLev * 1.2)) ?? 50;
 
   return (
     <Card>
@@ -53,65 +37,6 @@ export function ResultPanel({
           <Metric label="손익비" value={grade.rr > 0 ? `${grade.rr.toFixed(2)} R` : "—"} />
           <Metric label="점수" value={`${grade.score}점`} />
         </div>
-
-        {/* Risk-based sizing block */}
-        {sizing.valid ? (
-          <div className="space-y-3 rounded-md border border-border bg-background/30 p-3">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <Cell
-                label="잃을 한도"
-                value={`${riskPct.toFixed(2)}%`}
-                sub={`${formatCurrency(sizing.maxLoss, currency)} (계좌의)`}
-                tone="bad"
-              />
-              <Cell
-                label="노출 금액"
-                value={`${positionPctOfAccount.toFixed(1)}%`}
-                sub={`${formatCurrency(sizing.positionSize, currency)} (계좌의)`}
-              />
-              <Cell label="매수 수량" value={formatNumber(sizing.quantity)} />
-              <Cell
-                label={`필요 마진 (${lev}x)`}
-                value={`${marginPctOfAccount.toFixed(2)}%`}
-                sub={`${formatCurrency(requiredMargin, currency)} (계좌의)`}
-                tone={marginExceedsAccount ? "bad" : undefined}
-              />
-            </div>
-            {marginExceedsAccount ? (
-              <div className="space-y-2 rounded-md border border-grade-d/40 bg-grade-d/10 p-2.5 text-xs text-grade-d">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
-                  <span>
-                    {lev}x 로는 필요 마진({formatCurrency(requiredMargin, currency)})이 계좌($
-                    {formatNumber(accountSize, { maximumFractionDigits: 0 })})를 초과합니다.
-                    <span className="ml-1 font-semibold">
-                      {recommendedLev}x 이상 권장
-                    </span>
-                    {" "}— 노출은 그대로지만 필요 마진은 {formatCurrency(sizing.positionSize / recommendedLev, currency)}로 줄어듭니다.
-                  </span>
-                </div>
-                {onApplyLeverage ? (
-                  <button
-                    type="button"
-                    onClick={() => onApplyLeverage(recommendedLev)}
-                    className="w-full rounded border border-grade-d/60 bg-grade-d/20 py-1 text-[11px] font-semibold text-foreground transition-colors hover:bg-grade-d/30"
-                  >
-                    {recommendedLev}x로 적용
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="text-[10px] leading-relaxed text-muted-foreground">
-              <strong>노출 금액</strong>(진입가 × 수량) = 이 거래가 시장에 노출되는 총 금액. 레버리지와 무관하게 BTC 1% 변동 시 노출의 1%가 손익. 레버리지는 묶이는 마진만 줄여줍니다.
-            </div>
-          </div>
-        ) : null}
-
-        {!sizing.valid && sizing.reason ? (
-          <div className="rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-sm text-grade-d">
-            {sizing.reason}
-          </div>
-        ) : null}
 
         <Separator />
 
@@ -166,30 +91,3 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Cell({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: "good" | "bad";
-}) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "mt-0.5 font-mono text-sm font-semibold",
-          tone === "good" && "text-grade-a",
-          tone === "bad" && "text-grade-d",
-        )}
-      >
-        {value}
-      </div>
-      {sub ? <div className="text-[10px] text-muted-foreground/80">{sub}</div> : null}
-    </div>
-  );
-}

@@ -5,8 +5,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   BookOpen,
+  Brain,
   CandlestickChart,
   CheckCircle2,
+  Crown,
+  Database,
+  Layers,
   LineChart as LineChartIcon,
   Sparkles,
   TrendingUp,
@@ -43,7 +47,12 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
   const displayName = user?.email?.split("@")[0] ?? "트레이더";
 
-  const [recentTradesRes, tickers, statsRes] = await Promise.all([
+  // 이번 달 시작 시각 (UTC)
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+
+  const [recentTradesRes, tickers, statsRes, monthAnalysesRes] = await Promise.all([
     supabase
       .from("trades")
       .select("id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at")
@@ -51,6 +60,10 @@ export default async function HomePage() {
       .limit(5),
     getQuickTickers(),
     supabase.from("trades").select("result_r, pre_grade, closed_at"),
+    supabase
+      .from("analyses")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", monthStart.toISOString()),
   ]);
 
   const recent = recentTradesRes.data ?? [];
@@ -61,6 +74,15 @@ export default async function HomePage() {
   const winRate = totalTrades > 0 ? Math.round((wins / totalTrades) * 100) : 0;
   const totalR = closed.reduce((s, t) => s + Number(t.result_r ?? 0), 0);
   const openCount = allTrades.filter((t) => !t.closed_at).length;
+  const analysesUsed = monthAnalysesRes.count ?? 0;
+
+  // 멤버십 정보 (billing 미구현 — 기본 Free)
+  const userPlan: PlanKind = "free";
+  const planConfig = PLAN_INFO[userPlan];
+  const usagePct =
+    planConfig.quota === Infinity
+      ? 0
+      : Math.min(100, Math.round((analysesUsed / planConfig.quota) * 100));
 
   // 상황별 가이드 결정
   type GuideKind = "open_positions" | "first_time" | "continue";
@@ -87,47 +109,53 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-6 sm:p-8">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
-        />
-        <div className="relative">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-primary">
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-            Alpha Gate · 매매 전 점검
-          </div>
-          <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
-            안녕하세요, <span className="text-primary">{displayName}</span>님
-          </h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            AI 분석 → 주문 검토 → 내 거래 → 성과 분석. 네 단계가 한 사이클입니다.
-          </p>
+      {/* Hero + Membership */}
+      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+        {/* Hero */}
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-6 sm:p-8">
           <div
-            className={cn(
-              "mt-5 flex flex-wrap items-start gap-3 rounded-lg border p-4",
-              guideKind === "open_positions"
-                ? "border-grade-b/40 bg-grade-b/10"
-                : "border-primary/40 bg-primary/10",
-            )}
-          >
-            <div className="flex-1">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                오늘 무엇부터?
-              </div>
-              <div className="mt-0.5 text-sm font-bold text-foreground">{guideTitle}</div>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{guideDesc}</p>
+            aria-hidden
+            className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
+          />
+          <div className="relative">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-primary">
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              Alpha Gate · 매매 전 점검
             </div>
-            <Link
-              href={guideCTA.href}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
+              안녕하세요, <span className="text-primary">{displayName}</span>님
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              AI 분석 → 주문 검토 → 내 거래 → 성과 분석. 네 단계가 한 사이클입니다.
+            </p>
+            <div
+              className={cn(
+                "mt-5 flex flex-wrap items-start gap-3 rounded-lg border p-4",
+                guideKind === "open_positions"
+                  ? "border-grade-b/40 bg-grade-b/10"
+                  : "border-primary/40 bg-primary/10",
+              )}
             >
-              {guideCTA.label}
-              <ArrowRight className="h-3 w-3" />
-            </Link>
+              <div className="flex-1">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  오늘 무엇부터?
+                </div>
+                <div className="mt-0.5 text-sm font-bold text-foreground">{guideTitle}</div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{guideDesc}</p>
+              </div>
+              <Link
+                href={guideCTA.href}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                {guideCTA.label}
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
           </div>
         </div>
+
+        {/* Membership */}
+        <MembershipCard plan={userPlan} used={analysesUsed} usagePct={usagePct} />
       </div>
 
       {/* Stats */}
@@ -160,6 +188,52 @@ export default async function HomePage() {
           badge={openCount > 0 ? "live" : undefined}
         />
       </div>
+
+      {/* AI 분석 작동 방식 안내 */}
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="h-4 w-4 text-primary" />
+              AI 분석은 어떻게 작동하나요?
+            </CardTitle>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              AI가 가격을 창작하지 않습니다. 실시간 객관 데이터를 코드로 수집한 뒤 LLM은 해석만 합니다.
+            </p>
+          </div>
+          <Link
+            href="/how-it-works"
+            className="hidden flex-none items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground sm:inline-flex"
+          >
+            자세히
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <StageCard
+            stage={1}
+            icon={<Database className="h-4 w-4" />}
+            title="데이터 수집"
+            kind="코드 · 결정론적"
+            body="Binance 멀티 TF 캔들·호가·체결·펀딩·OI + ATR·VWAP·F&G·BTC 도미넌스 등 12+ 소스 병렬 수집."
+          />
+          <StageCard
+            stage={2}
+            icon={<Layers className="h-4 w-4" />}
+            title="전략 분류"
+            kind="LLM · Strategy"
+            body="수집된 데이터를 보고 5개 전략(눌림·돌파·박스·반전·대기) 중 1개 선택. 신뢰도·거부 사유 출력."
+            highlight
+          />
+          <StageCard
+            stage={3}
+            icon={<Sparkles className="h-4 w-4" />}
+            title="시나리오 생성"
+            kind="LLM · Scenario"
+            body="선택된 전략 범위 안에서 1~3개 시나리오 생성. 진입·손절·목표·트리거를 데이터 위치에 맞춰 도출."
+          />
+        </CardContent>
+      </Card>
 
       {/* Quick start + Tickers */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -313,6 +387,187 @@ export default async function HomePage() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+type PlanKind = "free" | "standard" | "pro" | "premium";
+
+const PLAN_INFO: Record<PlanKind, {
+  label: string;
+  tagline: string;
+  quota: number;
+  quotaLabel: string;
+  next?: { id: PlanKind; label: string; price: string };
+}> = {
+  free: {
+    label: "Free",
+    tagline: "맛보기로 충분",
+    quota: 5,
+    quotaLabel: "월 5회",
+    next: { id: "standard", label: "Standard", price: "₩15,000/월" },
+  },
+  standard: {
+    label: "Standard",
+    tagline: "활성 트레이더용",
+    quota: 100,
+    quotaLabel: "월 100회",
+    next: { id: "pro", label: "Pro", price: "₩95,000/월" },
+  },
+  pro: {
+    label: "Pro",
+    tagline: "프로 트레이더용",
+    quota: 500,
+    quotaLabel: "월 500회",
+    next: { id: "premium", label: "Premium", price: "₩295,000/월" },
+  },
+  premium: {
+    label: "Premium",
+    tagline: "팀·헤비유저용",
+    quota: Infinity,
+    quotaLabel: "무제한",
+  },
+};
+
+function MembershipCard({
+  plan,
+  used,
+  usagePct,
+}: {
+  plan: PlanKind;
+  used: number;
+  usagePct: number;
+}) {
+  const info = PLAN_INFO[plan];
+  const isUnlimited = info.quota === Infinity;
+  const remaining = isUnlimited ? Infinity : Math.max(0, info.quota - used);
+  const tone = isUnlimited
+    ? "ok"
+    : usagePct >= 100
+      ? "out"
+      : usagePct >= 80
+        ? "warn"
+        : "ok";
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:p-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-primary/15 blur-3xl"
+      />
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+            <Crown className="h-3 w-3" />
+            현재 플랜
+          </div>
+          <Link
+            href="/pricing"
+            className="text-[10px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            전체 플랜 →
+          </Link>
+        </div>
+
+        <div className="mt-3 flex items-baseline gap-2">
+          <span className="text-2xl font-bold tracking-tight">{info.label}</span>
+          <span className="text-xs text-muted-foreground">· {info.tagline}</span>
+        </div>
+
+        <div className="mt-5">
+          <div className="flex items-baseline justify-between text-xs">
+            <span className="text-muted-foreground">이번 달 AI 분석</span>
+            <span className="font-mono">
+              <span
+                className={cn(
+                  "font-semibold",
+                  tone === "out" && "text-grade-d",
+                  tone === "warn" && "text-grade-b",
+                )}
+              >
+                {used}
+              </span>
+              <span className="text-muted-foreground"> / {isUnlimited ? "∞" : info.quota}</span>
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted/60">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                tone === "out"
+                  ? "bg-grade-d"
+                  : tone === "warn"
+                    ? "bg-grade-b"
+                    : "bg-gradient-to-r from-primary to-primary/70",
+              )}
+              style={{ width: `${Math.min(100, usagePct)}%` }}
+            />
+          </div>
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            {isUnlimited
+              ? "무제한 사용 가능"
+              : tone === "out"
+                ? "이번 달 한도 소진 — 다음 달 1일 충전"
+                : `남은 분석 ${remaining}회`}
+          </div>
+        </div>
+
+        {info.next && (
+          <Link
+            href="/pricing"
+            className="mt-5 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs transition-colors hover:border-primary/60 hover:bg-primary/10"
+          >
+            <span>
+              <span className="text-muted-foreground">업그레이드 · </span>
+              <span className="font-semibold text-foreground">{info.next.label}</span>
+              <span className="ml-1 font-mono text-muted-foreground">{info.next.price}</span>
+            </span>
+            <ArrowRight className="h-3 w-3 text-primary" />
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StageCard({
+  stage,
+  icon,
+  title,
+  kind,
+  body,
+  highlight,
+}: {
+  stage: number;
+  icon: React.ReactNode;
+  title: string;
+  kind: string;
+  body: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-lg border bg-card-2/40 p-4 transition-colors",
+        highlight ? "border-primary/40 shadow-[0_0_24px_-8px_rgba(56,189,248,0.4)]" : "border-border",
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[10px] font-semibold text-primary">
+          STAGE {String(stage).padStart(2, "0")}
+        </span>
+        <span
+          className={cn(
+            "flex h-7 w-7 items-center justify-center rounded-md border text-primary",
+            highlight ? "border-primary/40 bg-primary/15" : "border-border bg-card",
+          )}
+        >
+          {icon}
+        </span>
+      </div>
+      <h3 className="mt-3 text-sm font-bold">{title}</h3>
+      <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{kind}</div>
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{body}</p>
     </div>
   );
 }

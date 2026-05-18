@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Clock, Radio } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GradeBadge } from "@/components/trade/grade-badge";
@@ -6,21 +8,46 @@ import { MISTAKE_TAG_LABELS, type Grade, type MistakeTag } from "@/types/trade";
 import { cn } from "@/lib/utils";
 import { FlowStepper } from "@/components/app/flow-stepper";
 
+type ModeFilter = "all" | "live" | "backtest";
+
 interface Closed {
   pre_grade: Grade;
   result_r: number;
   mistake_tags: string[] | null;
   closed_at: string;
+  mode: "live" | "backtest" | null;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage(props: {
+  searchParams: Promise<{ mode?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const modeParam = searchParams.mode;
+  const modeFilter: ModeFilter =
+    modeParam === "live" || modeParam === "backtest" ? modeParam : "all";
+
   const supabase = await getSupabaseServer();
   const { data } = await supabase
     .from("trades")
-    .select("pre_grade, result_r, mistake_tags, closed_at")
+    .select("pre_grade, result_r, mistake_tags, closed_at, mode")
     .not("closed_at", "is", null);
 
-  const rows = ((data ?? []) as unknown as Closed[]).filter((r) => r.result_r != null);
+  const allClosed = ((data ?? []) as unknown as Closed[]).filter((r) => r.result_r != null);
+
+  // 모드별 카운트 (탭 표시용)
+  const counts = {
+    all: allClosed.length,
+    live: allClosed.filter((r) => (r.mode ?? "live") === "live").length,
+    backtest: allClosed.filter((r) => r.mode === "backtest").length,
+  };
+
+  // 필터 적용
+  const rows =
+    modeFilter === "all"
+      ? allClosed
+      : modeFilter === "live"
+        ? allClosed.filter((r) => (r.mode ?? "live") === "live")
+        : allClosed.filter((r) => r.mode === "backtest");
 
   const byGrade = new Map<Grade, { n: number; sumR: number; wins: number }>();
   for (const g of ["A", "B", "C", "D"] as Grade[]) byGrade.set(g, { n: 0, sumR: 0, wins: 0 });
@@ -63,13 +90,46 @@ export default async function DashboardPage() {
       <FlowStepper current="dashboard" />
       <div>
         <h1 className="text-2xl font-bold tracking-tight">성과 분석</h1>
-        <p className="text-sm text-muted-foreground">결과가 입력된 거래만 집계합니다.</p>
+        <p className="text-sm text-muted-foreground">
+          결과가 입력된 거래만 집계합니다.
+          {modeFilter === "backtest" && (
+            <span className="ml-2 text-primary">백테스트 결과는 별도로 집계됩니다 — 실거래와 섞이지 않습니다.</span>
+          )}
+        </p>
+      </div>
+
+      {/* 모드 필터 탭 */}
+      <div className="flex flex-wrap gap-1.5">
+        <ModeTab
+          href="/app/dashboard"
+          label="전체"
+          count={counts.all}
+          active={modeFilter === "all"}
+        />
+        <ModeTab
+          href="/app/dashboard?mode=live"
+          label="실거래"
+          count={counts.live}
+          active={modeFilter === "live"}
+          icon={<Radio className="h-3 w-3 text-grade-a" />}
+        />
+        <ModeTab
+          href="/app/dashboard?mode=backtest"
+          label="백테스트"
+          count={counts.backtest}
+          active={modeFilter === "backtest"}
+          icon={<Clock className="h-3 w-3 text-primary" />}
+        />
       </div>
 
       {rows.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center text-sm text-muted-foreground">
-            아직 결과가 입력된 거래가 없습니다.
+            {modeFilter === "all"
+              ? "아직 결과가 입력된 거래가 없습니다."
+              : modeFilter === "live"
+                ? "실거래 결과가 아직 없습니다."
+                : "백테스트 결과가 아직 없습니다. AI 분석에서 백테스트 모드로 시뮬레이션해보세요."}
           </CardContent>
         </Card>
       ) : (
@@ -146,7 +206,9 @@ export default async function DashboardPage() {
                 )}
                 {worst && worst.total < 0 ? (
                   <div className="mt-4 rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-sm">
-                    <div className="font-semibold text-grade-d">당신이 가장 자주 잃는 패턴</div>
+                    <div className="font-semibold text-grade-d">
+                      {modeFilter === "backtest" ? "백테스트에서 가장 자주 잃는 패턴" : "당신이 가장 자주 잃는 패턴"}
+                    </div>
                     <div className="mt-1">
                       <span className="font-semibold">{worst.label}</span> — 누적 {worst.total.toFixed(2)}R
                       ({worst.n}건, 평균 {worst.avg.toFixed(2)}R)
@@ -156,8 +218,68 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* 라이브 vs 백테스트 비교 안내 (전체 모드일 때만) */}
+          {modeFilter === "all" && counts.backtest > 0 && counts.live > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  💡 라이브와 백테스트를 분리해서 보기
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  현재는 모든 거래가 섞여 있습니다. 라이브 실거래와 백테스트 시뮬레이션의 평균 R이 다를 수 있습니다 — 같은 등급인데 라이브에서 더 잃는다면, 분석 문제가 아니라 <strong>실행 문제</strong>일 가능성이 큽니다.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    href="/app/dashboard?mode=live"
+                    className="rounded-md border border-grade-a/30 bg-grade-a/5 px-3 py-1.5 text-xs font-medium text-grade-a transition-colors hover:bg-grade-a/10"
+                  >
+                    실거래만 보기 →
+                  </Link>
+                  <Link
+                    href="/app/dashboard?mode=backtest"
+                    className="rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                  >
+                    백테스트만 보기 →
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>
+  );
+}
+
+function ModeTab({
+  href,
+  label,
+  count,
+  active,
+  icon,
+}: {
+  href: string;
+  label: string;
+  count: number;
+  active: boolean;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+        active
+          ? "border-primary bg-primary/10 text-foreground"
+          : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+      )}
+    >
+      {icon}
+      {label}
+      <span className="font-mono text-[10px] text-muted-foreground/80">{count}</span>
+    </Link>
   );
 }

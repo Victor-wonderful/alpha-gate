@@ -15,9 +15,7 @@ import {
   MARKET_CHECK_LABELS,
   TRIGGER_CHECK_KEYS,
   TRIGGER_CHECK_LABELS,
-  DAILY_LOSS_LIMIT_R,
   ENTRY_BAND_PCT,
-  SAME_DIRECTION_EXPOSURE_PCT,
   type Direction,
   type MarketContext,
   type MoneyContext,
@@ -27,9 +25,52 @@ import {
 import { gradeTrade } from "@/lib/grading";
 import { sizePosition } from "@/lib/sizing";
 import { ResultPanel } from "./result-panel";
-import { TradingViewWidget } from "./tradingview-widget";
 import { saveTradeAction } from "@/app/app/_actions";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
+
+const ENTRY_ACCENT = "border-primary/40 focus-within:border-primary";
+const STOP_ACCENT = "border-grade-d/40 focus-within:border-grade-d";
+const TARGET_ACCENT = "border-grade-a/40 focus-within:border-grade-a";
+
+function formatRPreview(entry: number, stop: number, target: number, kind: "stop" | "target") {
+  const risk = Math.abs(entry - stop);
+  if (risk === 0) return "—";
+  if (kind === "stop") return "1R";
+  const reward = Math.abs(target - entry);
+  const r = reward / risk;
+  return `${r.toFixed(2)}R`;
+}
+
+function PriceRow({
+  label,
+  value,
+  onChange,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  hint: string | null;
+  accent: string;
+}) {
+  return (
+    <div className={cn("flex items-center gap-2 rounded-md border bg-background/40 px-3 py-1.5", accent)}>
+      <span className="w-16 flex-none text-xs font-semibold text-muted-foreground">{label}</span>
+      <Input
+        type="number"
+        inputMode="decimal"
+        step="any"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 border-0 bg-transparent px-0 font-mono text-base font-semibold focus-visible:ring-0"
+      />
+      {hint ? (
+        <span className="flex-none font-mono text-[11px] text-muted-foreground">{hint}</span>
+      ) : null}
+    </div>
+  );
+}
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"];
 const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1D"];
@@ -84,7 +125,7 @@ function TradeFormInner({
   const [target, setTarget] = useState(() => params.get("target") ?? "");
   const [accountSize, setAccountSize] = useState(String(initialAccountSize || 10000));
   const [riskPct, setRiskPct] = useState(String(initialRiskPct || 1));
-  const [leverage, setLeverage] = useState(1);
+  const [leverage, setLeverage] = useState(5);
   const [market, setMarket] = useState<TradeInput["market"]>(() => {
     const prefilled = { ...defaultMarket };
     for (const k of MARKET_CHECK_KEYS) {
@@ -118,8 +159,6 @@ function TradeFormInner({
   const entryNum = Number(entry) || 0;
   const entryBandLow = entryNum * (1 - ENTRY_BAND_PCT / 100);
   const entryBandHigh = entryNum * (1 + ENTRY_BAND_PCT / 100);
-
-  const duplicateSymbol = money.openPositions.some((p) => p.symbol === symbol);
 
   const input: TradeInput = useMemo(
     () => ({
@@ -157,7 +196,7 @@ function TradeFormInner({
       return;
     }
     startTransition(async () => {
-      const res = await saveTradeAction({ input, grade, sizing });
+      const res = await saveTradeAction({ input, grade, sizing, leverage });
       if (res.error) {
         toast.error(res.error);
         return;
@@ -167,92 +206,254 @@ function TradeFormInner({
     });
   }
 
+  // 거래소 스타일 계산값
+  const entryNumV = Number(entry) || 0;
+  const stopNumV = Number(stop) || 0;
+  const targetNumV = Number(target) || 0;
+  const accountNumV = Number(accountSize) || 0;
+  const currentPrice = marketCtx.btcPrice; // BTC만. 다른 심볼 현재가는 향후 marketCtx 확장
+  const stopPct =
+    entryNumV > 0 && stopNumV > 0
+      ? ((stopNumV - entryNumV) / entryNumV) * 100
+      : 0;
+  const targetPct =
+    entryNumV > 0 && targetNumV > 0
+      ? ((targetNumV - entryNumV) / entryNumV) * 100
+      : 0;
+  // 리스크%에서 도출되는 사이즈 (read-only 미리보기)
+  const lossUsd = accountNumV * (Number(riskPct) || 0) / 100;
+  const riskPerUnit = Math.abs(entryNumV - stopNumV);
+  const previewQty = riskPerUnit > 0 ? lossUsd / riskPerUnit : 0;
+  const previewNotional = previewQty * entryNumV;
+  const notionalPctOfAccount = accountNumV > 0 ? (previewNotional / accountNumV) * 100 : 0;
+
+  function applyAccountPct(pct: number) {
+    // pct = 25/50/75/100 → riskPct를 그 % 만큼의 손실 한도로 환산
+    // 여기서는 "노출 금액 = 계좌의 pct%"로 해석하고, 그에 대응하는 손실%를 거꾸로 계산
+    // 노출 = 계좌 × pct/100, 손실 = 노출 × (riskPerUnit / entry)
+    // 결과 손실% = pct × (riskPerUnit/entry)
+    if (entryNumV > 0 && riskPerUnit > 0) {
+      const notional = accountNumV * (pct / 100);
+      const qty = notional / entryNumV;
+      const loss = qty * riskPerUnit;
+      const newRiskPct = accountNumV > 0 ? (loss / accountNumV) * 100 : 0;
+      setRiskPct(newRiskPct.toFixed(2));
+    } else {
+      // 기본: 리스크 자체를 pct로 (단순 fallback)
+      setRiskPct(String(pct / 25));
+    }
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
       <div className="space-y-6">
-        {/* 1. 거래 입력 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>거래 입력</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label>코인</Label>
-                <Select value={symbol} onChange={(e) => setSymbol(e.target.value)}>
-                  {(SYMBOLS.includes(symbol) ? SYMBOLS : [symbol, ...SYMBOLS]).map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>방향</Label>
-                <Select value={direction} onChange={(e) => setDirection(e.target.value as Direction)}>
-                  <option value="long">롱</option>
-                  <option value="short">숏</option>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>타임프레임</Label>
-                <Select value={timeframe} onChange={(e) => setTimeframe(e.target.value as Timeframe)}>
+        {/* 1. 주문 입력 — 거래소 스타일 */}
+        <Card className="overflow-hidden">
+          {/* Header: symbol + futures meta */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/40 px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Select
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value)}
+                className="h-8 w-auto min-w-[120px] border-border bg-background font-mono text-sm font-bold"
+              >
+                {(SYMBOLS.includes(symbol) ? SYMBOLS : [symbol, ...SYMBOLS]).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Select>
+              <span className="rounded border border-border bg-background/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Perpetual
+              </span>
+              <span className="rounded border border-border bg-background/60 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
+                {leverage}x
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">TF</span>
+                <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/60 p-0.5">
                   {TIMEFRAMES.map((t) => (
-                    <option key={t} value={t}>
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTimeframe(t)}
+                      className={cn(
+                        "rounded px-2 py-0.5 font-mono text-[11px] font-semibold transition-colors",
+                        timeframe === t
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                      )}
+                    >
                       {t}
-                    </option>
+                    </button>
                   ))}
-                </Select>
+                </div>
+              </div>
+              {currentPrice && symbol === "BTCUSDT" ? (
+                <div className="font-mono text-xs">
+                  <span className="text-muted-foreground">현재가</span>{" "}
+                  <span className="font-semibold text-foreground">${currentPrice.toLocaleString()}</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Big direction buttons */}
+          <div className="grid grid-cols-2 gap-2 p-4">
+            <button
+              type="button"
+              onClick={() => setDirection("long")}
+              className={cn(
+                "rounded-md py-3 text-sm font-bold uppercase tracking-wide transition-all",
+                direction === "long"
+                  ? "bg-grade-a text-white shadow-md shadow-grade-a/30"
+                  : "border border-border bg-background/40 text-muted-foreground hover:bg-grade-a/10 hover:text-grade-a",
+              )}
+            >
+              롱 매수 / Long
+            </button>
+            <button
+              type="button"
+              onClick={() => setDirection("short")}
+              className={cn(
+                "rounded-md py-3 text-sm font-bold uppercase tracking-wide transition-all",
+                direction === "short"
+                  ? "bg-grade-d text-white shadow-md shadow-grade-d/30"
+                  : "border border-border bg-background/40 text-muted-foreground hover:bg-grade-d/10 hover:text-grade-d",
+              )}
+            >
+              숏 매도 / Short
+            </button>
+          </div>
+
+          <CardContent className="space-y-4 pt-0">
+            {/* Price inputs with auto-% */}
+            <div className="space-y-2">
+              <PriceRow
+                label="진입가"
+                value={entry}
+                onChange={setEntry}
+                accent={ENTRY_ACCENT}
+                hint={
+                  currentPrice && symbol === "BTCUSDT" && entryNumV > 0
+                    ? `현재가 대비 ${(((entryNumV - currentPrice) / currentPrice) * 100).toFixed(2)}%`
+                    : null
+                }
+              />
+              <PriceRow
+                label="손절 SL"
+                value={stop}
+                onChange={setStop}
+                accent={STOP_ACCENT}
+                hint={
+                  entryNumV > 0 && stopNumV > 0
+                    ? `${stopPct.toFixed(2)}% (${formatRPreview(entryNumV, stopNumV, targetNumV, "stop")})`
+                    : null
+                }
+              />
+              <PriceRow
+                label="익절 TP"
+                value={target}
+                onChange={setTarget}
+                accent={TARGET_ACCENT}
+                hint={
+                  entryNumV > 0 && targetNumV > 0
+                    ? `${targetPct >= 0 ? "+" : ""}${targetPct.toFixed(2)}% (${formatRPreview(entryNumV, stopNumV, targetNumV, "target")})`
+                    : null
+                }
+              />
+            </div>
+
+            {/* Size / quantity section */}
+            <div className="space-y-2 rounded-md border border-border bg-background/30 p-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground">사이즈 (리스크 기반)</span>
+                <span className="font-mono text-muted-foreground">
+                  {previewQty > 0 ? `${formatNumber(previewQty, { maximumFractionDigits: 4 })} ${symbol.replace("USDT", "")}` : "—"}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-muted-foreground">계좌의:</span>
+                {[10, 25, 50, 100].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => applyAccountPct(pct)}
+                    className={cn(
+                      "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
+                      Math.abs(notionalPctOfAccount - pct) < 1
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
+                    )}
+                  >
+                    {pct === 100 ? "Max" : `${pct}%`}
+                  </button>
+                ))}
+                <span className="ml-auto font-mono text-[11px] text-muted-foreground">
+                  노출 {notionalPctOfAccount.toFixed(1)}%
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="space-y-1">
+                  <Label className="text-[11px]">계좌 ({currency})</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={accountSize}
+                    onChange={(e) => setAccountSize(e.target.value)}
+                    className="h-9 font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px]">리스크 / 거래 (%)</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    value={riskPct}
+                    onChange={(e) => setRiskPct(e.target.value)}
+                    className="h-9 font-mono"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label>진입가</Label>
-                <Input type="number" inputMode="decimal" step="any" value={entry} onChange={(e) => setEntry(e.target.value)} />
+            {/* Leverage slider */}
+            <div className="space-y-2 rounded-md border border-border bg-background/30 p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">레버리지</Label>
+                <span className="font-mono text-sm font-bold text-foreground">{leverage}x</span>
               </div>
-              <div className="space-y-1.5">
-                <Label>손절가</Label>
-                <Input type="number" inputMode="decimal" step="any" value={stop} onChange={(e) => setStop(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>목표가</Label>
-                <Input type="number" inputMode="decimal" step="any" value={target} onChange={(e) => setTarget(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>계좌 크기 ({currency})</Label>
-                <Input type="number" inputMode="decimal" value={accountSize} onChange={(e) => setAccountSize(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>허용 손실률 (%)</Label>
-                <Input type="number" inputMode="decimal" step="0.1" value={riskPct} onChange={(e) => setRiskPct(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>레버리지</Label>
-              <div className="flex flex-wrap gap-2">
+              <input
+                type="range"
+                min={1}
+                max={50}
+                step={1}
+                value={leverage}
+                onChange={(e) => setLeverage(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+              <div className="flex flex-wrap gap-1">
                 {[1, 3, 5, 10, 20, 50].map((lv) => (
                   <button
                     key={lv}
                     type="button"
                     onClick={() => setLeverage(lv)}
-                    className={
-                      "rounded-md border px-3 py-1.5 text-sm transition-colors " +
-                      (leverage === lv
+                    className={cn(
+                      "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
+                      leverage === lv
                         ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40")
-                    }
+                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
+                    )}
                   >
                     {lv}x
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                레버리지는 손익비와 등급에 영향을 주지 않습니다. 필요한 마진(증거금) 계산만 달라집니다.
+              <p className="text-[10px] text-muted-foreground">
+                레버리지는 손익비/등급과 무관. 필요 마진만 달라집니다.
               </p>
             </div>
           </CardContent>
@@ -309,61 +510,7 @@ function TradeFormInner({
           </CardContent>
         </Card>
 
-        {/* 4. 자금 관리 상태 (NEW, 자동) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>자금 관리 상태</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="grid grid-cols-3 gap-3">
-              <StatCell
-                label="오늘 거래"
-                value={`${money.todayClosedCount}건`}
-                sub={`${money.todayCumulativeR.toFixed(2)}R 누적`}
-                tone={money.todayCumulativeR < 0 ? "bad" : money.todayCumulativeR > 0 ? "good" : undefined}
-              />
-              <StatCell
-                label="일일 한도까지"
-                value={`${(money.todayCumulativeR - DAILY_LOSS_LIMIT_R).toFixed(2)}R`}
-                sub={`한도 ${DAILY_LOSS_LIMIT_R}R`}
-                tone={money.todayCumulativeR <= DAILY_LOSS_LIMIT_R ? "bad" : undefined}
-              />
-              <StatCell
-                label="진행 중 노출"
-                value={`${money.openExposurePct.toFixed(0)}%`}
-                sub={`${money.openPositions.length}개 포지션`}
-                tone={money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? "bad" : undefined}
-              />
-            </div>
-
-            {money.openPositions.length > 0 ? (
-              <div className="rounded-md border border-border bg-background/30 p-3 text-xs">
-                <div className="mb-1.5 text-[11px] uppercase text-muted-foreground">진행 중 포지션</div>
-                <div className="space-y-1">
-                  {money.openPositions.slice(0, 6).map((p) => (
-                    <div key={p.id} className="flex items-center justify-between">
-                      <span>
-                        {p.symbol} <span className="text-muted-foreground">{p.direction === "long" ? "롱" : "숏"}</span>
-                      </span>
-                      <span className="font-mono text-muted-foreground">
-                        {formatCurrency(p.positionSize, currency)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {duplicateSymbol ? (
-              <WarnBar text={`${symbol} 진행 중 포지션이 이미 있습니다 — 중복 진입 재검토.`} />
-            ) : null}
-            {money.todayCumulativeR <= DAILY_LOSS_LIMIT_R ? (
-              <WarnBar text="일일 손실 한도에 도달했습니다. 오늘은 거래 중단을 권장합니다." />
-            ) : null}
-          </CardContent>
-        </Card>
-
-        {/* 5. 시장 컨텍스트 (NEW, 자동) */}
+        {/* 4. 시장 컨텍스트 (NEW, 자동) */}
         <Card>
           <CardHeader>
             <CardTitle>시장 컨텍스트</CardTitle>
@@ -426,15 +573,6 @@ function TradeFormInner({
             ) : null}
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{symbol} · {timeframe}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TradingViewWidget symbol={symbol} timeframe={timeframe} />
-          </CardContent>
-        </Card>
       </div>
 
       <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
@@ -445,6 +583,7 @@ function TradeFormInner({
           accountSize={Number(accountSize) || 0}
           riskPct={Number(riskPct) || 0}
           leverage={leverage}
+          onApplyLeverage={setLeverage}
         />
         <Button className="w-full" size="lg" onClick={save} disabled={pending}>
           {pending ? "저장 중..." : "거래 저장"}

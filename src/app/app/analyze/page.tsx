@@ -1,5 +1,7 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { AnalyzeClient } from "./analyze-client";
+import { AnalysisHistory } from "@/components/analyze/analysis-history";
+import { FlowStepper } from "@/components/app/flow-stepper";
 
 export default async function AnalyzePage() {
   const supabase = await getSupabaseServer();
@@ -16,6 +18,7 @@ export default async function AnalyzePage() {
 
   return (
     <div className="space-y-6">
+      <FlowStepper current="analyze" />
       <div>
         <h1 className="text-2xl font-bold tracking-tight">AI 시장 분석</h1>
         <p className="text-sm text-muted-foreground">
@@ -28,6 +31,7 @@ export default async function AnalyzePage() {
         riskPct={Number(profile?.default_risk_pct) || 1}
         currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
       />
+      <AnalysisHistory />
     </div>
   );
 }

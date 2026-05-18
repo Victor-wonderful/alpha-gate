@@ -65,3 +65,23 @@ export async function generateCoachAction(id: string): Promise<{ comment?: strin
   revalidatePath(`/app/journal/${id}`);
   return { comment };
 }
+
+export async function deleteTradeAction(id: string): Promise<{ error?: string }> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { error } = await supabase
+    .from("trades")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/app/journal");
+  revalidatePath("/app/dashboard");
+  revalidatePath("/app");
+  return {};
+}

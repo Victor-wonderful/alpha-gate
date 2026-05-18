@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GradeBadge } from "@/components/trade/grade-badge";
 import type { Grade } from "@/types/trade";
+import { FlowStepper } from "@/components/app/flow-stepper";
 
 export default async function JournalListPage() {
   const supabase = await getSupabaseServer();
@@ -15,15 +16,16 @@ export default async function JournalListPage() {
 
   return (
     <div className="space-y-6">
+      <FlowStepper current="journal" />
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">거래 저널</h1>
+        <h1 className="text-2xl font-bold tracking-tight">내 거래</h1>
         <p className="text-sm text-muted-foreground">최근 100건의 거래입니다.</p>
       </div>
 
       {!trades?.length ? (
         <Card>
           <CardContent className="p-10 text-center text-sm text-muted-foreground">
-            아직 저장한 거래가 없습니다. 거래 평가 화면에서 첫 거래를 저장해보세요.
+            아직 저장한 거래가 없습니다. 주문 검토 화면에서 첫 거래를 저장해보세요.
           </CardContent>
         </Card>
       ) : (

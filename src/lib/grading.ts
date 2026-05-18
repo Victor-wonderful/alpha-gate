@@ -1,10 +1,4 @@
-import {
-  DAILY_LOSS_LIMIT_R,
-  SAME_DIRECTION_EXPOSURE_PCT,
-  type GradeResult,
-  type ScoreReason,
-  type TradeInput,
-} from "@/types/trade";
+import type { GradeResult, ScoreReason, TradeInput } from "@/types/trade";
 
 export function calcRR(entry: number, stop: number, target: number, direction: "long" | "short") {
   const risk = Math.abs(entry - stop);
@@ -62,35 +56,6 @@ export function gradeTrade(input: TradeInput): GradeResult {
   if (!input.trigger.trigger_confirmed)
     reasons.push({ code: "trigger_missing", label: "트리거 조건 미확인", points: -1 });
 
-  // ─── 자금 관리 자동 감지 ──────────────────────────────
-  if (input.money.todayCumulativeR <= DAILY_LOSS_LIMIT_R)
-    reasons.push({
-      code: "daily_loss_limit",
-      label: `오늘 누적 ${input.money.todayCumulativeR.toFixed(2)}R — 일일 손실 한도 도달`,
-      points: -2,
-    });
-  else if (input.money.todayCumulativeR < 0 && input.money.todayClosedCount >= 2)
-    reasons.push({
-      code: "losing_streak_today",
-      label: `오늘 ${input.money.todayClosedCount}건 ${input.money.todayCumulativeR.toFixed(2)}R 손실 중`,
-      points: -1,
-    });
-
-  const duplicateSymbol = input.money.openPositions.some((p) => p.symbol === input.symbol);
-  if (duplicateSymbol)
-    reasons.push({
-      code: "duplicate_symbol",
-      label: `${input.symbol} 진행 중 포지션이 이미 있음`,
-      points: -1,
-    });
-
-  if (input.money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT)
-    reasons.push({
-      code: "exposure_high",
-      label: `진행 중 노출이 계좌의 ${input.money.openExposurePct.toFixed(0)}%`,
-      points: -2,
-    });
-
   // ─── 시장 컨텍스트 자동 감지 ──────────────────────────
   if (
     input.marketCtx.minutesToFunding !== null &&
@@ -124,8 +89,6 @@ export function gradeTrade(input: TradeInput): GradeResult {
   // ─── 행동 권고 ────────────────────────────────────────
   const actions: string[] = [];
   if (grade === "D") actions.push("이 거래는 하지 마세요. 조건이 너무 나쁩니다.");
-  if (input.money.todayCumulativeR <= DAILY_LOSS_LIMIT_R)
-    actions.push("일일 손실 한도에 도달했습니다. 오늘은 거래를 멈추세요.");
   if (rr > 0 && rr < 1.5) actions.push("손익비가 낮습니다. 목표가를 조정하거나 거래를 취소하세요.");
   if (rr === 0) actions.push("진입가/손절가/목표가 방향이 어긋났습니다. 다시 입력하세요.");
   if (!input.market.not_box_middle)
@@ -136,8 +99,6 @@ export function gradeTrade(input: TradeInput): GradeResult {
     actions.push("계획 진입 구간을 벗어났습니다. 추격 대신 다음 기회를 기다리세요.");
   if (!input.trigger.candle_closed)
     actions.push("캔들이 종가까지 확정된 후 진입하세요.");
-  if (duplicateSymbol)
-    actions.push(`${input.symbol} 포지션이 이미 진행 중입니다. 동일 종목 중복 진입을 재검토하세요.`);
   if (input.marketCtx.minutesToFunding !== null && input.marketCtx.minutesToFunding <= 10)
     actions.push("펀딩 정산이 임박합니다. 슬리피지/펀딩비 부담을 감안하세요.");
 

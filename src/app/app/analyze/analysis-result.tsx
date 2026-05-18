@@ -12,6 +12,7 @@ import {
   Target,
   Lightbulb,
   ChevronDown,
+  Info,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -215,27 +216,36 @@ export function AnalysisResult({
       {/* Chart visualization */}
       {report.scenarios.length > 0 ? (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <CardTitle className="text-base">차트로 보기</CardTitle>
-            {report.scenarios.length > 1 ? (
-              <div className="flex flex-wrap gap-1">
-                {report.scenarios.map((s, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setActiveScenario(i)}
-                    className={cn(
-                      "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
-                      activeScenario === i
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
-                    )}
-                  >
-                    {String.fromCharCode(65 + i)} · {s.direction === "long" ? "롱" : "숏"}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+          <CardHeader className="space-y-3">
+            <div className="flex flex-row items-center justify-between gap-3">
+              <CardTitle className="text-base">차트로 보기</CardTitle>
+              {report.scenarios.length > 1 ? (
+                <div className="flex flex-wrap gap-1">
+                  {report.scenarios.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setActiveScenario(i)}
+                      title={s.name}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                        activeScenario === i
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
+                      )}
+                    >
+                      {String.fromCharCode(65 + i)} · {s.direction === "long" ? "롱" : "숏"}
+                      {i === 0 ? (
+                        <span className="ml-1 rounded bg-primary/20 px-1 py-0 text-[9px] uppercase tracking-wider text-primary">
+                          메인
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <ScenarioExplainer scenarios={report.scenarios} active={activeScenario} />
           </CardHeader>
           <CardContent>
             <ChartErrorBoundary
@@ -698,7 +708,7 @@ function SimpleScenarioCard({
                 />
               </div>
               <div className="text-[10px] text-muted-foreground">
-                계좌 {formatCurrency(accountSize, currency)} 기준. <strong>노출 금액</strong>은 진입가 × 수량 (레버리지 무관, 시장에 노출되는 총 금액). 레버리지는 거래 평가 화면에서 선택하면 필요 마진이 나옵니다.
+                계좌 {formatCurrency(accountSize, currency)} 기준. <strong>노출 금액</strong>은 진입가 × 수량 (레버리지 무관, 시장에 노출되는 총 금액). 레버리지는 주문 검토 화면에서 선택하면 필요 마진이 나옵니다.
               </div>
             </div>
 
@@ -715,7 +725,7 @@ function SimpleScenarioCard({
         {/* CTA */}
         <Link href={tradeFormHref(symbol, scenario)}>
           <Button className="w-full" size="lg">
-            이 시나리오로 거래 평가 시작
+            이 시나리오로 주문 검토
             <ArrowRight className="h-4 w-4" />
           </Button>
         </Link>
@@ -903,5 +913,65 @@ function StandardBadge({
       <span>{icon}</span>
       <span>{check.label}</span>
     </span>
+  );
+}
+
+function ScenarioExplainer({
+  scenarios,
+  active,
+}: {
+  scenarios: AnalysisReport["scenarios"];
+  active: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const count = scenarios.length;
+  const current = scenarios[active];
+  const activeLetter = String.fromCharCode(65 + active);
+
+  return (
+    <div className="rounded-md border border-border bg-background/40 p-3 text-xs">
+      <div className="flex items-start gap-2">
+        <Info className="mt-0.5 h-3.5 w-3.5 flex-none text-primary" />
+        <div className="flex-1 space-y-1.5">
+          {count === 1 ? (
+            <div className="leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">시나리오 1개</span> — 현재는 메인 시나리오 1개만 잡혔습니다. AI가 보조 시나리오를 만들 만큼 명확한 대안 구조를 찾지 못했다는 뜻입니다.
+            </div>
+          ) : (
+            <div className="leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">시나리오 {count}개</span> —
+              <span className="ml-1 font-semibold text-primary">A는 메인</span>(가장 확률 높은 진입),
+              <span className="ml-1">B{count >= 3 ? "/C" : ""}는 대안</span>(같은 방향의 다른 트리거 또는 메인 무효화 시 작동). 탭을 눌러 비교하고, <strong className="text-foreground">동시에 진입하지 마세요</strong> — 트리거가 가장 먼저 발생한 1개만 진입.
+            </div>
+          )}
+
+          {/* Now showing */}
+          {current ? (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="rounded bg-primary/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">
+                지금 보는 중: {activeLetter}
+              </span>
+              <span className="text-muted-foreground">{current.name}</span>
+            </div>
+          ) : null}
+
+          {expanded ? (
+            <ul className="mt-2 space-y-1 border-t border-border pt-2 leading-relaxed text-muted-foreground">
+              <li>• AI는 시장 상황에 따라 1~3개의 시나리오를 만듭니다. 억지로 양방향을 만들지 않습니다.</li>
+              <li>• 각 시나리오의 <span className="font-mono">트리거 / 진입가 / 손절 / 목표</span>는 모두 다릅니다.</li>
+              <li>• 진입 후에는 그 시나리오의 손절가만 지키세요. 다른 시나리오의 손절은 무관합니다.</li>
+            </ul>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="text-[11px] text-primary hover:underline"
+          >
+            {expanded ? "접기" : "자세히 보기"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -42,12 +42,12 @@ const MAIN: SidebarItem[] = [{ href: "/app", label: "홈", icon: "home" }];
 
 const TRADE: SidebarItem[] = [
   { href: "/app/analyze", label: "AI 분석", icon: "sparkles" },
-  { href: "/app/trade", label: "거래 평가", icon: "check" },
+  { href: "/app/trade", label: "주문 검토", icon: "check" },
 ];
 
 const REVIEW: SidebarItem[] = [
-  { href: "/app/journal", label: "저널", icon: "book" },
-  { href: "/app/dashboard", label: "대시보드", icon: "chart" },
+  { href: "/app/journal", label: "내 거래", icon: "book" },
+  { href: "/app/dashboard", label: "성과 분석", icon: "chart" },
 ];
 
 const SETTINGS: SidebarItem[] = [{ href: "/app/settings/notify", label: "알림 설정", icon: "bell" }];
@@ -211,8 +211,8 @@ function SidebarContent({ email, onNavigate }: { email: string; onNavigate?: () 
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-5">
         <NavGroup items={MAIN} pathname={pathname} onNavigate={onNavigate} />
-        <NavGroup label="매매 도구" items={TRADE} pathname={pathname} onNavigate={onNavigate} />
-        <NavGroup label="기록 · 복기" items={REVIEW} pathname={pathname} onNavigate={onNavigate} />
+        <NavGroup label="진입 전" items={TRADE} pathname={pathname} onNavigate={onNavigate} />
+        <NavGroup label="진입 후" items={REVIEW} pathname={pathname} onNavigate={onNavigate} />
         <NavGroup label="설정" items={SETTINGS} pathname={pathname} onNavigate={onNavigate} />
       </nav>
 

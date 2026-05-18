@@ -9,6 +9,7 @@ export async function saveTradeAction(args: {
   input: TradeInput;
   grade: GradeResult;
   sizing: SizingResult;
+  leverage?: number;
 }): Promise<{ id?: string; error?: string }> {
   const supabase = await getSupabaseServer();
   const {
@@ -16,7 +17,7 @@ export async function saveTradeAction(args: {
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요합니다." };
 
-  const { input, grade, sizing } = args;
+  const { input, grade, sizing, leverage } = args;
   const { data, error } = await supabase
     .from("trades")
     .insert({
@@ -33,13 +34,8 @@ export async function saveTradeAction(args: {
       market_checks: input.market,
       psych_checks: {}, // deprecated, kept for NOT NULL constraint
       context_flags: {
+        leverage: leverage ?? 1,
         trigger: input.trigger,
-        money: {
-          todayCumulativeR: input.money.todayCumulativeR,
-          todayClosedCount: input.money.todayClosedCount,
-          openExposurePct: input.money.openExposurePct,
-          openSymbols: input.money.openPositions.map((p) => p.symbol),
-        },
         marketCtx: input.marketCtx,
       },
       pre_grade: grade.grade,
@@ -61,14 +57,6 @@ export async function saveTradeAction(args: {
       tradeId: data.id,
     });
   }
-  if (input.money.todayCumulativeR <= -2) {
-    await dispatch(user.id, "losing_streak", {
-      title: "일일 손실 한도 경고",
-      body: `오늘 누적 ${input.money.todayCumulativeR.toFixed(2)}R 손실 상태에서 ${grade.grade}급 거래를 저장했습니다. 오늘은 거래 중단을 권장합니다.`,
-      tradeId: data.id,
-    });
-  }
-
   revalidatePath("/app/journal");
   revalidatePath("/app/dashboard");
   return { id: data.id };

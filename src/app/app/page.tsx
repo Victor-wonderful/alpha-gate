@@ -62,6 +62,29 @@ export default async function HomePage() {
   const totalR = closed.reduce((s, t) => s + Number(t.result_r ?? 0), 0);
   const openCount = allTrades.filter((t) => !t.closed_at).length;
 
+  // 상황별 가이드 결정
+  type GuideKind = "open_positions" | "first_time" | "continue";
+  let guideKind: GuideKind;
+  let guideTitle: string;
+  let guideDesc: string;
+  let guideCTA: { href: string; label: string };
+  if (openCount > 0) {
+    guideKind = "open_positions";
+    guideTitle = `진행 중 ${openCount}건 — 결과 확인`;
+    guideDesc = "이미 진입한 포지션이 있습니다. 청산 후 내 거래에서 결과를 기록해 다음 거래에 반영하세요.";
+    guideCTA = { href: "/app/journal", label: "내 거래로" };
+  } else if (totalTrades === 0) {
+    guideKind = "first_time";
+    guideTitle = "첫 시작 — AI 분석부터";
+    guideDesc = "Alpha Gate는 4단계 사이클입니다. AI 분석 → 주문 검토 → 내 거래(결과 입력) → 성과 분석. 첫 분석부터 시작하세요.";
+    guideCTA = { href: "/app/analyze", label: "AI 분석 시작" };
+  } else {
+    guideKind = "continue";
+    guideTitle = "다음 셋업 찾기";
+    guideDesc = "AI 분석으로 시장을 보고 진입할 자리를 찾으세요.";
+    guideCTA = { href: "/app/analyze", label: "AI 분석으로" };
+  }
+
   return (
     <div className="space-y-8">
       {/* Hero */}
@@ -79,22 +102,29 @@ export default async function HomePage() {
             안녕하세요, <span className="text-primary">{displayName}</span>님
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            오늘 어떤 거래를 검토할지 정리해봅시다. 분석 → 평가 → 저널 → 복기, 네 단계가 한 사이클입니다.
+            AI 분석 → 주문 검토 → 내 거래 → 성과 분석. 네 단계가 한 사이클입니다.
           </p>
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div
+            className={cn(
+              "mt-5 flex flex-wrap items-start gap-3 rounded-lg border p-4",
+              guideKind === "open_positions"
+                ? "border-grade-b/40 bg-grade-b/10"
+                : "border-primary/40 bg-primary/10",
+            )}
+          >
+            <div className="flex-1">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                오늘 무엇부터?
+              </div>
+              <div className="mt-0.5 text-sm font-bold text-foreground">{guideTitle}</div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{guideDesc}</p>
+            </div>
             <Link
-              href="/app/analyze"
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              href={guideCTA.href}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              <Sparkles className="h-4 w-4" />
-              AI 시장 분석 시작
-            </Link>
-            <Link
-              href="/app/trade"
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-background/40 px-4 py-2 text-sm font-medium hover:bg-muted/50"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              거래 평가
+              {guideCTA.label}
+              <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
         </div>
@@ -150,14 +180,14 @@ export default async function HomePage() {
             />
             <ActionCard
               href="/app/trade"
-              title="거래 평가"
+              title="주문 검토"
               desc="등급 · 손익비 · 사이징"
               icon={<CheckCircle2 className="h-4 w-4" />}
               accent="grade-a"
             />
             <ActionCard
               href="/app/journal"
-              title="저널 · AI 복기"
+              title="내 거래 · AI 복기"
               desc="결과 기록 · 패턴 분석"
               icon={<BookOpen className="h-4 w-4" />}
               accent="grade-c"

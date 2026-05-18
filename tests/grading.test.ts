@@ -65,17 +65,16 @@ describe("gradeTrade", () => {
     expect(["C", "D"]).toContain(r.grade);
   });
 
-  it("daily loss limit + wide stop drops to D", () => {
+  it("missing triggers + bad market drops to C/D", () => {
     const r = gradeTrade({
       ...base,
       entry: 100,
       stop: 95, // 5% wide
       target: 110,
       market: { ...base.market, aligned_with_btc: false, not_box_middle: false },
-      money: { ...base.money, todayCumulativeR: -2.5, todayClosedCount: 3 },
+      trigger: { trigger_confirmed: false, within_entry_band: false, candle_closed: false },
     });
-    expect(r.grade).toBe("D");
-    expect(r.actions.some((a) => a.includes("멈"))).toBe(true);
+    expect(["C", "D"]).toContain(r.grade);
   });
 
   it("invalid structure surfaces action", () => {

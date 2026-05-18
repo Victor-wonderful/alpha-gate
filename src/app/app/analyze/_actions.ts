@@ -8,14 +8,9 @@ import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { saveAnalysis, loadAnalysis } from "@/lib/analysis/persist";
 import { revalidatePath } from "next/cache";
 
-const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
-type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
 export async function runAnalysisAction(
   symbol: string,
   style: TradingStyle = "swing",
-  image?: { mediaType: string; base64: string },
 ): Promise<{
   snapshot?: AnalysisSnapshot;
   strategy?: StrategyResult;
@@ -32,15 +27,6 @@ export async function runAnalysisAction(
     return { error: "심볼 형식이 올바르지 않습니다. 예: BTCUSDT" };
 
   if (!STYLE_PRESETS[style]) return { error: "지원하지 않는 트레이딩 스타일입니다." };
-
-  let validatedImage: { mediaType: AllowedImageType; base64: string } | undefined;
-  if (image) {
-    if (!ALLOWED_IMAGE_TYPES.includes(image.mediaType as AllowedImageType))
-      return { error: "PNG / JPG / WEBP / GIF 이미지만 업로드 가능합니다." };
-    const approxBytes = (image.base64.length * 3) / 4;
-    if (approxBytes > MAX_IMAGE_BYTES) return { error: "이미지 크기는 5MB 이하여야 합니다." };
-    validatedImage = { mediaType: image.mediaType as AllowedImageType, base64: image.base64 };
-  }
 
   // Stage 1: Market Data (deterministic)
   let snapshot: AnalysisSnapshot;
@@ -67,7 +53,7 @@ export async function runAnalysisAction(
   // Stage 3: Scenario Synthesis (LLM, constrained by strategy)
   let report: AnalysisReport;
   try {
-    report = await synthesizeAnalysis(snapshot, strategy, validatedImage);
+    report = await synthesizeAnalysis(snapshot, strategy);
   } catch (e) {
     return {
       snapshot,
@@ -93,4 +79,23 @@ export async function loadAnalysisAction(id: string): Promise<
   | { error: string }
 > {
   return await loadAnalysis(id);
+}
+
+export async function deleteAnalysisAction(id: string): Promise<{ error?: string }> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { error } = await supabase
+    .from("analyses")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/app/analyze");
+  revalidatePath("/app/analyze/history");
+  return {};
 }

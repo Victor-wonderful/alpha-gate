@@ -13,6 +13,17 @@ import { classifyTrend, findFVGs, findLiquidityZones, findOrderBlocks, findSwing
 import { computeVolumeProfile } from "./volume-profile";
 import { classifyFunding, summarizeDepth, summarizeFlow } from "./order-flow";
 import { STYLE_PRESETS, tfsForStyle, type TradingStyle } from "./style";
+import {
+  computeATR,
+  computeSessionVWAP,
+  detectSession,
+  fetchDXY,
+  fetchFearGreed,
+  fetchFundingHistory,
+  fetchOIDelta,
+  fetchSpotPerpBasis,
+  fetchTopTraderRatio,
+} from "./enriched";
 
 export interface AnalysisSnapshot {
   symbol: string;
@@ -39,6 +50,12 @@ export interface AnalysisSnapshot {
   mtfChart: {
     tf: Interval;
     candles: { time: number; open: number; high: number; low: number; close: number }[];
+    /** All 3 timeframes for chart toggle (HTF/MTF/LTF). Optional for backward compat with older saved analyses. */
+    byRole?: {
+      HTF: { tf: Interval; candles: { time: number; open: number; high: number; low: number; close: number }[] };
+      MTF: { tf: Interval; candles: { time: number; open: number; high: number; low: number; close: number }[] };
+      LTF: { tf: Interval; candles: { time: number; open: number; high: number; low: number; close: number }[] };
+    };
   };
   volumeProfile: { tf: Interval; poc: number; vah: number; val: number };
   flow1m: {
@@ -58,8 +75,44 @@ export interface AnalysisSnapshot {
     imbalance: number;
   };
   funding: { rate: number; nextFundingTime: number; bias: string };
+  fundingHistory?: {
+    recent: Array<{ rate: number; time: number }>;
+    avg24h: number;
+    trend: "rising" | "falling" | "flat";
+  } | null;
   openInterest: number;
-  macro: { btcDominance: number | null };
+  oiDelta?: {
+    current: number;
+    hourAgo: number | null;
+    hourChangePct: number | null;
+    fourHourChangePct: number | null;
+  } | null;
+  macro: {
+    btcDominance: number | null;
+    dxy?: { value: number; change24hPct: number } | null;
+    fearGreed?: { value: number; label: string } | null;
+  };
+  /** ATR per visible TF (HTF/MTF/LTF) — % of price */
+  atr?: Array<{ tf: Interval; role: "HTF" | "MTF" | "LTF"; pctOfPrice: number; value: number }>;
+  /** Session VWAP based on MTF candles */
+  vwap?: { value: number; distancePct: number } | null;
+  /** Top trader (top 20% by margin) long/short ratio */
+  topTraderRatio?: {
+    longShortRatio: number;
+    longAccountPct: number;
+    shortAccountPct: number;
+  } | null;
+  /** Spot vs Perp basis */
+  basis?: { spot: number; perp: number; premiumPct: number } | null;
+  /** Current trading session (UTC-based) */
+  session?: {
+    current: "Asia" | "EU" | "US" | "Off";
+    minutesIntoSession: number;
+    minutesToNext: number;
+    nextSession: "Asia" | "EU" | "US" | "Off";
+  };
+  /** Weekly volume profile for longer-term POC reference */
+  weeklyVolumeProfile?: { poc: number; vah: number; val: number } | null;
 }
 
 export async function buildSnapshot(symbol: string, style: TradingStyle = "swing"): Promise<AnalysisSnapshot> {
@@ -71,13 +124,33 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
   // Make sure we also fetch the volume-profile TF if it's different
   const allTfs = Array.from(new Set([...tfs, preset.volumeProfileTf])) as Interval[];
 
-  const [ticker, depth, trades, funding, oi, btcd, ...klineSets] = await Promise.all([
+  const [
+    ticker,
+    depth,
+    trades,
+    funding,
+    oi,
+    btcd,
+    topTraderRatio,
+    fearGreed,
+    dxy,
+    oiDelta,
+    fundingHistory,
+    weeklyCandles,
+    ...klineSets
+  ] = await Promise.all([
     fetchTicker24h(sym),
     fetchDepth(sym, 100),
     fetchAggTrades(sym, 500),
     fetchFundingRate(sym),
     fetchOpenInterest(sym),
     fetchBtcDominance(),
+    fetchTopTraderRatio(sym, "15m"),
+    fetchFearGreed(),
+    fetchDXY(),
+    fetchOIDelta(sym),
+    fetchFundingHistory(sym),
+    fetchKlines(sym, "1d", 200), // for weekly volume profile (200 daily ≈ 28 weeks)
     ...allTfs.map((tf) => fetchKlines(sym, tf, 300)),
   ]);
 
@@ -109,22 +182,50 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
   const vpCandles = (tfData as Record<string, (typeof klineSets)[number]>)[preset.volumeProfileTf];
   const vp = computeVolumeProfile(vpCandles, 40, 0.7);
 
-  // MTF candles for chart visualization (last 250 bars)
-  const mtfTf = preset.mtf;
-  const mtfRaw = (tfData as Record<string, (typeof klineSets)[number]>)[mtfTf];
-  const mtfChart = {
-    tf: mtfTf,
-    candles: mtfRaw.slice(-250).map((c) => ({
+  // Chart candles for all 3 TFs (last 250 bars each). MTF is the default.
+  const buildChartCandles = (tf: Interval) => {
+    const raw = (tfData as Record<string, (typeof klineSets)[number]>)[tf];
+    return raw.slice(-250).map((c) => ({
       time: Math.floor(c.openTime / 1000),
       open: c.open,
       high: c.high,
       low: c.low,
       close: c.close,
-    })),
+    }));
+  };
+  const mtfTf = preset.mtf;
+  const mtfChart = {
+    tf: mtfTf,
+    candles: buildChartCandles(mtfTf),
+    byRole: {
+      HTF: { tf: preset.htf, candles: buildChartCandles(preset.htf) },
+      MTF: { tf: preset.mtf, candles: buildChartCandles(preset.mtf) },
+      LTF: { tf: preset.ltf, candles: buildChartCandles(preset.ltf) },
+    },
   };
   const flow = summarizeFlow(trades);
   const depthSum = summarizeDepth(depth);
   const fundBias = classifyFunding(funding.rate);
+
+  // ATR per TF
+  const atr = tfs.map((tf, i) => {
+    const candles = (tfData as Record<string, (typeof klineSets)[number]>)[tf];
+    const a = computeATR(candles, 14);
+    return { tf, role: ROLES[i], pctOfPrice: a.pctOfPrice, value: a.value };
+  });
+
+  // Session VWAP based on MTF candles
+  const mtfCandles = (tfData as Record<string, (typeof klineSets)[number]>)[preset.mtf];
+  const vwap = computeSessionVWAP(mtfCandles);
+
+  // Spot-Perp basis (depends on ticker.lastPrice)
+  const basis = await fetchSpotPerpBasis(sym, ticker.lastPrice);
+
+  // Trading session
+  const session = detectSession();
+
+  // Weekly volume profile (using daily candles, group by 7)
+  const weeklyVp = weeklyCandles.length >= 14 ? computeVolumeProfile(weeklyCandles, 60, 0.7) : null;
 
   return {
     symbol: sym,
@@ -151,7 +252,19 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     },
     depth: depthSum,
     funding: { rate: funding.rate, nextFundingTime: funding.nextFundingTime, bias: fundBias.label },
+    fundingHistory,
     openInterest: oi,
-    macro: { btcDominance: btcd },
+    oiDelta,
+    macro: {
+      btcDominance: btcd,
+      dxy,
+      fearGreed,
+    },
+    atr,
+    vwap,
+    topTraderRatio,
+    basis,
+    session,
+    weeklyVolumeProfile: weeklyVp ? { poc: weeklyVp.poc, vah: weeklyVp.vah, val: weeklyVp.val } : null,
   };
 }

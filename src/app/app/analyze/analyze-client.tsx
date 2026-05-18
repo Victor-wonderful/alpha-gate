@@ -1,22 +1,19 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState, useTransition } from "react";
-import Image from "next/image";
+import { Suspense, useEffect, useState, useTransition } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { X, Upload, History } from "lucide-react";
+import { History } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { runAnalysisAction, loadAnalysisAction } from "./_actions";
 import { AnalysisResult } from "./analysis-result";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
+import { AnalysisInfo } from "@/components/analyze/analysis-info";
 
 const PRESETS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"];
-const ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp", "image/gif"];
-const MAX_BYTES = 5 * 1024 * 1024;
 
 export function AnalyzeClient(props: {
   accountSize: number;
@@ -49,7 +46,6 @@ function AnalyzeClientInner({
   const result = useAnalysisStore((s) => s.result);
   const setResult = useAnalysisStore((s) => s.setResult);
   const symbol = useAnalysisStore((s) => s.symbol);
-  const custom = useAnalysisStore((s) => s.custom);
   const style = useAnalysisStore((s) => s.style);
   const setForm = useAnalysisStore((s) => s.setForm);
   const clearStore = useAnalysisStore((s) => s.clear);
@@ -84,57 +80,22 @@ function AnalyzeClientInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadId]);
 
-  // Transient (not persisted) — image is large and bound to one run
-  const [image, setImage] = useState<{ dataUrl: string; mediaType: string; base64: string } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
   function setSymbol(v: string) {
-    setForm({ symbol: v });
-  }
-  function setCustom(v: string) {
-    setForm({ custom: v });
+    setForm({ symbol: v.toUpperCase() });
   }
   function setStyle(v: TradingStyle) {
     setForm({ style: v });
   }
 
-  function onPickFile(file: File) {
-    if (!ALLOWED_MIME.includes(file.type)) {
-      toast.error("PNG / JPG / WEBP / GIF 이미지만 업로드 가능합니다.");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      toast.error("이미지 크기는 5MB 이하여야 합니다.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(",")[1] ?? "";
-      setImage({ dataUrl, mediaType: file.type, base64 });
-    };
-    reader.onerror = () => toast.error("이미지를 읽지 못했습니다.");
-    reader.readAsDataURL(file);
-  }
-
-  function clearImage() {
-    setImage(null);
-    if (fileRef.current) fileRef.current.value = "";
-  }
-
   function run() {
-    const target = (custom || symbol).toUpperCase().trim();
+    const target = symbol.toUpperCase().trim();
     if (!target) {
-      toast.error("심볼을 선택하거나 입력하세요.");
+      toast.error("심볼을 입력하세요.");
       return;
     }
     startTransition(async () => {
       setResult(null);
-      const r = await runAnalysisAction(
-        target,
-        style,
-        image ? { mediaType: image.mediaType, base64: image.base64 } : undefined,
-      );
+      const r = await runAnalysisAction(target, style);
       if (r.snapshot && r.strategy && r.report) {
         setResult({ snapshot: r.snapshot, strategy: r.strategy, report: r.report });
       }
@@ -150,35 +111,40 @@ function AnalyzeClientInner({
 
   return (
     <div className="space-y-6">
+      <AnalysisInfo />
       <Card>
         <CardHeader>
           <CardTitle>분석 대상</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr]">
-            <div>
-              <label className="text-xs text-muted-foreground">프리셋</label>
-              <Select
-                value={symbol}
-                onChange={(e) => {
-                  setSymbol(e.target.value);
-                  setCustom("");
-                }}
-              >
-                {PRESETS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">또는 직접 입력</label>
-              <Input
-                value={custom}
-                onChange={(e) => setCustom(e.target.value)}
-                placeholder="예: ARBUSDT"
-              />
+          <div className="space-y-2">
+            <label className="text-xs text-muted-foreground">분석할 심볼</label>
+            <Input
+              value={symbol}
+              onChange={(e) => setSymbol(e.target.value)}
+              placeholder="예: BTCUSDT"
+              className="font-mono"
+            />
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] text-muted-foreground">자주 쓰는 코인:</span>
+              {PRESETS.map((s) => {
+                const active = symbol.toUpperCase() === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setSymbol(s)}
+                    className={
+                      "rounded-md border px-2.5 py-1 font-mono text-[11px] transition-colors " +
+                      (active
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40")
+                    }
+                  >
+                    {s.replace("USDT", "")}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -213,56 +179,8 @@ function AnalyzeClientInner({
               {pending ? "분석 중... (10~20초)" : "분석 실행"}
             </Button>
           </div>
-          <div className="border-t border-border pt-4">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium">차트 이미지 (선택)</div>
-                <div className="text-xs text-muted-foreground">
-                  본인 차트(드로잉·커스텀 인디케이터 등)를 함께 올리면 AI가 보조 컨텍스트로 활용합니다.
-                </div>
-              </div>
-              {image ? (
-                <Button variant="ghost" size="sm" onClick={clearImage}>
-                  <X className="h-4 w-4" />
-                  제거
-                </Button>
-              ) : null}
-            </div>
-            {image ? (
-              <div className="relative overflow-hidden rounded-md border border-border">
-                <Image
-                  src={image.dataUrl}
-                  alt="차트 미리보기"
-                  width={1200}
-                  height={600}
-                  className="h-auto w-full object-contain"
-                  unoptimized
-                />
-              </div>
-            ) : (
-              <label
-                htmlFor="chart-upload"
-                className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border bg-background/40 p-6 text-sm text-muted-foreground transition-colors hover:bg-accent/40"
-              >
-                <Upload className="h-4 w-4" />
-                차트 이미지 업로드 (PNG / JPG / WEBP / GIF, 최대 5MB)
-              </label>
-            )}
-            <input
-              ref={fileRef}
-              id="chart-upload"
-              type="file"
-              accept={ALLOWED_MIME.join(",")}
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onPickFile(f);
-              }}
-            />
-          </div>
-
           <p className="text-xs text-muted-foreground">
-            분석은 Binance 공개 API에서 다중 타임프레임 데이터를 가져온 뒤 Claude가 종합합니다.
+            분석은 Binance 공개 API에서 다중 타임프레임 데이터를 가져온 뒤 Alpha Gate 자체 분석 엔진이 종합합니다.
             특정 매수/매도 추천이 아닌 시나리오 및 무효화 조건을 제시합니다.
           </p>
         </CardContent>

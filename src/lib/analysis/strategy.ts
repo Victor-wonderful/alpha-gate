@@ -47,9 +47,16 @@ const SYSTEM_PROMPT = `당신은 시장 구조 스냅샷을 보고 가장 적합
 1. 멀티 TF 정렬 (HTF/MTF/LTF 트렌드가 같은 방향인가?)
 2. 가격이 Volume Profile 어디 있나 (POC 근처 = range, VAH/VAL 끝 = fade 또는 breakout 후보)
 3. FVG/Order Block이 어떤 방향을 가리키는가
-4. 펀딩비 (과열 → reversal 가능성 ↑)
+4. 펀딩비 + fundingHistory.trend (과열·군집 → reversal 가능성 ↑)
 5. 호가 임밸런스 + 체결 흐름 단기 압력
-6. 사용자의 트레이딩 스타일 (스캘퍼는 짧은 fade/breakout 선호, 스윙은 큰 trend_pullback 선호)
+6. ATR (변동성 적정 — 너무 낮으면 stale 시장)
+7. VWAP 대비 위치 (단기 편향)
+8. topTraderRatio (큰손 군집)
+9. basis premiumPct (현물·선물 괴리, squeeze 신호)
+10. oiDelta (신규 진입 / 청산 흐름)
+11. macro.dxy / macro.fearGreed (거시 + 심리)
+12. session (변동성 시간대)
+13. 사용자의 트레이딩 스타일 (스캘퍼는 짧은 fade/breakout 선호, 스윙은 큰 trend_pullback 선호)
 
 엄격한 규칙:
 - 정확히 하나만 고른다. 직관 금지, 데이터 추론만.

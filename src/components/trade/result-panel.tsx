@@ -15,6 +15,7 @@ export function ResultPanel({
   accountSize,
   riskPct,
   leverage,
+  onApplyLeverage,
 }: {
   grade: GradeResult;
   sizing: SizingResult;
@@ -22,6 +23,7 @@ export function ResultPanel({
   accountSize: number;
   riskPct: number;
   leverage: number;
+  onApplyLeverage?: (lev: number) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -32,6 +34,12 @@ export function ResultPanel({
   const positionPctOfAccount =
     accountSize > 0 ? (sizing.positionSize / accountSize) * 100 : 0;
   const marginExceedsAccount = requiredMargin > accountSize;
+
+  // 마진 초과 시 권장 레버리지 계산 — 노출/계좌의 ceil + 여유 20%, 일반 거래소 스텝(3,5,10,20,50)에 스냅
+  const LEVERAGE_STEPS = [1, 3, 5, 10, 20, 50];
+  const minLev = accountSize > 0 ? Math.ceil(sizing.positionSize / accountSize) : 0;
+  const recommendedLev =
+    LEVERAGE_STEPS.find((lv) => lv >= Math.ceil(minLev * 1.2)) ?? 50;
 
   return (
     <Card>
@@ -70,12 +78,27 @@ export function ResultPanel({
               />
             </div>
             {marginExceedsAccount ? (
-              <div className="flex items-start gap-2 rounded-md border border-grade-d/40 bg-grade-d/10 p-2 text-xs text-grade-d">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
-                <span>
-                  필요 마진({formatCurrency(requiredMargin, currency)})이 계좌 크기를 초과합니다.
-                  레버리지를 높이거나 진입가/손절가를 다시 검토하세요.
-                </span>
+              <div className="space-y-2 rounded-md border border-grade-d/40 bg-grade-d/10 p-2.5 text-xs text-grade-d">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                  <span>
+                    {lev}x 로는 필요 마진({formatCurrency(requiredMargin, currency)})이 계좌($
+                    {formatNumber(accountSize, { maximumFractionDigits: 0 })})를 초과합니다.
+                    <span className="ml-1 font-semibold">
+                      {recommendedLev}x 이상 권장
+                    </span>
+                    {" "}— 노출은 그대로지만 필요 마진은 {formatCurrency(sizing.positionSize / recommendedLev, currency)}로 줄어듭니다.
+                  </span>
+                </div>
+                {onApplyLeverage ? (
+                  <button
+                    type="button"
+                    onClick={() => onApplyLeverage(recommendedLev)}
+                    className="w-full rounded border border-grade-d/60 bg-grade-d/20 py-1 text-[11px] font-semibold text-foreground transition-colors hover:bg-grade-d/30"
+                  >
+                    {recommendedLev}x로 적용
+                  </button>
+                ) : null}
               </div>
             ) : null}
             <div className="text-[10px] leading-relaxed text-muted-foreground">

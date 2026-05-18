@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Sparkles, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { SectionShell, SectionHeader, GradientText } from "@/components/marketing/section";
@@ -11,18 +11,14 @@ export const metadata = {
     "Free / Standard / Pro 3개 플랜. 무료로 시작해서 필요할 때만 업그레이드하세요.",
 };
 
-interface PlanFeature {
-  label: string;
-  included: boolean;
-}
-
 interface Plan {
   id: string;
   name: string;
   price: string;
   priceNote: string;
   tagline: string;
-  features: PlanFeature[];
+  quota: string;
+  quotaNote: string;
   cta: string;
   ctaHref: string;
   featured?: boolean;
@@ -35,62 +31,43 @@ const PLANS: Plan[] = [
     price: "₩0",
     priceNote: "영구 무료",
     tagline: "맛보기로 충분",
-    features: [
-      { label: "월 5회 AI 분석", included: true },
-      { label: "주문 검토 무제한", included: true },
-      { label: "저널 30건까지", included: true },
-      { label: "성과 분석 기본", included: true },
-      { label: "AI 복기 코멘트 월 3회", included: true },
-      { label: "워치리스트 + 알림", included: false },
-      { label: "거래소 API 연동", included: false },
-      { label: "다중 코인 스캐너", included: false },
-      { label: "자동 정기 분석", included: false },
-      { label: "백테스트", included: false },
-    ],
+    quota: "월 5회",
+    quotaNote: "AI 분석",
     cta: "무료로 시작",
     ctaHref: "/login?mode=signup",
   },
   {
     id: "standard",
     name: "Standard",
-    price: "₩24,900",
+    price: "₩15,000",
     priceNote: "/ 월",
     tagline: "활성 트레이더용",
-    featured: true,
-    features: [
-      { label: "Free 전부", included: true },
-      { label: "AI 분석 무제한", included: true },
-      { label: "저널 무제한", included: true },
-      { label: "AI 복기 무제한", included: true },
-      { label: "워치리스트 20개 + 알림", included: true },
-      { label: "거래소 API 연동 (1개)", included: true },
-      { label: "다중 코인 스캐너", included: true },
-      { label: "Telegram / Discord 알림", included: true },
-      { label: "자동 정기 분석", included: false },
-      { label: "백테스트", included: false },
-    ],
-    cta: "7일 무료 체험",
+    quota: "월 100회",
+    quotaNote: "AI 분석",
+    cta: "Standard 시작",
     ctaHref: "/login?mode=signup",
+    featured: true,
   },
   {
     id: "pro",
     name: "Pro",
-    price: "₩59,900",
+    price: "₩95,000",
     priceNote: "/ 월",
     tagline: "프로 트레이더용",
-    features: [
-      { label: "Standard 전부", included: true },
-      { label: "자동 정기 분석 (매일 N회)", included: true },
-      { label: "다중 거래소 (3개까지)", included: true },
-      { label: "백테스트", included: true },
-      { label: "AI 채팅 (분석 후속 질문)", included: true },
-      { label: "우선 처리 + 빠른 모델", included: true },
-      { label: "워치리스트 무제한", included: true },
-      { label: "고급 데이터 (옵션·온체인 일부)", included: true },
-      { label: "1:1 이메일 지원", included: true },
-      { label: "API 접근 (Webhook)", included: true },
-    ],
+    quota: "월 500회",
+    quotaNote: "AI 분석",
     cta: "Pro 시작",
+    ctaHref: "/login?mode=signup",
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    price: "₩295,000",
+    priceNote: "/ 월",
+    tagline: "팀·헤비유저용",
+    quota: "무제한",
+    quotaNote: "AI 분석",
+    cta: "Premium 시작",
     ctaHref: "/login?mode=signup",
   },
 ];
@@ -117,7 +94,7 @@ export default function PricingPage() {
 
       {/* Plans */}
       <SectionShell glowPosition="top-right">
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {PLANS.map((p) => (
             <PlanCard key={p.id} plan={p} />
           ))}
@@ -125,76 +102,21 @@ export default function PricingPage() {
         <p className="mt-12 text-center text-xs uppercase tracking-[0.2em] text-white/40">
           모든 플랜 · 7일 환불 보장 · 언제든 해지
         </p>
-      </SectionShell>
 
-      {/* Comparison table */}
-      <SectionShell glowPosition="bottom-left">
-        <SectionHeader
-          eyebrow="플랜 비교"
-          title={
-            <>
-              <GradientText>한눈에</GradientText> 비교
-            </>
-          }
-        />
-        <div className="mt-16 overflow-hidden rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-[#091632]/60 via-[#06112a]/50 to-[#040b1d]/75 backdrop-blur-xl">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-cyan-500/15 bg-cyan-500/[0.04]">
-                  <th className="p-5 text-left text-xs font-semibold uppercase tracking-wider text-white/40">
-                    기능
-                  </th>
-                  {PLANS.map((p) => (
-                    <th key={p.id} className="p-5 text-center">
-                      <div className="text-base font-bold">{p.name}</div>
-                      <div className="mt-1 font-mono text-xs text-white/60">{p.price}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARISON.map((row, i) => (
-                  <tr
-                    key={i}
-                    className={cn(
-                      "border-b border-white/5",
-                      row.section && "bg-white/[0.02]",
-                    )}
-                  >
-                    <td
-                      className={cn(
-                        "p-4 text-white/70",
-                        row.section && "font-semibold uppercase tracking-wider text-cyan-400 text-[10px]",
-                      )}
-                    >
-                      {row.label}
-                    </td>
-                    {row.section ? (
-                      <>
-                        <td />
-                        <td />
-                        <td />
-                      </>
-                    ) : (
-                      row.values.map((v, j) => (
-                        <td key={j} className="p-4 text-center">
-                          {typeof v === "boolean" ? (
-                            v ? (
-                              <CheckCircle2 className="mx-auto h-4 w-4 text-cyan-300" />
-                            ) : (
-                              <X className="mx-auto h-4 w-4 text-white/20" />
-                            )
-                          ) : (
-                            <span className="font-mono text-xs text-white/80">{v}</span>
-                          )}
-                        </td>
-                      ))
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Quota explainer */}
+        <div className="mx-auto mt-16 max-w-3xl">
+          <div className="rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-[#091632]/60 via-[#06112a]/50 to-[#040b1d]/75 p-6 backdrop-blur-xl sm:p-8">
+            <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
+              <span className="inline-block h-px w-8 bg-cyan-400" />
+              참고
+            </div>
+            <h3 className="mt-4 text-lg font-bold">AI 분석 횟수만 다릅니다</h3>
+            <p className="mt-3 text-sm leading-relaxed text-white/65">
+              주문 검토·내 거래(저널)·성과 분석·AI 복기 코멘트는 모든 플랜에서 <strong className="text-white">제한 없이</strong>
+              {" "}쓰실 수 있습니다. 결제는 매달 분석 횟수가 충전되는 구독 방식이며, 다 쓰지 못한 횟수는 이월되지 않습니다.
+            </p>
           </div>
+        </div>
       </SectionShell>
 
       {/* FAQ */}
@@ -279,47 +201,26 @@ export default function PricingPage() {
   );
 }
 
-interface ComparisonRow {
-  label: string;
-  values: (boolean | string)[];
-  section?: boolean;
-}
-
-const COMPARISON: ComparisonRow[] = [
-  { label: "AI 분석", values: [], section: true },
-  { label: "월 분석 횟수", values: ["5회", "무제한", "무제한"] },
-  { label: "분석 기록 보관", values: ["30일", "무제한", "무제한"] },
-  { label: "AI 복기 코멘트", values: ["월 3회", "무제한", "무제한"] },
-  { label: "주문 검토 & 저널", values: [], section: true },
-  { label: "주문 검토 사용", values: [true, true, true] },
-  { label: "저널 건수", values: ["30건", "무제한", "무제한"] },
-  { label: "성과 분석 대시보드", values: [true, true, true] },
-  { label: "거래 자동 연동 & 알림", values: [], section: true },
-  { label: "워치리스트 + 알림", values: [false, "20개", "무제한"] },
-  { label: "거래소 API 연동", values: [false, "1개", "3개"] },
-  { label: "Telegram / Discord", values: [false, true, true] },
-  { label: "자동 정기 분석", values: [false, false, true] },
-  { label: "고급 기능", values: [], section: true },
-  { label: "다중 코인 스캐너", values: [false, true, true] },
-  { label: "백테스트", values: [false, false, true] },
-  { label: "AI 채팅 (후속 질문)", values: [false, false, true] },
-  { label: "API 접근 (Webhook)", values: [false, false, true] },
-  { label: "지원", values: [], section: true },
-  { label: "응답 속도", values: ["커뮤니티", "이메일 48h", "이메일 24h + 우선"] },
-];
-
 const FAQS = [
   {
     q: "정말 무료로 시작할 수 있나요?",
-    a: "네. Free 플랜은 영구 무료이며 신용카드 없이 가입 가능합니다. 월 5회 AI 분석과 주문 검토·저널 기본 기능을 사용하실 수 있습니다.",
+    a: "네. Free 플랜은 영구 무료이며 신용카드 없이 가입 가능합니다. 매월 5회 AI 분석과 주문 검토·내 거래·성과 분석 기능을 제한 없이 쓰실 수 있습니다.",
+  },
+  {
+    q: "플랜 간 차이는 무엇인가요?",
+    a: "월 AI 분석 횟수만 다릅니다. 주문 검토, 내 거래(저널), 성과 분석, AI 복기 코멘트는 모든 플랜에서 무제한입니다.",
+  },
+  {
+    q: "쓰지 못한 분석 횟수는 이월되나요?",
+    a: "아니요. 매월 결제일에 새로 충전되며, 남은 횟수는 이월되지 않습니다. 본인의 평균 매매 빈도에 맞는 플랜을 선택해주세요.",
   },
   {
     q: "결제 후 환불이 가능한가요?",
-    a: "결제일로부터 7일 이내 100% 환불 가능합니다. 이메일로 요청 주시면 영업일 기준 1~2일 내 처리됩니다.",
+    a: "결제일로부터 7일 이내 100% 환불 가능합니다. 이메일(hello@alphagate.app)로 요청 주시면 영업일 기준 1~2일 내 처리됩니다.",
   },
   {
-    q: "거래소 API 연동은 어떻게 동작하나요?",
-    a: "Binance·Bybit·Upkit 등의 read-only API 키만 사용합니다. 출금 권한이 없는 키만 등록 가능하며, 거래 기록을 자동으로 저널에 가져옵니다. API 키는 암호화되어 저장됩니다.",
+    q: "플랜 변경은 언제든 가능한가요?",
+    a: "네. 언제든 업그레이드/다운그레이드 가능합니다. 업그레이드 시 차액만 청구되며 즉시 새 횟수가 적용됩니다. 다운그레이드는 다음 결제 주기부터 반영됩니다.",
   },
   {
     q: "AI가 매수/매도를 추천하나요?",
@@ -328,18 +229,6 @@ const FAQS = [
   {
     q: "내 거래 데이터는 안전한가요?",
     a: "모든 데이터는 Supabase의 Row-Level Security로 사용자별 격리됩니다. 다른 사용자는 코드 버그가 있어도 접근할 수 없으며, 언제든 본인 계정과 모든 데이터를 삭제할 수 있습니다.",
-  },
-  {
-    q: "Pro 플랜의 '우선 처리'는 무엇인가요?",
-    a: "트래픽이 많을 때 Pro 사용자의 분석 요청이 큐에서 먼저 처리됩니다. 또한 분석에 사용되는 LLM 모델이 더 빠른 응답 변형을 사용합니다.",
-  },
-  {
-    q: "플랜 변경은 언제든 가능한가요?",
-    a: "네. 언제든 업그레이드/다운그레이드 가능합니다. 업그레이드 시 차액만 청구, 다운그레이드 시 다음 결제 주기부터 적용됩니다.",
-  },
-  {
-    q: "어떤 거래소를 지원하나요?",
-    a: "현재 Binance Futures를 데이터 소스로 사용합니다. 거래소 API 연동(저널 자동화)은 Binance·Bybit·Upbit 순차 지원 예정입니다.",
   },
 ];
 
@@ -380,18 +269,32 @@ function PlanCard({ plan }: { plan: Plan }) {
         </div>
       </div>
 
-      <ul className="relative mt-8 flex-1 space-y-3">
-        {plan.features.map((f) => (
-          <li key={f.label} className="flex items-start gap-2.5 text-sm">
-            {f.included ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-            ) : (
-              <X className="mt-0.5 h-4 w-4 flex-none text-white/20" />
-            )}
-            <span className={cn(f.included ? "text-white/80" : "text-white/30")}>{f.label}</span>
+      <div className="relative mt-8 flex-1">
+        {/* Quota — the only differentiator */}
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] p-5 text-center">
+          <div className="bg-gradient-to-br from-sky-200 via-cyan-300 to-blue-400 bg-clip-text font-mono text-3xl font-black tracking-tight text-transparent">
+            {plan.quota}
+          </div>
+          <div className="mt-1 text-[11px] uppercase tracking-wider text-white/55">
+            {plan.quotaNote}
+          </div>
+        </div>
+
+        <ul className="mt-5 space-y-2.5 text-sm">
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
+            <span className="text-white/75">주문 검토 무제한</span>
           </li>
-        ))}
-      </ul>
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
+            <span className="text-white/75">내 거래·성과 분석 무제한</span>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
+            <span className="text-white/75">AI 복기 코멘트 무제한</span>
+          </li>
+        </ul>
+      </div>
 
       <Link
         href={plan.ctaHref}

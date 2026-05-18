@@ -58,7 +58,7 @@ export default function ContactPage() {
           <ChannelCard
             icon={Clock}
             title="응답 시간"
-            body="영업일 기준 24시간 이내. Pro 플랜은 우선 응답으로 평균 4시간 이내 회신됩니다."
+            body="영업일 기준 24시간 이내. 결제·환불·기술 문제 모두 동일하게 회신해드립니다."
             cta="/pricing"
             ctaLabel="플랜 비교"
           />
@@ -149,7 +149,7 @@ export default function ContactPage() {
 const TOPICS = [
   { label: "결제 후 환불 절차", href: "/refund" },
   { label: "플랜 변경 / 업그레이드", href: "/faq" },
-  { label: "거래소 API 연동 방법", href: "/faq" },
+  { label: "AI 분석 횟수 카운트 기준", href: "/faq" },
   { label: "계정 / 비밀번호 문제", href: "/faq" },
   { label: "데이터 삭제 / 탈퇴", href: "/privacy" },
   { label: "이용약관 / 면책 사항", href: "/terms" },

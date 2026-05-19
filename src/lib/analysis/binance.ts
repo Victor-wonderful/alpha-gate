@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 
 const FAPI = "https://fapi.binance.com"; // USDT-M Futures
 const SPOT = "https://api.binance.com";
@@ -16,8 +17,8 @@ export type Candle = {
 
 export type Interval = "5m" | "15m" | "1h" | "4h" | "1d";
 
-async function jget<T>(url: string): Promise<T> {
-  const res = await fetch(url, { cache: "no-store" });
+async function jget<T>(url: string, timeoutMs = 8000): Promise<T> {
+  const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`${url} -> ${res.status} ${res.statusText}`);
   return (await res.json()) as T;
 }
@@ -112,17 +113,6 @@ export async function fetchTicker24h(symbol: string): Promise<{
   };
 }
 
-export async function fetchBtcDominance(): Promise<number | null> {
-  try {
-    const raw = await jget<{ data: { market_cap_percentage: { btc: number } } }>(
-      "https://api.coingecko.com/api/v3/global",
-    );
-    return raw.data.market_cap_percentage.btc;
-  } catch {
-    return null;
-  }
-}
-
 export interface MarketDominance {
   btc: number;
   eth: number;
@@ -135,7 +125,7 @@ export interface MarketDominance {
   totalMcap24hChangePct: number;
 }
 
-export async function fetchMarketDominance(): Promise<MarketDominance | null> {
+async function _fetchMarketDominanceUncached(): Promise<MarketDominance | null> {
   try {
     const raw = await jget<{
       data: {
@@ -158,4 +148,18 @@ export async function fetchMarketDominance(): Promise<MarketDominance | null> {
   } catch {
     return null;
   }
+}
+
+// 5-minute cache for CoinGecko /global — dominance/total mcap change slowly.
+// Free tier is 10~30/min; caching makes us safely under that even with many users.
+export const fetchMarketDominance = unstable_cache(
+  _fetchMarketDominanceUncached,
+  ["market-dominance-v1"],
+  { revalidate: 300, tags: ["dominance"] },
+);
+
+/** Legacy single-field helper — delegates to the cached fetcher to avoid duplicate API calls. */
+export async function fetchBtcDominance(): Promise<number | null> {
+  const d = await fetchMarketDominance();
+  return d?.btc ?? null;
 }

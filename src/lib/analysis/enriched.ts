@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import type { Candle } from "./binance";
 
 const FAPI = "https://fapi.binance.com";
@@ -110,7 +111,7 @@ export type FearGreed = {
   label: string; // "Extreme Fear" | "Fear" | "Neutral" | "Greed" | "Extreme Greed"
 };
 
-export async function fetchFearGreed(): Promise<FearGreed | null> {
+async function _fetchFearGreedUncached(): Promise<FearGreed | null> {
   try {
     const data = await jget<{ data: Array<{ value: string; value_classification: string }> }>(FNG_URL);
     if (!data.data?.length) return null;
@@ -123,13 +124,20 @@ export async function fetchFearGreed(): Promise<FearGreed | null> {
   }
 }
 
+// F&G updates once per day — cache for 1 hour to be safe.
+export const fetchFearGreed = unstable_cache(
+  _fetchFearGreedUncached,
+  ["fear-greed-v1"],
+  { revalidate: 3600, tags: ["fng"] },
+);
+
 // ─── DXY (Dollar Index, Yahoo Finance) ────────────────────────
 export type DXY = {
   value: number;
   change24hPct: number;
 };
 
-export async function fetchDXY(): Promise<DXY | null> {
+async function _fetchDXYUncached(): Promise<DXY | null> {
   try {
     const data = await jget<{
       chart: {
@@ -148,6 +156,13 @@ export async function fetchDXY(): Promise<DXY | null> {
     return null;
   }
 }
+
+// DXY moves slowly; refresh every 10 minutes.
+export const fetchDXY = unstable_cache(
+  _fetchDXYUncached,
+  ["dxy-v1"],
+  { revalidate: 600, tags: ["dxy"] },
+);
 
 // ─── Trading Session (Asia / EU / US / Off) ───────────────────
 export type Session = {

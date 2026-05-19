@@ -2,13 +2,14 @@
 
 import { Suspense, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, ArrowRight, Sparkles } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   MARKET_CHECK_KEYS,
@@ -26,7 +27,12 @@ import { gradeTrade } from "@/lib/grading";
 import { sizePosition } from "@/lib/sizing";
 import { ResultPanel } from "./result-panel";
 import { saveTradeAction } from "@/app/app/_actions";
-import { cn, formatNumber } from "@/lib/utils";
+import { useAnalysisStore } from "@/lib/stores/analysis-store";
+import { STRATEGY_LABELS } from "@/lib/analysis/strategy";
+import type { AnalysisReport } from "@/lib/analysis/synthesize";
+import { recommendTradeParams } from "@/lib/recommend";
+import { monteCarloSim, STYLE_BAR_LIMITS, type MonteCarloResult } from "@/lib/simulation/monte-carlo";
+import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
 const ENTRY_ACCENT = "border-primary/40 focus-within:border-primary";
 const STOP_ACCENT = "border-grade-d/40 focus-within:border-grade-d";
@@ -109,6 +115,36 @@ function TradeFormInner({
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
 
+  // Pull scenario context from analysis store (set during AI analysis flow).
+  const analysisResult = useAnalysisStore((s) => s.result);
+  const scenarioIdx = params.get("scenario");
+  const activeScenario: AnalysisReport["scenarios"][number] | null = useMemo(() => {
+    if (!analysisResult || scenarioIdx == null) return null;
+    const idx = Number(scenarioIdx);
+    if (!Number.isInteger(idx) || idx < 0) return null;
+    return analysisResult.report.scenarios[idx] ?? null;
+  }, [analysisResult, scenarioIdx]);
+  const activeStrategy = analysisResult?.strategy ?? null;
+  const activeTrend = analysisResult?.report.marketTrend ?? null;
+
+  // Selected tier index for tier picker (only used when activeScenario has entries).
+  const [selectedTier, setSelectedTier] = useState<number | "avg">("avg");
+
+  function selectTier(tier: number | "avg") {
+    setSelectedTier(tier);
+    if (!activeScenario || !activeScenario.entries || activeScenario.entries.length === 0) return;
+    if (tier === "avg") {
+      const wSum = activeScenario.entries.reduce((acc, e) => acc + (e.weight || 0), 0);
+      const avg = wSum > 0
+        ? activeScenario.entries.reduce((acc, e) => acc + e.price * (e.weight / wSum), 0)
+        : activeScenario.entries.reduce((acc, e) => acc + e.price, 0) / activeScenario.entries.length;
+      setEntry(avg.toFixed(2));
+    } else {
+      const e = activeScenario.entries.find((x) => x.tier === tier);
+      if (e) setEntry(e.price.toFixed(2));
+    }
+  }
+
   const triggerHint = params.get("trigger") ?? "";
 
   const [symbol, setSymbol] = useState(() => {
@@ -134,6 +170,26 @@ function TradeFormInner({
     return prefilled;
   });
   const [trigger, setTrigger] = useState<TradeInput["trigger"]>(defaultTrigger);
+
+  // AI mode: came from analysis page with a scenario. Simplify the form.
+  const aiMode = activeScenario !== null;
+
+  // In AI mode the trigger checks are implicitly confirmed (user clicked through
+  // an AI scenario after reviewing the trigger). Auto-flip them on entry.
+  useEffect(() => {
+    if (!aiMode) return;
+    setTrigger((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const k of TRIGGER_CHECK_KEYS) {
+        if (!next[k]) {
+          next[k] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [aiMode]);
 
   // 시장 컨텍스트: 심볼 변경 시 재fetch
   const [marketCtx, setMarketCtx] = useState<MarketContext>({
@@ -190,13 +246,66 @@ function TradeFormInner({
     [input.accountSize, input.allowedLossPct, input.entry, input.stop],
   );
 
+  // AI mode: live-sync recommended risk % + leverage. Stops syncing once user
+  // has manually overridden either input — that way tier switches / grade changes
+  // re-flow the recommendation without overwriting user intent.
+  const [userOverride, setUserOverride] = useState(false);
+  const recommendation = useMemo(() => {
+    if (!aiMode || !analysisResult) return null;
+    const entryN = Number(entry) || 0;
+    const stopN = Number(stop) || 0;
+    if (entryN <= 0 || stopN <= 0) return null;
+    const stopPct = (Math.abs(stopN - entryN) / entryN) * 100;
+    return recommendTradeParams({
+      style: analysisResult.snapshot.style,
+      grade: grade.grade,
+      confidence: analysisResult.strategy.confidence ?? 0.6,
+      stopPct,
+      userPreferredRiskPct: initialRiskPct,
+    });
+  }, [aiMode, analysisResult, entry, stop, grade.grade, initialRiskPct]);
+
+  // Live-apply recommendation whenever it changes (no override).
+  useEffect(() => {
+    if (!aiMode || !recommendation || userOverride) return;
+    setRiskPct(recommendation.riskPct.toFixed(2));
+    setLeverage(recommendation.leverage);
+  }, [aiMode, recommendation, userOverride]);
+
+  // Reset override on scenario switch (entering a fresh AI flow).
+  useEffect(() => {
+    setUserOverride(false);
+  }, [scenarioIdx]);
+
+  // Monte Carlo trade simulation (AI mode) — projects probable outcome from current ATR.
+  const mcResult: MonteCarloResult | null = useMemo(() => {
+    if (!aiMode || !analysisResult) return null;
+    const entryN = Number(entry) || 0;
+    const stopN = Number(stop) || 0;
+    const targetN = Number(target) || 0;
+    if (entryN <= 0 || stopN <= 0 || targetN <= 0) return null;
+    // Use MTF ATR (1H for day, 4H for swing etc.) — matches the trade timeframe best.
+    const mtfAtrPct = analysisResult.snapshot.atr?.find((a) => a.role === "MTF")?.pctOfPrice;
+    if (!mtfAtrPct || mtfAtrPct <= 0) return null;
+    const barLimit = STYLE_BAR_LIMITS[analysisResult.snapshot.style] ?? 48;
+    return monteCarloSim({
+      entry: entryN,
+      stop: stopN,
+      target: targetN,
+      direction,
+      atrPctPerBar: mtfAtrPct,
+      barLimit,
+      runs: 1000,
+    });
+  }, [aiMode, analysisResult, entry, stop, target, direction]);
+
   function save() {
     if (!sizing.valid) {
       toast.error("입력을 확인하세요. 포지션 사이징이 유효하지 않습니다.");
       return;
     }
     startTransition(async () => {
-      const res = await saveTradeAction({ input, grade, sizing, leverage });
+      const res = await saveTradeAction({ input, grade, sizing, leverage, forecast: mcResult ?? undefined });
       if (res.error) {
         toast.error(res.error);
         return;
@@ -242,11 +351,64 @@ function TradeFormInner({
       // 기본: 리스크 자체를 pct로 (단순 fallback)
       setRiskPct(String(pct / 25));
     }
+    setUserOverride(true);
   }
 
   return (
+    <div className="space-y-6">
+      {/* 모드 배너 + 동적 헤더 */}
+      {aiMode ? (
+        <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Sparkles className="h-4 w-4 flex-none text-primary" />
+            <span className="font-semibold text-primary">AI 분석 시나리오 모드</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">
+              진입가·손절·목표·리스크·레버리지가 자동 적용됐습니다. 단계 버튼으로 진입 시점을 조정할 수 있습니다.
+            </span>
+          </div>
+        </div>
+      ) : null}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {aiMode ? "AI 시나리오 실행" : "수동 주문 검토"}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {aiMode
+            ? "AI가 추천한 진입·손절·목표와 자동 사이징을 확인하고 한 번에 거래를 시작하세요."
+            : "AI 분석 없이 직접 주문을 평가합니다. 진입 버튼을 누르기 전 등급·리스크·시장 상황을 한눈에 확인하세요."}
+        </p>
+      </div>
+
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
       <div className="space-y-6">
+        {/* AI 분석 시나리오 컨텍스트 — 분석 페이지에서 넘어왔을 때만 표시 */}
+        {activeScenario ? (
+          <ScenarioContextCard
+            scenario={activeScenario}
+            strategyLabel={activeStrategy ? STRATEGY_LABELS[activeStrategy.primary] : null}
+            strategyConfidence={activeStrategy ? activeStrategy.confidence : null}
+            trend={activeTrend}
+            selectedTier={selectedTier}
+            onSelectTier={selectTier}
+            recommendation={recommendation}
+            grade={grade.grade}
+            sizing={sizing}
+            currency={currency}
+            accountSize={Number(accountSize) || 0}
+            riskPct={Number(riskPct) || 0}
+            leverage={leverage}
+            onApplyRecommendation={() => {
+              if (!recommendation) return;
+              setRiskPct(recommendation.riskPct.toFixed(2));
+              setLeverage(recommendation.leverage);
+              setUserOverride(false); // 다시 권장값 따르기로 — 이후 tier 변경 시 자동 동기화
+            }}
+            mcResult={mcResult}
+            mtfTf={analysisResult?.snapshot.atr?.find((a) => a.role === "MTF")?.tf ?? null}
+          />
+        ) : null}
+
         {/* 1. 주문 입력 — 거래소 스타일 */}
         <Card className="overflow-hidden">
           {/* Header: symbol + futures meta */}
@@ -271,26 +433,28 @@ function TradeFormInner({
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">TF</span>
-                <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/60 p-0.5">
-                  {TIMEFRAMES.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTimeframe(t)}
-                      className={cn(
-                        "rounded px-2 py-0.5 font-mono text-[11px] font-semibold transition-colors",
-                        timeframe === t
-                          ? "bg-primary/15 text-primary"
-                          : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-                      )}
-                    >
-                      {t}
-                    </button>
-                  ))}
+              {!aiMode ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">TF</span>
+                  <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/60 p-0.5">
+                    {TIMEFRAMES.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTimeframe(t)}
+                        className={cn(
+                          "rounded px-2 py-0.5 font-mono text-[11px] font-semibold transition-colors",
+                          timeframe === t
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : null}
               {currentPrice && symbol === "BTCUSDT" ? (
                 <div className="font-mono text-xs">
                   <span className="text-muted-foreground">현재가</span>{" "}
@@ -413,7 +577,7 @@ function TradeFormInner({
                     inputMode="decimal"
                     step="0.1"
                     value={riskPct}
-                    onChange={(e) => setRiskPct(e.target.value)}
+                    onChange={(e) => { setRiskPct(e.target.value); setUserOverride(true); }}
                     className="h-9 font-mono"
                   />
                 </div>
@@ -432,7 +596,7 @@ function TradeFormInner({
                 max={50}
                 step={1}
                 value={leverage}
-                onChange={(e) => setLeverage(Number(e.target.value))}
+                onChange={(e) => { setLeverage(Number(e.target.value)); setUserOverride(true); }}
                 className="w-full accent-primary"
               />
               <div className="flex flex-wrap gap-1">
@@ -440,7 +604,7 @@ function TradeFormInner({
                   <button
                     key={lv}
                     type="button"
-                    onClick={() => setLeverage(lv)}
+                    onClick={() => { setLeverage(lv); setUserOverride(true); }}
                     className={cn(
                       "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
                       leverage === lv
@@ -459,7 +623,8 @@ function TradeFormInner({
           </CardContent>
         </Card>
 
-        {/* 2. 시장 구조 체크리스트 */}
+        {/* 2. 시장 구조 체크리스트 — AI 모드에서는 분석이 이미 평가했으므로 숨김 */}
+        {!aiMode ? (
         <Card>
           <CardHeader>
             <CardTitle>시장 구조 체크리스트</CardTitle>
@@ -475,8 +640,10 @@ function TradeFormInner({
             ))}
           </CardContent>
         </Card>
+        ) : null}
 
-        {/* 3. 트리거 검증 (NEW) */}
+        {/* 3. 트리거 검증 — AI 모드에서는 시나리오 클릭으로 암묵 확인되므로 숨김 */}
+        {!aiMode ? (
         <Card>
           <CardHeader>
             <CardTitle>트리거 검증</CardTitle>
@@ -509,8 +676,10 @@ function TradeFormInner({
             ) : null}
           </CardContent>
         </Card>
+        ) : null}
 
-        {/* 4. 시장 컨텍스트 (NEW, 자동) */}
+        {/* 4. 시장 컨텍스트 — AI 모드에서는 분석 결과에 이미 포함되므로 숨김 */}
+        {!aiMode ? (
         <Card>
           <CardHeader>
             <CardTitle>시장 컨텍스트</CardTitle>
@@ -573,6 +742,7 @@ function TradeFormInner({
             ) : null}
           </CardContent>
         </Card>
+        ) : null}
       </div>
 
       <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
@@ -583,12 +753,22 @@ function TradeFormInner({
           accountSize={Number(accountSize) || 0}
           riskPct={Number(riskPct) || 0}
           leverage={leverage}
-          onApplyLeverage={setLeverage}
+          onApplyLeverage={(lv) => { setLeverage(lv); setUserOverride(true); }}
         />
         <Button className="w-full" size="lg" onClick={save} disabled={pending}>
-          {pending ? "저장 중..." : "거래 저장"}
+          {pending
+            ? "저장 중..."
+            : aiMode
+              ? "이 계획으로 거래 시작 (저널에 저장)"
+              : "거래 저장"}
         </Button>
+        {aiMode ? (
+          <p className="text-center text-[11px] text-muted-foreground">
+            진입가·손절·목표는 AI 분석에서 가져왔습니다. 위 단계 버튼으로 진입 시점을 바꿀 수 있습니다.
+          </p>
+        ) : null}
       </aside>
+    </div>
     </div>
   );
 }
@@ -627,5 +807,426 @@ function WarnBar({ text }: { text: string }) {
       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
       <span>{text}</span>
     </div>
+  );
+}
+
+function ScenarioContextCard({
+  scenario,
+  strategyLabel,
+  strategyConfidence,
+  trend,
+  selectedTier,
+  onSelectTier,
+  recommendation,
+  grade,
+  sizing,
+  currency,
+  accountSize,
+  riskPct,
+  leverage,
+  onApplyRecommendation,
+  mcResult,
+  mtfTf,
+}: {
+  scenario: AnalysisReport["scenarios"][number];
+  strategyLabel: string | null;
+  strategyConfidence: number | null;
+  trend: NonNullable<AnalysisReport["marketTrend"]> | null;
+  selectedTier: number | "avg";
+  onSelectTier: (t: number | "avg") => void;
+  recommendation: ReturnType<typeof recommendTradeParams> | null;
+  grade: "A" | "B" | "C" | "D";
+  sizing: ReturnType<typeof sizePosition>;
+  currency: "USD" | "KRW";
+  accountSize: number;
+  riskPct: number;
+  leverage: number;
+  onApplyRecommendation: () => void;
+  mcResult: MonteCarloResult | null;
+  mtfTf: string | null;
+}) {
+  const isLong = scenario.direction === "long";
+  const entries = scenario.entries ?? [];
+  const wSum = entries.reduce((acc, e) => acc + (e.weight || 0), 0);
+  const avgPrice = entries.length === 0 ? null
+    : wSum > 0
+      ? entries.reduce((acc, e) => acc + e.price * (e.weight / wSum), 0)
+      : entries.reduce((acc, e) => acc + e.price, 0) / entries.length;
+  const trendDir = trend?.direction;
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardHeader className="space-y-1 pb-3">
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span className="font-semibold uppercase tracking-wider text-primary">AI 분석에서 가져온 시나리오</span>
+        </div>
+        <CardTitle className="text-base">{scenario.name}</CardTitle>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge className={cn("border", isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d")}>
+            {isLong ? "롱 (사기)" : "숏 (팔기)"}
+          </Badge>
+          {strategyLabel ? (
+            <Badge className="border border-border bg-muted/40 text-foreground">
+              {strategyLabel}{strategyConfidence != null ? ` · 신뢰도 ${Math.round(strategyConfidence * 100)}%` : ""}
+            </Badge>
+          ) : null}
+          {trend ? (
+            <Badge className={cn(
+              "border",
+              trendDir === "up" ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
+              : trendDir === "down" ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
+              : "border-border bg-muted/40 text-muted-foreground",
+            )}>
+              {trendDir === "up" ? <TrendingUp className="mr-1 inline h-3 w-3" /> : trendDir === "down" ? <TrendingDown className="mr-1 inline h-3 w-3" /> : <ArrowRight className="mr-1 inline h-3 w-3" />}
+              {trendDir === "up" ? "상승 추세" : trendDir === "down" ? "하락 추세" : "횡보"} · 강도 {trend.strength === "strong" ? "강함" : trend.strength === "moderate" ? "보통" : "약함"}
+            </Badge>
+          ) : null}
+        </div>
+        {scenario.trigger ? (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">조건: </span>{scenario.trigger}
+          </p>
+        ) : null}
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        {entries.length > 0 ? (
+          <div className="space-y-2">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              분할 진입 — 어느 단계로 진입가를 채울지 선택
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              {avgPrice != null ? (
+                <TierButton
+                  active={selectedTier === "avg"}
+                  onClick={() => onSelectTier("avg")}
+                  label="평균"
+                  price={avgPrice}
+                  weight={100}
+                  note="가중 평균"
+                />
+              ) : null}
+              {entries.map((e) => (
+                <TierButton
+                  key={e.tier}
+                  active={selectedTier === e.tier}
+                  onClick={() => onSelectTier(e.tier)}
+                  label={`${e.tier}차`}
+                  price={e.price}
+                  weight={e.weight}
+                  note={e.note}
+                  dist={e.distancePct}
+                />
+              ))}
+            </div>
+            {/* 단계별 상세 — 진입가에 따라 손절폭/목표폭/R:R/수량이 어떻게 달라지는지 */}
+            <TierMetricsTable
+              entries={entries}
+              avgPrice={avgPrice ?? 0}
+              invalidation={scenario.invalidation}
+              target={scenario.target}
+              accountSize={accountSize}
+              riskPct={riskPct}
+              currency={currency}
+              selectedTier={selectedTier}
+            />
+          </div>
+        ) : null}
+        {/* AI 권장 사이징 — 즉시 적용된 값 + 도출 근거 */}
+        {recommendation ? (
+          <div className="rounded-lg border border-primary/30 bg-background/60 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+                AI 권장 사이징 (자동 적용됨)
+              </span>
+              <button
+                type="button"
+                onClick={onApplyRecommendation}
+                className="text-[10px] underline-offset-2 hover:underline text-muted-foreground hover:text-foreground"
+              >
+                다시 적용
+              </button>
+            </div>
+            {grade === "D" || grade === "C" ? (
+              <div className={cn(
+                "mb-2 flex items-start gap-2 rounded border p-2 text-[11px]",
+                grade === "D" ? "border-grade-d/40 bg-grade-d/10 text-grade-d" : "border-amber-500/40 bg-amber-500/10 text-amber-400",
+              )}>
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                <span>
+                  <strong>등급 {grade} — {grade === "D" ? "진입 비추천" : "주의 필요"}.</strong>{" "}
+                  권장 사이징이 평소보다 작게 잡혔습니다. 표준 미달 항목을 확인하고 진입 여부를 신중히 결정하세요.
+                </span>
+              </div>
+            ) : null}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <SizeStat
+                label="리스크 한도"
+                value={`${riskPct.toFixed(2)}%`}
+                sub={sizing.valid ? `${formatCurrency(sizing.maxLoss, currency)} 잃을 한도` : "—"}
+                recommended={recommendation.riskPct.toFixed(2) + "%"}
+                applied={Math.abs(riskPct - recommendation.riskPct) < 0.01}
+              />
+              <SizeStat
+                label="레버리지"
+                value={`${leverage}x`}
+                sub={sizing.valid ? `필요 마진 ${(((sizing.positionSize / leverage) / accountSize) * 100).toFixed(1)}%` : "—"}
+                recommended={`${recommendation.leverage}x`}
+                applied={leverage === recommendation.leverage}
+              />
+              <SizeStat
+                label="노출 금액"
+                value={sizing.valid ? `${((sizing.positionSize / accountSize) * 100).toFixed(1)}%` : "—"}
+                sub={sizing.valid ? formatCurrency(sizing.positionSize, currency) : ""}
+              />
+              <SizeStat
+                label="수량 / 등급"
+                value={sizing.valid ? `${formatNumber(sizing.quantity)}` : "—"}
+                sub={`등급 ${grade}`}
+                tone={grade === "A" ? "good" : grade === "D" ? "bad" : undefined}
+              />
+            </div>
+            <div className="mt-2 text-[10px] text-muted-foreground">
+              <span className="font-semibold">근거:</span> {recommendation.reasoning}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Monte Carlo 결과 시뮬레이션 */}
+        {mcResult ? <MonteCarloPreview mc={mcResult} mtfTf={mtfTf} /> : null}
+
+        {scenario.qualityIssues && scenario.qualityIssues.length > 0 ? (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5">
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+              <AlertTriangle className="h-3 w-3" />
+              검토 항목 — 표준 미달 (진입 전 본인 판단)
+            </div>
+            <ul className="space-y-0.5 text-[10px] text-amber-300/80">
+              {scenario.qualityIssues.map((q, i) => (
+                <li key={i}>· {q}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MonteCarloPreview({ mc, mtfTf }: { mc: MonteCarloResult; mtfTf: string | null }) {
+  const winPct = mc.winRate * 100;
+  const lossPct = mc.lossRate * 100;
+  const timeoutPct = mc.timeoutRate * 100;
+  const evTone = mc.expectedR > 0 ? "text-grade-a" : mc.expectedR < 0 ? "text-grade-d" : "text-muted-foreground";
+  const winBarsLabel = mc.medianBarsToWin != null && mtfTf ? `${mc.medianBarsToWin}봉` : "—";
+  const lossBarsLabel = mc.medianBarsToLoss != null && mtfTf ? `${mc.medianBarsToLoss}봉` : "—";
+  return (
+    <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-cyan-400">
+          결과 시뮬레이션 (Monte Carlo · {mc.runs.toLocaleString()}회 · {mtfTf ?? "MTF"} 변동성 기준)
+        </span>
+      </div>
+      {/* 비율 바 */}
+      <div className="mb-2 flex h-2.5 w-full overflow-hidden rounded-full border border-border bg-background/40">
+        <div className="bg-grade-a" style={{ width: `${winPct}%` }} title={`목표 도달 ${winPct.toFixed(1)}%`} />
+        <div className="bg-grade-d" style={{ width: `${lossPct}%` }} title={`손절 ${lossPct.toFixed(1)}%`} />
+        <div className="bg-muted-foreground/40" style={{ width: `${timeoutPct}%` }} title={`시간 만료 ${timeoutPct.toFixed(1)}%`} />
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <SizeStat label="목표 도달" value={`${winPct.toFixed(1)}%`} sub={`평균 ${winBarsLabel}`} tone="good" />
+        <SizeStat label="손절 적중" value={`${lossPct.toFixed(1)}%`} sub={`평균 ${lossBarsLabel}`} tone="bad" />
+        <SizeStat label="시간 만료" value={`${timeoutPct.toFixed(1)}%`} sub={`${mc.barLimit}봉 한도`} />
+        <SizeStat label="기대 결과" value={`${mc.expectedR >= 0 ? "+" : ""}${mc.expectedR.toFixed(2)}R`} sub={`R:R ${mc.rrRatio.toFixed(2)}`} tone={mc.expectedR > 0 ? "good" : mc.expectedR < 0 ? "bad" : undefined} />
+      </div>
+      <div className={cn("mt-2 text-[10px]", evTone)}>
+        <span className="font-semibold">해석:</span>{" "}
+        {mc.expectedR > 0.3
+          ? "기대값 양수. 같은 셋업을 반복하면 통계적으로 이익."
+          : mc.expectedR > 0
+            ? "기대값 약하게 양수. 빈도 높지 않으면 의미 약함."
+            : mc.expectedR > -0.3
+              ? "기대값 0 부근. 통계적 우위 거의 없음 — 재검토 권장."
+              : "기대값 음수. 같은 셋업 반복 시 손실 누적."}
+        {" "}변동성 {mc.atrPctPerBar.toFixed(2)}% / 봉 기준 1000회 무작위 경로 시뮬.
+      </div>
+    </div>
+  );
+}
+
+function TierMetricsTable({
+  entries,
+  avgPrice,
+  invalidation,
+  target,
+  accountSize,
+  riskPct,
+  currency,
+  selectedTier,
+}: {
+  entries: NonNullable<AnalysisReport["scenarios"][number]["entries"]>;
+  avgPrice: number;
+  invalidation: number;
+  target: number;
+  accountSize: number;
+  riskPct: number;
+  currency: "USD" | "KRW";
+  selectedTier: number | "avg";
+}) {
+  const ROUND_TRIP = 0.12; // 왕복 수수료/슬리피지
+  const rows: Array<{
+    key: string;
+    label: string;
+    price: number;
+    weight: number;
+    selected: boolean;
+  }> = [
+    { key: "avg", label: "평균", price: avgPrice, weight: 100, selected: selectedTier === "avg" },
+    ...entries.map((e) => ({
+      key: `t${e.tier}`,
+      label: `${e.tier}차`,
+      price: e.price,
+      weight: e.weight,
+      selected: selectedTier === e.tier,
+    })),
+  ];
+
+  const maxLoss = accountSize * (riskPct / 100);
+
+  const colGrid = "grid-cols-[auto_repeat(7,minmax(0,1fr))]";
+
+  return (
+    <div className="overflow-x-auto rounded-md border border-border bg-background/40">
+      <div className={cn("grid gap-x-2 border-b border-border bg-background/60 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground min-w-[640px]", colGrid)}>
+        <span>단계</span>
+        <span className="text-right">진입</span>
+        <span className="text-right">손절폭</span>
+        <span className="text-right">목표폭</span>
+        <span className="text-right">R:R</span>
+        <span className="text-right">수량</span>
+        <span className="text-right">노출 금액</span>
+        <span className="text-right">잃을 한도</span>
+      </div>
+      {rows.map((r) => {
+        const stopPct = r.price > 0 ? (Math.abs(invalidation - r.price) / r.price) * 100 : 0;
+        const targetPct = r.price > 0 ? (Math.abs(target - r.price) / r.price) * 100 : 0;
+        const netStop = stopPct + ROUND_TRIP;
+        const netTarget = Math.max(0, targetPct - ROUND_TRIP);
+        const rr = netStop > 0 ? netTarget / netStop : 0;
+        const riskPerUnit = Math.abs(r.price - invalidation);
+        const qty = riskPerUnit > 0 ? Math.floor((maxLoss / riskPerUnit) * 1e4) / 1e4 : 0;
+        const positionSize = qty * r.price;
+        const exposurePct = accountSize > 0 ? (positionSize / accountSize) * 100 : 0;
+        return (
+          <div
+            key={r.key}
+            className={cn(
+              "grid gap-x-2 border-b border-border/30 px-2.5 py-1.5 font-mono text-[11px] tabular-nums last:border-b-0 min-w-[640px]",
+              colGrid,
+              r.selected && "bg-primary/10",
+            )}
+          >
+            <span className="font-sans font-semibold">
+              {r.label}
+              <span className="ml-1 text-[9px] text-muted-foreground">{r.weight}%</span>
+            </span>
+            <span className="text-right">${formatNumber(r.price)}</span>
+            <span className="text-right text-grade-d">−{stopPct.toFixed(2)}%</span>
+            <span className="text-right text-grade-a">+{targetPct.toFixed(2)}%</span>
+            <span className={cn("text-right font-semibold", rr >= 1.5 ? "text-grade-a" : "text-grade-c")}>
+              {rr.toFixed(2)}R
+            </span>
+            <span className="text-right">{formatNumber(qty)}</span>
+            <span className="text-right">
+              {formatCurrency(positionSize, currency)}
+              <span className="ml-1 text-[9px] text-muted-foreground">({exposurePct.toFixed(1)}%)</span>
+            </span>
+            <span className="text-right text-muted-foreground">{formatCurrency(maxLoss, currency)}</span>
+          </div>
+        );
+      })}
+      <div className="px-2.5 py-1 text-[10px] text-muted-foreground min-w-[640px]">
+        손절·목표 가격은 시나리오 공유. 단계별 진입가에 따라 손절폭·목표폭·R:R·수량·노출 금액이 달라집니다. 잃을 한도는 리스크 % 설정으로 고정.
+      </div>
+    </div>
+  );
+}
+
+function SizeStat({
+  label,
+  value,
+  sub,
+  recommended,
+  applied,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  recommended?: string;
+  applied?: boolean;
+  tone?: "good" | "bad";
+}) {
+  return (
+    <div className="rounded border border-border bg-background/40 p-2">
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+        {recommended && applied ? (
+          <span className="rounded bg-primary/20 px-1 py-0.5 text-[9px] font-semibold text-primary">권장</span>
+        ) : null}
+      </div>
+      <div
+        className={cn(
+          "mt-0.5 font-mono text-base font-bold tabular-nums",
+          tone === "good" && "text-grade-a",
+          tone === "bad" && "text-grade-d",
+        )}
+      >
+        {value}
+      </div>
+      {sub ? <div className="text-[10px] text-muted-foreground">{sub}</div> : null}
+    </div>
+  );
+}
+
+function TierButton({
+  active,
+  onClick,
+  label,
+  price,
+  weight,
+  note,
+  dist,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  price: number;
+  weight: number;
+  note: string;
+  dist?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-md border p-2 text-left transition-colors",
+        active
+          ? "border-primary bg-primary/15 text-foreground"
+          : "border-border bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+      )}
+    >
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wider">{label}</span>
+        <span className="text-[10px]">{weight}%</span>
+      </div>
+      <div className="mt-0.5 font-mono text-sm font-bold tabular-nums">${formatNumber(price)}</div>
+      {dist != null ? (
+        <div className="text-[10px] font-mono tabular-nums">
+          현재가 {dist >= 0 ? "+" : ""}{dist.toFixed(2)}%
+        </div>
+      ) : null}
+      <div className="truncate text-[10px] text-muted-foreground">{note}</div>
+    </button>
   );
 }

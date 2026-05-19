@@ -58,17 +58,34 @@ const SYSTEM_PROMPT = `당신은 시장 구조 스냅샷을 보고 가장 적합
 12. session (변동성 시간대)
 13. 사용자의 트레이딩 스타일 (스캘퍼는 짧은 fade/breakout 선호, 스윙은 큰 trend_pullback 선호)
 
-엄격한 규칙:
-- 정확히 하나만 고른다. 직관 금지, 데이터 추론만.
-- 양방향 가능하면 더 명확한 쪽 (direction 명시).
-- 의심되면 wait. 억지로 시나리오 만들지 마라.
-- reversal은 정말 명확한 신호일 때만. 디폴트로 고르지 마라.
+★ 시장 상태 기반 강제 플레이북 (이 규칙이 모든 판단보다 우선):
 
-수수료/슬리피지 고려 (실거래 0.12% 왕복 비용):
-- 스캘핑인데 명확한 추세나 박스 끝이 안 보이고 가격이 POC 부근 횡보 → wait (수수료에 까임).
-- 스타일별 최소 손익비를 충족할 수 없는 시장 상황이면 wait:
-  · scalp R:R 2 미만, day 1.5 미만, swing 2 미만, position 3 미만
-- 명확한 셋업 없이 "어차피 분석 결과는 내야 하니까" 식으로 trend_pullback 등을 억지로 고르지 마라.
+스냅샷의 trendMetrics.classification 값을 먼저 보고 거기서 출발한다:
+
+- classification = "up" (상승 추세 합의):
+  · 기본 선택: primary="trend_pullback", direction="long"
+  · 예외: 가격이 직전 스윙 고점을 명확히 깨고 청산 흐름이면 reversal short 검토
+  · "wait" 절대 금지 — 추세가 잡혀있으면 눌림목 진입이 정석
+
+- classification = "down" (하락 추세 합의):
+  · 기본 선택: primary="trend_pullback", direction="short"
+  · 예외: 강한 매수 흐름 + 스윙 저점 반등이면 reversal long 검토
+  · "wait" 절대 금지
+
+- classification = "range" (횡보 합의):
+  · 기본 선택: primary="range_fade", direction=null (양방향 가능 — Scenario Generator가 박스 상하단 모두 시나리오 생성)
+  · 박스 한쪽 끝에 가까우면 그 방향 fade(반대방향 진입) 우선
+  · 박스 돌파 임박(거래량 동반 + OI 증가)이면 breakout 검토
+  · "wait" 절대 금지 — 횡보장은 양 끝에서 매매가 정상
+
+- classification = "mixed" (혼조 — 지표 의견 갈림):
+  · 가격이 명확한 키레벨(POC/VAH/VAL/직전 스윙) 근처면 range_fade
+  · 그렇지 않으면 wait 허용
+
+엄격한 규칙:
+- 정확히 하나만 고른다. 데이터 추론만.
+- 위 플레이북을 따른 뒤, direction은 추가 신호로 다시 확정 (펀딩, OI, 호가, 흐름).
+- reversal은 명확한 반전 신호일 때만.
 
 reasoning 작성 규칙 (매우 중요):
 - 일반인이 읽어도 이해할 수 있게 평범한 한국어로 써라.

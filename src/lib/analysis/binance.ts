@@ -22,10 +22,16 @@ async function jget<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function fetchKlines(symbol: string, interval: Interval, limit = 300): Promise<Candle[]> {
-  const raw = await jget<unknown[][]>(
-    `${FAPI}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
-  );
+export async function fetchKlines(
+  symbol: string,
+  interval: Interval,
+  limit = 300,
+  opts?: { startTime?: number; endTime?: number },
+): Promise<Candle[]> {
+  const params = new URLSearchParams({ symbol, interval, limit: String(limit) });
+  if (opts?.startTime) params.set("startTime", String(opts.startTime));
+  if (opts?.endTime) params.set("endTime", String(opts.endTime));
+  const raw = await jget<unknown[][]>(`${FAPI}/fapi/v1/klines?${params.toString()}`);
   return raw.map((r) => ({
     openTime: Number(r[0]),
     open: Number(r[1]),
@@ -112,6 +118,43 @@ export async function fetchBtcDominance(): Promise<number | null> {
       "https://api.coingecko.com/api/v3/global",
     );
     return raw.data.market_cap_percentage.btc;
+  } catch {
+    return null;
+  }
+}
+
+export interface MarketDominance {
+  btc: number;
+  eth: number;
+  usdt: number;
+  /** USDT + USDC + BUSD + DAI + others (sum of stablecoin %) */
+  stablecoin: number;
+  /** Total crypto market cap (USD) */
+  totalMcapUsd: number;
+  /** Total market cap 24h % change */
+  totalMcap24hChangePct: number;
+}
+
+export async function fetchMarketDominance(): Promise<MarketDominance | null> {
+  try {
+    const raw = await jget<{
+      data: {
+        market_cap_percentage: Record<string, number>;
+        total_market_cap: { usd: number };
+        market_cap_change_percentage_24h_usd: number;
+      };
+    }>("https://api.coingecko.com/api/v3/global");
+    const mcp = raw.data.market_cap_percentage;
+    const stableKeys = ["usdt", "usdc", "busd", "dai", "tusd", "usdp", "frax", "lusd"];
+    const stablecoinTotal = stableKeys.reduce((sum, k) => sum + (mcp[k] ?? 0), 0);
+    return {
+      btc: mcp.btc ?? 0,
+      eth: mcp.eth ?? 0,
+      usdt: mcp.usdt ?? 0,
+      stablecoin: Number(stablecoinTotal.toFixed(2)),
+      totalMcapUsd: raw.data.total_market_cap.usd ?? 0,
+      totalMcap24hChangePct: raw.data.market_cap_change_percentage_24h_usd ?? 0,
+    };
   } catch {
     return null;
   }

@@ -36,12 +36,6 @@ export default async function TradePage({
   return (
     <div className="space-y-6">
       <FlowStepper current="trade" />
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">주문 검토</h1>
-        <p className="text-sm text-muted-foreground">
-          진입 버튼을 누르기 전, 주문을 거래소처럼 입력하고 등급·리스크·시장 상황을 한눈에 확인하세요.
-        </p>
-      </div>
       <TradeForm
         initialAccountSize={accountSize}
         initialRiskPct={Number(profile?.default_risk_pct) || 1}

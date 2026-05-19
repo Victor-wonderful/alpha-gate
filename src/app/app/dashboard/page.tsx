@@ -1,163 +1,358 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { GradeBadge } from "@/components/trade/grade-badge";
-import { MonthlyChart } from "./monthly-chart";
-import { MISTAKE_TAG_LABELS, type Grade, type MistakeTag } from "@/types/trade";
+import { EquityCurve } from "./monthly-chart";
+import { ArrowDownRight, ArrowUpRight, Minus, TrendingUp } from "lucide-react";
+import type { Grade } from "@/types/trade";
 import { cn } from "@/lib/utils";
 import { FlowStepper } from "@/components/app/flow-stepper";
 
-interface Closed {
+interface ClosedRow {
   pre_grade: Grade;
   result_r: number;
-  mistake_tags: string[] | null;
   closed_at: string;
+  symbol: string;
+  direction: "long" | "short";
+  exit_reason: "target" | "stop" | "manual" | null;
 }
 
 export default async function DashboardPage() {
   const supabase = await getSupabaseServer();
   const { data } = await supabase
     .from("trades")
-    .select("pre_grade, result_r, mistake_tags, closed_at")
-    .not("closed_at", "is", null);
+    .select("pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode")
+    .not("closed_at", "is", null)
+    .neq("mode", "backtest")
+    .order("closed_at", { ascending: true });
 
-  const rows = ((data ?? []) as unknown as Closed[]).filter((r) => r.result_r != null);
+  const rows = ((data ?? []) as unknown as ClosedRow[]).filter((r) => r.result_r != null);
 
+  // ── Headline KPIs ────────────────────────────────────────
+  const n = rows.length;
+  const totalR = rows.reduce((s, r) => s + Number(r.result_r), 0);
+  const wins = rows.filter((r) => Number(r.result_r) > 0).length;
+  const losses = rows.filter((r) => Number(r.result_r) < 0).length;
+  const breakeven = n - wins - losses;
+  const winRate = n > 0 ? (wins / n) * 100 : 0;
+  const avgR = n > 0 ? totalR / n : 0;
+  const avgWin = wins > 0 ? rows.filter((r) => Number(r.result_r) > 0).reduce((s, r) => s + Number(r.result_r), 0) / wins : 0;
+  const avgLoss = losses > 0 ? rows.filter((r) => Number(r.result_r) < 0).reduce((s, r) => s + Number(r.result_r), 0) / losses : 0;
+  const profitFactor = avgLoss < 0 ? (wins * avgWin) / Math.abs(losses * avgLoss) : 0;
+  const best = rows.reduce((b, r) => (Number(r.result_r) > b ? Number(r.result_r) : b), -Infinity);
+  const worst = rows.reduce((w, r) => (Number(r.result_r) < w ? Number(r.result_r) : w), Infinity);
+
+  // ── Equity curve points ──────────────────────────────────
+  let cum = 0;
+  const equityData = rows.map((r, i) => {
+    cum += Number(r.result_r);
+    return { date: r.closed_at, cumR: cum, trade: i + 1 };
+  });
+
+  // ── Streak (current win/loss streak ending at latest trade) ──
+  let streak = 0;
+  let streakSign: "win" | "loss" | "none" = "none";
+  if (n > 0) {
+    const last = Number(rows[n - 1].result_r);
+    streakSign = last > 0 ? "win" : last < 0 ? "loss" : "none";
+    for (let i = n - 1; i >= 0; i--) {
+      const r = Number(rows[i].result_r);
+      if (streakSign === "win" && r > 0) streak++;
+      else if (streakSign === "loss" && r < 0) streak++;
+      else break;
+    }
+  }
+
+  // ── Breakdown by grade ───────────────────────────────────
   const byGrade = new Map<Grade, { n: number; sumR: number; wins: number }>();
   for (const g of ["A", "B", "C", "D"] as Grade[]) byGrade.set(g, { n: 0, sumR: 0, wins: 0 });
-  const mistakeAgg = new Map<string, { n: number; sumR: number }>();
-  const monthly = new Map<string, number>();
-
   for (const r of rows) {
     const g = byGrade.get(r.pre_grade)!;
     g.n += 1;
     g.sumR += Number(r.result_r);
     if (Number(r.result_r) > 0) g.wins += 1;
-    for (const t of r.mistake_tags ?? []) {
-      const cur = mistakeAgg.get(t) ?? { n: 0, sumR: 0 };
-      cur.n += 1;
-      cur.sumR += Number(r.result_r);
-      mistakeAgg.set(t, cur);
-    }
-    const m = r.closed_at.slice(0, 7);
-    monthly.set(m, (monthly.get(m) ?? 0) + Number(r.result_r));
   }
 
-  const monthlyData = Array.from(monthly.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, value]) => ({ month, value }));
+  // ── Breakdown by direction ───────────────────────────────
+  const longStats = aggregateDir(rows, "long");
+  const shortStats = aggregateDir(rows, "short");
 
-  const mistakeRanked = Array.from(mistakeAgg.entries())
-    .map(([tag, v]) => ({
-      tag,
-      label: MISTAKE_TAG_LABELS[tag as MistakeTag] ?? tag,
-      n: v.n,
-      avg: v.sumR / v.n,
-      total: v.sumR,
-    }))
-    .sort((a, b) => a.total - b.total);
-
-  const worst = mistakeRanked[0];
+  // ── Breakdown by exit reason ─────────────────────────────
+  const exitStats = {
+    target: rows.filter((r) => r.exit_reason === "target").length,
+    stop: rows.filter((r) => r.exit_reason === "stop").length,
+    manual: rows.filter((r) => r.exit_reason === "manual" || !r.exit_reason).length,
+  };
 
   return (
     <div className="space-y-6">
       <FlowStepper current="dashboard" />
       <div>
         <h1 className="text-2xl font-bold tracking-tight">성과 분석</h1>
-        <p className="text-sm text-muted-foreground">결과가 입력된 거래만 집계합니다.</p>
+        <p className="text-sm text-muted-foreground">
+          종료된 라이브 거래 {n}건 기준. 백테스트 결과는 제외됩니다.
+        </p>
       </div>
 
-      {rows.length === 0 ? (
+      {n === 0 ? (
         <Card>
-          <CardContent className="p-10 text-center text-sm text-muted-foreground">
-            아직 결과가 입력된 거래가 없습니다.
+          <CardContent className="flex flex-col items-center justify-center gap-3 p-16 text-center">
+            <TrendingUp className="h-8 w-8 text-muted-foreground/40" />
+            <div className="text-sm text-muted-foreground">
+              종료된 거래가 없습니다. 거래를 저장하고 손절·목표 도달 시 자동 정산되면 여기에 표시됩니다.
+            </div>
           </CardContent>
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(["A", "B", "C", "D"] as Grade[]).map((g) => {
-              const s = byGrade.get(g)!;
-              return (
-                <Card key={g}>
-                  <CardContent className="space-y-3 p-5">
-                    <div className="flex items-center justify-between">
-                      <GradeBadge grade={g} size="sm" />
-                      <span className="text-xs text-muted-foreground">{s.n}건</span>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">평균 R</div>
-                      <div
-                        className={cn(
-                          "font-mono text-2xl",
-                          s.n === 0
-                            ? "text-muted-foreground"
-                            : s.sumR / s.n >= 0
-                              ? "text-grade-a"
-                              : "text-grade-d",
-                        )}
-                      >
-                        {s.n === 0 ? "—" : (s.sumR / s.n).toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      승률 {s.n === 0 ? "—" : `${((s.wins / s.n) * 100).toFixed(0)}%`}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          {/* ── Hero KPIs ────────────────────────────────────── */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Kpi
+              label="누적 R"
+              value={`${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)}R`}
+              sub={`${n}건 (승 ${wins} · 패 ${losses}${breakeven ? ` · BE ${breakeven}` : ""})`}
+              tone={totalR >= 0 ? "good" : "bad"}
+              icon={totalR >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+            />
+            <Kpi
+              label="승률"
+              value={`${winRate.toFixed(1)}%`}
+              sub={`평균 ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R / 거래`}
+              tone={winRate >= 50 ? "good" : winRate >= 35 ? "neutral" : "bad"}
+            />
+            <Kpi
+              label="Profit Factor"
+              value={profitFactor > 0 ? profitFactor.toFixed(2) : "—"}
+              sub={profitFactor >= 1 ? "장기 수익 우위" : "장기 손실 우위"}
+              tone={profitFactor >= 1.5 ? "good" : profitFactor >= 1 ? "neutral" : "bad"}
+            />
+            <Kpi
+              label="현재 연속"
+              value={streak > 0 ? `${streakSign === "win" ? "🔥 " : streakSign === "loss" ? "🥶 " : ""}${streak}` : "—"}
+              sub={
+                streakSign === "win"
+                  ? `${streak}연승 진행 중`
+                  : streakSign === "loss"
+                    ? `${streak}연패 — 리스크 절반 권장`
+                    : "기록 없음"
+              }
+              tone={streakSign === "win" ? "good" : streakSign === "loss" ? "bad" : "neutral"}
+            />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          {/* ── Equity Curve ─────────────────────────────────── */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
+              <div>
+                <CardTitle className="text-base">자본 곡선 (Equity Curve)</CardTitle>
+                <p className="mt-0.5 text-xs text-muted-foreground">시간순 누적 R. 0선 위는 이익, 아래는 손실.</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">최고</span>
+                <span className="font-mono font-semibold text-grade-a tabular-nums">
+                  {best === -Infinity ? "—" : `+${best.toFixed(2)}R`}
+                </span>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-muted-foreground">최저</span>
+                <span className="font-mono font-semibold text-grade-d tabular-nums">
+                  {worst === Infinity ? "—" : `${worst.toFixed(2)}R`}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <EquityCurve data={equityData} />
+            </CardContent>
+          </Card>
+
+          {/* ── Breakdown row ────────────────────────────────── */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* 등급별 */}
             <Card>
-              <CardHeader>
-                <CardTitle>월별 누적 R</CardTitle>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">진입 등급별 성과</CardTitle>
               </CardHeader>
-              <CardContent>
-                <MonthlyChart data={monthlyData} />
+              <CardContent className="space-y-2.5">
+                {(["A", "B", "C", "D"] as Grade[]).map((g) => {
+                  const s = byGrade.get(g)!;
+                  const pct = n > 0 ? (s.n / n) * 100 : 0;
+                  return (
+                    <div key={g} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <GradeBadge grade={g} size="sm" />
+                          <span className="text-muted-foreground">{s.n}건 · {pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="flex items-baseline gap-2 font-mono tabular-nums">
+                          <span className={cn("font-semibold", s.sumR >= 0 ? "text-grade-a" : "text-grade-d")}>
+                            {s.sumR >= 0 ? "+" : ""}{s.sumR.toFixed(2)}R
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            평균 {s.n > 0 ? (s.sumR / s.n).toFixed(2) : "—"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted/30">
+                        <div
+                          className={cn("h-full rounded-full", s.sumR >= 0 ? "bg-grade-a" : "bg-grade-d")}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
 
+            {/* 방향별 */}
             <Card>
-              <CardHeader>
-                <CardTitle>실수 태그별 누적 R</CardTitle>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">방향별 성과</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <DirectionRow label="롱 (매수)" stats={longStats} />
+                <DirectionRow label="숏 (매도)" stats={shortStats} />
+              </CardContent>
+            </Card>
+
+            {/* 청산 사유 */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">청산 사유</CardTitle>
               </CardHeader>
               <CardContent>
-                {mistakeRanked.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">실수 태그가 입력된 거래가 없습니다.</p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {mistakeRanked.map((m) => (
-                      <li key={m.tag} className="flex items-center justify-between">
-                        <span>
-                          {m.label} <span className="text-xs text-muted-foreground">({m.n})</span>
-                        </span>
-                        <span
-                          className={cn(
-                            "font-mono",
-                            m.total >= 0 ? "text-grade-a" : "text-grade-d",
-                          )}
-                        >
-                          {m.total.toFixed(2)}R
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {worst && worst.total < 0 ? (
-                  <div className="mt-4 rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-sm">
-                    <div className="font-semibold text-grade-d">당신이 가장 자주 잃는 패턴</div>
-                    <div className="mt-1">
-                      <span className="font-semibold">{worst.label}</span> — 누적 {worst.total.toFixed(2)}R
-                      ({worst.n}건, 평균 {worst.avg.toFixed(2)}R)
-                    </div>
-                  </div>
-                ) : null}
+                <ExitStackedBar
+                  target={exitStats.target}
+                  stop={exitStats.stop}
+                  manual={exitStats.manual}
+                  total={n}
+                />
               </CardContent>
             </Card>
           </div>
         </>
       )}
     </div>
+  );
+}
+
+function aggregateDir(rows: ClosedRow[], dir: "long" | "short") {
+  const filtered = rows.filter((r) => r.direction === dir);
+  const n = filtered.length;
+  const sumR = filtered.reduce((s, r) => s + Number(r.result_r), 0);
+  const wins = filtered.filter((r) => Number(r.result_r) > 0).length;
+  return {
+    n,
+    sumR,
+    avgR: n > 0 ? sumR / n : 0,
+    winRate: n > 0 ? (wins / n) * 100 : 0,
+  };
+}
+
+function Kpi({
+  label,
+  value,
+  sub,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "good" | "bad" | "neutral";
+  icon?: React.ReactNode;
+}) {
+  const valueColor =
+    tone === "good" ? "text-grade-a" : tone === "bad" ? "text-grade-d" : "text-foreground";
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+          {icon ? <span className={valueColor}>{icon}</span> : null}
+        </div>
+        <div className={cn("mt-1.5 font-mono text-2xl font-bold tabular-nums", valueColor)}>{value}</div>
+        {sub ? <div className="mt-0.5 text-[11px] text-muted-foreground">{sub}</div> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DirectionRow({
+  label,
+  stats,
+}: {
+  label: string;
+  stats: { n: number; sumR: number; avgR: number; winRate: number };
+}) {
+  return (
+    <div className="rounded-md border border-border bg-background/40 p-2.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium">{label}</span>
+        <span className="text-muted-foreground">{stats.n}건</span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-3 gap-2 font-mono text-xs tabular-nums">
+        <div>
+          <div className="text-[10px] text-muted-foreground">누적</div>
+          <div className={cn("font-semibold", stats.sumR >= 0 ? "text-grade-a" : "text-grade-d")}>
+            {stats.sumR >= 0 ? "+" : ""}{stats.sumR.toFixed(2)}R
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-muted-foreground">평균</div>
+          <div className={cn("font-semibold", stats.avgR >= 0 ? "text-grade-a" : "text-grade-d")}>
+            {stats.n > 0 ? `${stats.avgR >= 0 ? "+" : ""}${stats.avgR.toFixed(2)}` : "—"}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-muted-foreground">승률</div>
+          <div className="font-semibold">{stats.n > 0 ? `${stats.winRate.toFixed(0)}%` : "—"}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExitStackedBar({
+  target,
+  stop,
+  manual,
+  total,
+}: {
+  target: number;
+  stop: number;
+  manual: number;
+  total: number;
+}) {
+  const tPct = total > 0 ? (target / total) * 100 : 0;
+  const sPct = total > 0 ? (stop / total) * 100 : 0;
+  const mPct = total > 0 ? (manual / total) * 100 : 0;
+  return (
+    <div className="space-y-3">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full border border-border bg-background/40">
+        <div className="bg-grade-a transition-all" style={{ width: `${tPct}%` }} />
+        <div className="bg-grade-d transition-all" style={{ width: `${sPct}%` }} />
+        <div className="bg-muted-foreground/40 transition-all" style={{ width: `${mPct}%` }} />
+      </div>
+      <ul className="space-y-1.5 text-xs">
+        <ExitRow color="bg-grade-a" label="목표 도달" n={target} pct={tPct} />
+        <ExitRow color="bg-grade-d" label="손절 적중" n={stop} pct={sPct} />
+        <ExitRow color="bg-muted-foreground/40" label="임의/타임아웃" n={manual} pct={mPct} />
+      </ul>
+    </div>
+  );
+}
+
+function ExitRow({ color, label, n, pct }: { color: string; label: string; n: number; pct: number }) {
+  return (
+    <li className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <span className={cn("h-2 w-2 rounded-full", color)} />
+        <span className="text-foreground">{label}</span>
+      </div>
+      <div className="flex items-baseline gap-2 font-mono tabular-nums">
+        <span className="text-muted-foreground">{n}건</span>
+        <span>{pct.toFixed(0)}%</span>
+      </div>
+    </li>
   );
 }

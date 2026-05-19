@@ -72,7 +72,11 @@ export function buildAnalysisMarkdown(args: {
       const targetPct = (Math.abs(s.target - entry) / entry) * 100;
       const rr = Math.abs(s.target - entry) / Math.abs(entry - s.invalidation);
 
-      lines.push(`### 시나리오 ${letter} · ${s.direction === "long" ? "롱 (사기)" : "숏 (팔기)"}`);
+      const typeLabel =
+        s.entryType === "immediate" ? " · 지금 진입 가능"
+        : s.entryType === "pending" ? " · 도달 대기"
+        : "";
+      lines.push(`### 시나리오 ${letter} · ${s.direction === "long" ? "롱 (사기)" : "숏 (팔기)"}${typeLabel}`);
       lines.push("");
       lines.push(`**${s.name}**`);
       lines.push("");

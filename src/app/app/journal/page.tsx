@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { GradeBadge } from "@/components/trade/grade-badge";
 import type { Grade } from "@/types/trade";
 import { FlowStepper } from "@/components/app/flow-stepper";
+import { ResolveTradesButton } from "./resolve-button";
 
 export default async function JournalListPage() {
   const supabase = await getSupabaseServer();
@@ -17,9 +18,14 @@ export default async function JournalListPage() {
   return (
     <div className="space-y-6">
       <FlowStepper current="journal" />
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">내 거래</h1>
-        <p className="text-sm text-muted-foreground">최근 100건의 거래입니다.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">내 거래</h1>
+          <p className="text-sm text-muted-foreground">
+            최근 100건의 거래입니다. 매일 자정에 자동 정산되며, 지금 바로 시세를 확인하려면 우측 버튼을 누르세요.
+          </p>
+        </div>
+        <ResolveTradesButton />
       </div>
 
       {!trades?.length ? (

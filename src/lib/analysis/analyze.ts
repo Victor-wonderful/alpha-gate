@@ -7,9 +7,13 @@ import {
   fetchOpenInterest,
   fetchTicker24h,
   fetchBtcDominance,
+  fetchMarketDominance,
+  type MarketDominance,
   type Interval,
 } from "./binance";
 import { classifyTrend, findFVGs, findLiquidityZones, findOrderBlocks, findSwings } from "./smc";
+import { classifyTrendComposite } from "./trend";
+import { classifyDominanceRegime } from "./dominance";
 import { computeVolumeProfile } from "./volume-profile";
 import { classifyFunding, summarizeDepth, summarizeFlow } from "./order-flow";
 import { STYLE_PRESETS, tfsForStyle, type TradingStyle } from "./style";
@@ -89,6 +93,10 @@ export interface AnalysisSnapshot {
   } | null;
   macro: {
     btcDominance: number | null;
+    /** Full dominance breakdown (BTC/ETH/USDT/stablecoin) + total mcap + 24h change */
+    dominance?: MarketDominance | null;
+    /** Classified market regime (alt_season / btc_season / risk_off / ...) */
+    dominanceRegime?: import("./dominance").DominanceVerdict | null;
     dxy?: { value: number; change24hPct: number } | null;
     fearGreed?: { value: number; label: string } | null;
   };
@@ -113,6 +121,17 @@ export interface AnalysisSnapshot {
   };
   /** Weekly volume profile for longer-term POC reference */
   weeklyVolumeProfile?: { poc: number; vah: number; val: number } | null;
+  /** Trend classification using established indicators (ADX/KER/Choppiness) on style-specific TF */
+  trendMetrics?: {
+    refTf: Interval;
+    adx: { value: number; verdict: "trend" | "developing" | "range"; plusDI: number; minusDI: number } | null;
+    ker: { value: number; verdict: "trend" | "mixed" | "range" } | null;
+    choppiness: { value: number; verdict: "trend" | "mixed" | "range" } | null;
+    classification: "up" | "down" | "range" | "mixed";
+    strength: "strong" | "moderate" | "weak";
+    trendVotes: number;
+    rangeVotes: number;
+  };
 }
 
 export async function buildSnapshot(symbol: string, style: TradingStyle = "swing"): Promise<AnalysisSnapshot> {
@@ -131,6 +150,7 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     funding,
     oi,
     btcd,
+    dominance,
     topTraderRatio,
     fearGreed,
     dxy,
@@ -145,6 +165,7 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     fetchFundingRate(sym),
     fetchOpenInterest(sym),
     fetchBtcDominance(),
+    fetchMarketDominance(),
     fetchTopTraderRatio(sym, "15m"),
     fetchFearGreed(),
     fetchDXY(),
@@ -227,6 +248,9 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
   // Weekly volume profile (using daily candles, group by 7)
   const weeklyVp = weeklyCandles.length >= 14 ? computeVolumeProfile(weeklyCandles, 60, 0.7) : null;
 
+  // Trend classification via ADX (Wilder) + KER (Kaufman) + Choppiness (Dreiss)
+  const trendMetrics = computeTrendMetrics(style, tfData, tfs);
+
   return {
     symbol: sym,
     generatedAt: new Date().toISOString(),
@@ -257,6 +281,8 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     oiDelta,
     macro: {
       btcDominance: btcd,
+      dominance,
+      dominanceRegime: dominance ? classifyDominanceRegime(dominance) : null,
       dxy,
       fearGreed,
     },
@@ -266,5 +292,38 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     basis,
     session,
     weeklyVolumeProfile: weeklyVp ? { poc: weeklyVp.poc, vah: weeklyVp.vah, val: weeklyVp.val } : null,
+    trendMetrics,
+  };
+}
+
+// Per-style reference TF for trend classification.
+// scalp/day/swing use MTF (15M/1H/4H), position uses HTF (1D).
+const TREND_REF_ROLE: Record<TradingStyle, "MTF" | "HTF"> = {
+  scalp: "MTF",
+  day: "MTF",
+  swing: "MTF",
+  position: "HTF",
+};
+
+function computeTrendMetrics(
+  style: TradingStyle,
+  tfData: Record<string, Array<{ open: number; high: number; low: number; close: number; volume: number; openTime: number }>>,
+  tfs: Interval[],
+): NonNullable<AnalysisSnapshot["trendMetrics"]> | undefined {
+  const refRole = TREND_REF_ROLE[style];
+  const refIdx = refRole === "HTF" ? 0 : 1;
+  const refTf = tfs[refIdx];
+  const candles = tfData[refTf];
+  if (!candles || candles.length < 30) return undefined;
+  const v = classifyTrendComposite(candles);
+  return {
+    refTf,
+    adx: v.adx,
+    ker: v.ker,
+    choppiness: v.choppiness,
+    classification: v.composite.classification,
+    strength: v.composite.strength,
+    trendVotes: v.composite.trendVotes,
+    rangeVotes: v.composite.rangeVotes,
   };
 }

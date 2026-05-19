@@ -50,17 +50,19 @@ export default async function HomePage() {
       .order("created_at", { ascending: false })
       .limit(5),
     getQuickTickers(),
-    supabase.from("trades").select("result_r, pre_grade, closed_at"),
+    supabase.from("trades").select("result_r, pre_grade, closed_at, mode").neq("mode", "backtest"),
   ]);
 
   const recent = recentTradesRes.data ?? [];
   const allTrades = statsRes.data ?? [];
   const closed = allTrades.filter((t) => t.closed_at && t.result_r != null);
-  const totalTrades = closed.length;
+  const closedCount = closed.length;
   const wins = closed.filter((t) => Number(t.result_r ?? 0) > 0).length;
-  const winRate = totalTrades > 0 ? Math.round((wins / totalTrades) * 100) : 0;
+  const losses = closed.filter((t) => Number(t.result_r ?? 0) < 0).length;
+  const winRate = closedCount > 0 ? Math.round((wins / closedCount) * 100) : 0;
   const totalR = closed.reduce((s, t) => s + Number(t.result_r ?? 0), 0);
   const openCount = allTrades.filter((t) => !t.closed_at).length;
+  const totalTrades = closedCount + openCount;
 
   // 상황별 가이드 결정
   type GuideKind = "open_positions" | "first_time" | "continue";
@@ -133,21 +135,24 @@ export default async function HomePage() {
       {/* Stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="총 거래"
+          label="전체 거래"
           value={String(totalTrades)}
+          sub={`종료 ${closedCount} · 진행 ${openCount}`}
           icon={<Activity className="h-3.5 w-3.5" />}
           accentColor="primary"
         />
         <StatCard
           label="승률"
-          value={totalTrades > 0 ? `${winRate}%` : "—"}
+          value={closedCount > 0 ? `${winRate}%` : "—"}
+          sub={closedCount > 0 ? `${wins}승 ${losses}패 (종료 ${closedCount}건 기준)` : "종료 거래 없음"}
           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
           accentColor="grade-a"
-          trend={totalTrades > 0 ? (winRate >= 50 ? "up" : "down") : undefined}
+          trend={closedCount > 0 ? (winRate >= 50 ? "up" : "down") : undefined}
         />
         <StatCard
           label="누적 R"
-          value={totalTrades > 0 ? `${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)}R` : "—"}
+          value={closedCount > 0 ? `${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)}R` : "—"}
+          sub={closedCount > 0 ? `거래당 평균 ${totalR / closedCount >= 0 ? "+" : ""}${(totalR / closedCount).toFixed(2)}R` : "종료 거래 없음"}
           icon={<LineChartIcon className="h-3.5 w-3.5" />}
           accentColor={totalR >= 0 ? "grade-a" : "grade-d"}
           tone={totalR > 0 ? "good" : totalR < 0 ? "bad" : "neutral"}
@@ -155,6 +160,7 @@ export default async function HomePage() {
         <StatCard
           label="진행 중"
           value={String(openCount)}
+          sub={openCount > 0 ? "자동 정산 대기 중" : "열린 거래 없음"}
           icon={<BookOpen className="h-3.5 w-3.5" />}
           accentColor="grade-b"
           badge={openCount > 0 ? "live" : undefined}
@@ -320,6 +326,7 @@ export default async function HomePage() {
 function StatCard({
   label,
   value,
+  sub,
   icon,
   tone = "neutral",
   accentColor,
@@ -328,6 +335,7 @@ function StatCard({
 }: {
   label: string;
   value: string;
+  sub?: string;
   icon: React.ReactNode;
   tone?: "good" | "bad" | "neutral";
   accentColor?: "primary" | "grade-a" | "grade-b" | "grade-c" | "grade-d";
@@ -376,6 +384,7 @@ function StatCard({
             </span>
           ) : null}
         </div>
+        {sub ? <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div> : null}
       </div>
     </Card>
   );

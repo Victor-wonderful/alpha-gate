@@ -8,15 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { MISTAKE_TAGS, MISTAKE_TAG_LABELS, type MistakeTag } from "@/types/trade";
 import { updateOutcomeAction } from "@/app/app/_actions";
 
 type Initial = {
   exit_price: number | null;
   result_r: number | null;
   exit_reason: string | null;
-  mistake_tags: string[] | null;
   note: string | null;
 };
 
@@ -33,7 +30,6 @@ export function OutcomeForm({
   const [exitPrice, setExitPrice] = useState(initial.exit_price?.toString() ?? "");
   const [resultR, setResultR] = useState(initial.result_r?.toString() ?? "");
   const [exitReason, setExitReason] = useState((initial.exit_reason as "target" | "stop" | "manual") || "manual");
-  const [tags, setTags] = useState<Set<string>>(new Set(initial.mistake_tags ?? []));
   const [note, setNote] = useState(initial.note ?? "");
 
   function submit() {
@@ -43,7 +39,7 @@ export function OutcomeForm({
         exitPrice: Number(exitPrice),
         resultR: Number(resultR),
         exitReason,
-        mistakeTags: Array.from(tags),
+        mistakeTags: [],
         note,
       });
       if (r.error) toast.error(r.error);
@@ -82,26 +78,8 @@ export function OutcomeForm({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>실수 태그 (해당하는 것 선택)</Label>
-          <div className="grid grid-cols-2 gap-1 rounded-md border border-border p-3">
-            {MISTAKE_TAGS.map((t) => (
-              <Checkbox
-                key={t}
-                checked={tags.has(t)}
-                onChange={(e) => {
-                  const next = new Set(tags);
-                  if (e.target.checked) next.add(t);
-                  else next.delete(t);
-                  setTags(next);
-                }}
-                label={MISTAKE_TAG_LABELS[t as MistakeTag]}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label>메모</Label>
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} />
+          <Label>메모 (선택)</Label>
+          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="이 거래에서 배운 점, 다음에 다르게 할 부분..." />
         </div>
         <Button onClick={submit} disabled={pending}>
           {pending ? "저장 중..." : "결과 저장"}

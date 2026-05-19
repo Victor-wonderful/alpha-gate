@@ -22,14 +22,16 @@ export function gradeTrade(input: TradeInput): GradeResult {
   // ─── 시장 구조 ────────────────────────────────────────
   const stopClear = input.market.near_key_level && input.market.higher_highs_lows;
   if (stopClear) reasons.push({ code: "stop_clear", label: "손절 기준이 구조적으로 타당함", points: 2 });
-  if (input.market.aligned_with_btc)
-    reasons.push({ code: "btc_aligned", label: "BTC 방향과 정렬됨", points: 1 });
+  // BTC 자체 매매는 alignment 체크 의미 없음(자기 자신과 정렬). 알트만 체크.
+  const isBtcPair = input.symbol.toUpperCase().startsWith("BTC");
+  if (!isBtcPair && input.market.aligned_with_btc)
+    reasons.push({ code: "btc_aligned", label: "시장 국면(도미넌스)과 정렬됨", points: 1 });
   if (input.market.not_box_middle)
     reasons.push({ code: "structure_clear", label: "구조적 위치 양호 (박스 중간 회피)", points: 1 });
   if (input.market.volume_confirm) reasons.push({ code: "volume_ok", label: "거래량 동반", points: 1 });
 
-  if (!input.market.aligned_with_btc)
-    reasons.push({ code: "btc_conflict", label: "BTC 방향과 충돌하는 매매", points: -2 });
+  if (!isBtcPair && !input.market.aligned_with_btc)
+    reasons.push({ code: "btc_conflict", label: "시장 국면(도미넌스)과 충돌", points: -1 });
   if (!input.market.not_box_middle)
     reasons.push({ code: "box_middle", label: "박스권 중간 진입", points: -2 });
 
@@ -93,8 +95,8 @@ export function gradeTrade(input: TradeInput): GradeResult {
   if (rr === 0) actions.push("진입가/손절가/목표가 방향이 어긋났습니다. 다시 입력하세요.");
   if (!input.market.not_box_middle)
     actions.push("박스권 중간입니다. 눌림 대기 또는 포지션을 절반으로 줄이세요.");
-  if (!input.market.aligned_with_btc)
-    actions.push("BTC 방향과 반대 매매입니다. 추가 검증 없이는 비추천.");
+  if (!isBtcPair && !input.market.aligned_with_btc)
+    actions.push("현재 시장 국면(BTC.D/USDT.D/총시총)과 다른 방향. 알트 디버전스 셋업이 아니면 추가 확인 필요.");
   if (!input.trigger.within_entry_band)
     actions.push("계획 진입 구간을 벗어났습니다. 추격 대신 다음 기회를 기다리세요.");
   if (!input.trigger.candle_closed)

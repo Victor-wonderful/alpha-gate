@@ -16,13 +16,14 @@ import {
   Menu,
   Sparkles,
   User,
+  Wallet,
   X,
 } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
 
-type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key";
+type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key" | "wallet";
 
 export type SidebarItem = {
   href: string;
@@ -38,6 +39,7 @@ const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   chart: LineChart,
   bell: Bell,
   key: KeyRound,
+  wallet: Wallet,
 };
 
 const MAIN: SidebarItem[] = [{ href: "/app", label: "홈", icon: "home" }];
@@ -45,6 +47,7 @@ const MAIN: SidebarItem[] = [{ href: "/app", label: "홈", icon: "home" }];
 const TRADE: SidebarItem[] = [
   { href: "/app/analyze", label: "AI 분석", icon: "sparkles" },
   { href: "/app/trade", label: "주문 검토", icon: "check" },
+  { href: "/app/virtual-trade", label: "가상 트레이딩", icon: "wallet" },
 ];
 
 const REVIEW: SidebarItem[] = [

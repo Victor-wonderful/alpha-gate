@@ -38,6 +38,9 @@ interface OpenTrade {
   target: number;
   /** Round-trip fee % applied at save time. Defaults to 0.12 if missing. */
   fees_pct: number | null;
+  position_quantity: number | null;
+  paper_margin: number | null;
+  is_paper: boolean | null;
   created_at: string;
 }
 
@@ -112,7 +115,9 @@ export async function GET(req: NextRequest) {
   const svc = getSupabaseService();
   const { data: openTrades, error } = await svc
     .from("trades")
-    .select("id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, created_at, mode")
+    .select(
+      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, mode",
+    )
     .is("closed_at", null)
     .neq("mode", "backtest")
     .order("created_at", { ascending: true })
@@ -164,6 +169,15 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      // Compute realized PnL in USDT for paper wallet settlement.
+      const entryActualNum = Number(t.entry_actual ?? t.entry);
+      const feesPctNum = Number(t.fees_pct ?? 0.12);
+      const qty = Number(t.position_quantity ?? 0);
+      const realizedPnl =
+        t.direction === "long"
+          ? (resolution.exitActual - entryActualNum) * qty - (entryActualNum * (feesPctNum / 100)) * qty
+          : (entryActualNum - resolution.exitActual) * qty - (entryActualNum * (feesPctNum / 100)) * qty;
+
       const { error: upErr } = await svc
         .from("trades")
         .update({
@@ -172,6 +186,7 @@ export async function GET(req: NextRequest) {
           result_r: resolution.resultR,
           exit_reason: resolution.exitReason,
           closed_at: resolution.closedAt,
+          paper_realized_pnl: t.is_paper ? realizedPnl : null,
           note: `자동 정산: ${resolution.exitReason === "target" ? "목표 도달" : "손절 적중"} (수수료 차감 후 ${resolution.resultR.toFixed(2)}R)`,
         })
         .eq("id", t.id)
@@ -184,6 +199,17 @@ export async function GET(req: NextRequest) {
       }
 
       resolved++;
+
+      // Paper wallet settle: release margin and credit/debit USDT PnL.
+      if (t.is_paper && t.paper_margin != null) {
+        const { settleMargin } = await import("@/lib/paper-wallet");
+        await settleMargin({
+          userId: t.user_id,
+          margin: Number(t.paper_margin),
+          realizedPnl,
+          tradeId: t.id,
+        });
+      }
       results.push({ id: t.id, exitReason: resolution.exitReason, resultR: Number(resolution.resultR.toFixed(2)) });
 
       // Best-effort notification — d_grade_warn used as generic channel

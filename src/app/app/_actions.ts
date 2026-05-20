@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { dispatch } from "@/lib/notify-dispatch";
 import { fetchKlines, fetchTicker24h } from "@/lib/analysis/binance";
+import { canAffordMargin, lockMargin, requiredMargin, settleMargin } from "@/lib/paper-wallet";
 import type { GradeResult, SizingResult, TradeInput } from "@/types/trade";
 
 /** Simulated market-order slippage in % for paper trading.
@@ -51,9 +52,19 @@ export async function saveTradeAction(args: {
   if (!user) return { error: "로그인이 필요합니다." };
 
   const { input, grade, sizing, leverage, forecast } = args;
+  const lev = leverage ?? 1;
 
   // Paper trading: simulate a market-order fill using the current Binance price.
   const fill = await simulateMarketFill(input.symbol, input.direction, input.entry);
+
+  // Compute required margin based on the actual fill price.
+  const margin = requiredMargin(fill.fillPrice, sizing.quantity, lev);
+
+  // Pre-flight: confirm the wallet can cover this trade.
+  const afford = await canAffordMargin(user.id, margin);
+  if (!afford.ok) {
+    return { error: afford.reason };
+  }
 
   const { data, error } = await supabase
     .from("trades")
@@ -71,7 +82,7 @@ export async function saveTradeAction(args: {
       market_checks: input.market,
       psych_checks: {}, // deprecated, kept for NOT NULL constraint
       context_flags: {
-        leverage: leverage ?? 1,
+        leverage: lev,
         trigger: input.trigger,
         marketCtx: input.marketCtx,
       },
@@ -81,15 +92,32 @@ export async function saveTradeAction(args: {
       pre_actions: grade.actions,
       pre_rr: grade.rr,
       simulation_meta: forecast ? { kind: "monte_carlo_forecast", at: new Date().toISOString(), ...(typeof forecast === "object" && forecast !== null ? forecast : {}) } : null,
-      // Paper-trading simulated fill
+      // Paper-trading simulated fill + margin
       entry_actual: fill.fillPrice,
       entry_slippage_pct: fill.slippagePct,
       fees_pct: PAPER_FEES_PCT,
+      paper_margin: margin,
     })
     .select("id, pre_grade")
     .single();
 
   if (error || !data) return { error: error?.message ?? "저장 실패" };
+
+  // Lock margin in the paper wallet. Wallet was pre-checked so this should
+  // succeed; on the off chance it doesn't, mark the trade as error and bail.
+  const lock = await lockMargin({
+    userId: user.id,
+    margin,
+    tradeId: data.id,
+    note: `진입 증거금 lock ($${margin.toFixed(2)})`,
+  });
+  if (!lock.ok) {
+    await supabase
+      .from("trades")
+      .update({ exchange_status: "error", exchange_error: lock.error })
+      .eq("id", data.id);
+    return { error: lock.error };
+  }
 
   // Fire notifications (best-effort, no throw)
   if (grade.grade === "D") {
@@ -171,7 +199,9 @@ export async function resolveMyTradesAction(): Promise<{
 
   const { data: openTrades, error } = await supabase
     .from("trades")
-    .select("id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, created_at, mode")
+    .select(
+      "id, symbol, direction, timeframe, entry, entry_actual, stop, target, position_quantity, paper_margin, fees_pct, is_paper, created_at, mode",
+    )
     .eq("user_id", user.id)
     .is("closed_at", null)
     .neq("mode", "backtest")
@@ -241,6 +271,13 @@ export async function resolveMyTradesAction(): Promise<{
         pending++;
         continue;
       }
+      // Realized PnL in USDT (for paper wallet settlement).
+      const qty = Number(t.position_quantity ?? 0);
+      const realizedPnl =
+        t.direction === "long"
+          ? (hit.exitActual - entryActual) * qty - (entryActual * (feesPct / 100)) * qty
+          : (entryActual - hit.exitActual) * qty - (entryActual * (feesPct / 100)) * qty;
+
       const { error: upErr } = await supabase
         .from("trades")
         .update({
@@ -249,12 +286,25 @@ export async function resolveMyTradesAction(): Promise<{
           result_r: hit.resultR,
           exit_reason: hit.exitReason,
           closed_at: hit.closedAt,
+          paper_realized_pnl: t.is_paper ? realizedPnl : null,
           note: `자동 정산: ${hit.exitReason === "target" ? "목표 도달" : "손절 적중"} (수수료 차감 후 ${hit.resultR.toFixed(2)}R)`,
         })
         .eq("id", t.id)
         .eq("user_id", user.id)
         .is("closed_at", null);
-      if (!upErr) resolved++;
+      if (!upErr) {
+        resolved++;
+        // Paper wallet settle: release margin and credit/debit USDT PnL.
+        if (t.is_paper && t.paper_margin != null) {
+          const { settleMargin } = await import("@/lib/paper-wallet");
+          await settleMargin({
+            userId: user.id,
+            margin: Number(t.paper_margin),
+            realizedPnl,
+            tradeId: t.id,
+          });
+        }
+      }
     } catch {
       pending++;
     }

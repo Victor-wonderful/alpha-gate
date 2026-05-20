@@ -1,6 +1,7 @@
 import { TradeForm } from "@/components/trade/trade-form";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { FlowStepper } from "@/components/app/flow-stepper";
+import { getOrCreateWallet } from "@/lib/paper-wallet";
 import type { MoneyContext } from "@/types/trade";
 
 const EMPTY_MONEY: MoneyContext = {
@@ -50,6 +51,10 @@ export default async function TradePage({
     canTrade: Boolean((k.permissions as { canTrade?: boolean } | null)?.canTrade),
   }));
 
+  const wallet = user
+    ? await getOrCreateWallet(user.id)
+    : { usdtBalance: 0, available: 0, usedMargin: 0, startingBalance: 10000 };
+
   return (
     <div className="space-y-6">
       <FlowStepper current="trade" />
@@ -60,6 +65,11 @@ export default async function TradePage({
         initialSymbol={symbol}
         money={EMPTY_MONEY}
         apiKeys={apiKeys}
+        paperWallet={{
+          balance: wallet.usdtBalance,
+          available: wallet.available,
+          usedMargin: wallet.usedMargin,
+        }}
       />
     </div>
   );

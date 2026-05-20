@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { AlertTriangle, TrendingUp, TrendingDown, ArrowRight, Sparkles } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -93,6 +94,12 @@ export type ApiKeyOption = {
   canTrade: boolean;
 };
 
+export type PaperWalletSummary = {
+  balance: number;
+  available: number;
+  usedMargin: number;
+};
+
 export function TradeForm(props: {
   initialAccountSize: number;
   initialRiskPct: number;
@@ -100,6 +107,7 @@ export function TradeForm(props: {
   initialSymbol: string;
   money: MoneyContext;
   apiKeys?: ApiKeyOption[];
+  paperWallet?: PaperWalletSummary;
 }) {
   return (
     <Suspense fallback={null}>
@@ -115,6 +123,7 @@ function TradeFormInner({
   initialSymbol,
   money,
   apiKeys = [],
+  paperWallet,
 }: {
   initialAccountSize: number;
   initialRiskPct: number;
@@ -122,6 +131,7 @@ function TradeFormInner({
   initialSymbol: string;
   money: MoneyContext;
   apiKeys?: ApiKeyOption[];
+  paperWallet?: PaperWalletSummary;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -336,11 +346,11 @@ function TradeFormInner({
     startTransition(async () => {
       const res = await saveTradeAction({ input, grade, sizing, leverage, forecast: mcResult ?? undefined });
       if (res.error) {
-        toast.error(res.error);
+        toast.error(res.error, { duration: 8000 });
         return;
       }
-      toast.success("거래를 저널에 저장했습니다.");
-      router.push(`/app/journal/${res.id}`);
+      toast.success("가상 트레이딩에 진입했습니다.");
+      router.push(`/app/virtual-trade`);
     });
   }
 
@@ -822,7 +832,7 @@ function TradeFormInner({
           onApplyLeverage={(lv) => { setLeverage(lv); setUserOverride(true); }}
         />
 
-        {/* Trade execution mode (paper vs live) */}
+        {/* Trade execution mode (virtual paper vs real exchange) */}
         <Card className="overflow-hidden">
           <CardContent className="space-y-3 p-4">
             <div>
@@ -840,77 +850,90 @@ function TradeFormInner({
                       : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  페이퍼 (저장만)
+                  가상 트레이딩
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (tradableKeys.length === 0) {
-                      toast.error("실거래용 API 키가 없습니다. 설정 → 거래소 API 키에서 먼저 등록하세요.", { duration: 6000 });
-                      return;
-                    }
-                    setMode("live");
-                  }}
-                  className={cn(
-                    "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
-                    mode === "live"
-                      ? "border-grade-d bg-grade-d/10 text-grade-d"
-                      : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
-                    tradableKeys.length === 0 && "opacity-60",
-                  )}
-                  title={tradableKeys.length === 0 ? "등록된 거래 가능한 키 없음" : ""}
+                  disabled
+                  className="cursor-not-allowed rounded-md border border-border bg-background/20 px-3 py-2 text-sm font-medium text-muted-foreground/50 opacity-60"
+                  title="현재 비활성 — Binance IP 제한 정책 때문에 자동 주문 불가. 추후 프록시 인프라 도입 시 활성화."
                 >
-                  실거래 (실제 주문)
+                  실거래 <span className="ml-1 rounded bg-muted/60 px-1 py-0.5 text-[9px] uppercase">준비 중</span>
                 </button>
               </div>
             </div>
 
-            {mode === "live" ? (
-              <>
-                <div>
-                  <Label className="text-xs text-muted-foreground">사용할 API 키</Label>
-                  <Select
-                    value={selectedKeyId}
-                    onChange={(e) => setSelectedKeyId(e.target.value)}
-                    className="mt-1.5"
-                  >
-                    {tradableKeys.map((k) => (
-                      <option key={k.id} value={k.id}>
-                        {k.exchange} · {k.nickname} · {k.apiKeyMasked}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div className="rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-xs text-grade-d">
-                  <div className="flex items-center gap-1.5 font-semibold">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    실거래 모드
+            {/* Paper-mode wallet preview */}
+            {mode === "paper" && paperWallet ? (() => {
+              const requiredMargin = sizing.valid && leverage > 0 ? sizing.positionSize / leverage : 0;
+              const afterAvailable = paperWallet.available - requiredMargin;
+              const insufficient = requiredMargin > paperWallet.available;
+              return (
+                <div className="space-y-2">
+                  <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        가상 지갑 미리보기
+                      </span>
+                      <Link
+                        href="/app/virtual-trade/wallet"
+                        className="text-[10px] text-primary underline-offset-2 hover:underline"
+                      >
+                        지갑 관리 →
+                      </Link>
+                    </div>
+                    <div className="space-y-0.5 font-mono tabular-nums">
+                      <Row label="USDT 잔액" value={formatCurrency(paperWallet.balance, "USD")} />
+                      <Row label="사용 가능" value={formatCurrency(paperWallet.available, "USD")} />
+                      <Row
+                        label="필요 마진"
+                        value={formatCurrency(requiredMargin, "USD")}
+                        tone={insufficient ? "bad" : "default"}
+                      />
+                      <Row
+                        label="진입 후 사용 가능"
+                        value={formatCurrency(Math.max(0, afterAvailable), "USD")}
+                        tone={insufficient ? "bad" : "default"}
+                      />
+                    </div>
+                    {insufficient ? (
+                      <div className="mt-2 rounded border border-grade-d/40 bg-grade-d/10 p-2 text-[11px] text-grade-d">
+                        <div className="flex items-center gap-1 font-semibold">
+                          <AlertTriangle className="h-3 w-3" />
+                          가상 잔액 부족
+                        </div>
+                        <p className="mt-0.5 text-grade-d/80">
+                          필요 마진 {formatCurrency(requiredMargin, "USD")}, 사용 가능 {formatCurrency(paperWallet.available, "USD")}.{" "}
+                          <Link href="/app/virtual-trade/wallet" className="underline">가상 자금 추가</Link>하거나 리스크%·레버리지를 조정하세요.
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
-                  <p className="mt-1 text-grade-d/80">
-                    실제 거래소에 주문이 전송됩니다. 진입 + 손절 + 익절 3개 주문이 순서대로 등록됩니다.
-                    버튼을 누르기 전에 가격과 수량을 한 번 더 확인하세요.
-                  </p>
                 </div>
-              </>
-            ) : null}
+              );
+            })() : null}
+
+            <p className="text-[10px] text-muted-foreground">
+              가상 트레이딩: 실제 자금 없이 거래소와 동일한 흐름(체결가·슬리피지·수수료·마진)으로 학습.
+              진입 후 <Link href="/app/virtual-trade" className="text-primary underline-offset-2 hover:underline">가상 트레이딩 화면</Link>에서 포지션이 추적됩니다.
+            </p>
           </CardContent>
         </Card>
 
         <Button
-          className={cn("w-full", mode === "live" && "bg-grade-d hover:bg-grade-d/90")}
+          className="w-full"
           size="lg"
           onClick={save}
-          disabled={pending}
+          disabled={
+            pending ||
+            (mode === "paper" && paperWallet != null && sizing.valid && (sizing.positionSize / Math.max(leverage, 1)) > paperWallet.available)
+          }
         >
           {pending
-            ? mode === "live"
-              ? "실거래 처리 중..."
-              : "저장 중..."
-            : mode === "live"
-              ? "실거래 시작 (실제 주문 전송)"
-              : aiMode
-                ? "이 계획으로 거래 시작 (저널에 저장)"
-                : "거래 저장"}
+            ? "진입 처리 중..."
+            : aiMode
+              ? "이 계획으로 가상 진입"
+              : "가상 진입"}
         </Button>
         {aiMode ? (
           <p className="text-center text-[11px] text-muted-foreground">
@@ -1421,3 +1444,13 @@ function TierButton({
     </button>
   );
 }
+
+function Row({ label, value, tone }: { label: string; value: string; tone?: "default" | "bad" }) {
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("font-mono tabular-nums", tone === "bad" ? "text-grade-d" : "text-foreground")}>{value}</span>
+    </div>
+  );
+}
+

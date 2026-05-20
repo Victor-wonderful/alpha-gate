@@ -26,7 +26,7 @@ export default async function VirtualTradePage({
   const { data: openTrades } = await supabase
     .from("trades")
     .select(
-      "id, symbol, direction, entry, entry_actual, stop, target, position_quantity, paper_margin, created_at",
+      "id, symbol, direction, entry, entry_actual, stop, target, position_quantity, paper_margin, fees_pct, context_flags, created_at",
     )
     .eq("user_id", user.id)
     .eq("is_paper", true)
@@ -34,17 +34,22 @@ export default async function VirtualTradePage({
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const positions = (openTrades ?? []).map((t) => ({
-    id: t.id as string,
-    symbol: t.symbol as string,
-    direction: t.direction as "long" | "short",
-    entryActual: Number(t.entry_actual ?? t.entry),
-    qty: Number(t.position_quantity ?? 0),
-    margin: Number(t.paper_margin ?? 0),
-    stop: Number(t.stop),
-    target: Number(t.target),
-    createdAt: t.created_at as string,
-  }));
+  const positions = (openTrades ?? []).map((t) => {
+    const ctx = (t.context_flags ?? {}) as { leverage?: number };
+    return {
+      id: t.id as string,
+      symbol: t.symbol as string,
+      direction: t.direction as "long" | "short",
+      entryActual: Number(t.entry_actual ?? t.entry),
+      qty: Number(t.position_quantity ?? 0),
+      margin: Number(t.paper_margin ?? 0),
+      stop: Number(t.stop),
+      target: Number(t.target),
+      leverage: Number(ctx.leverage ?? 1),
+      feesPct: Number(t.fees_pct ?? 0.12),
+      createdAt: t.created_at as string,
+    };
+  });
 
   return (
     <div className="space-y-3">

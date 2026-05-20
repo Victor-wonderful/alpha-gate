@@ -51,6 +51,8 @@ type Position = {
   margin: number;
   stop: number;
   target: number;
+  leverage: number;
+  feesPct: number;
   createdAt: string;
 };
 
@@ -1484,19 +1486,19 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 function PositionsTable({ positions }: { positions: Position[] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-full min-w-[1100px] text-xs">
         <thead className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
           <tr className="border-b border-border/40">
             <th className="px-2 py-2 text-left font-medium">심볼</th>
-            <th className="px-2 py-2 text-left font-medium">방향</th>
-            <th className="px-2 py-2 text-right font-medium">수량</th>
-            <th className="px-2 py-2 text-right font-medium">진입가</th>
+            <th className="px-2 py-2 text-left font-medium">방향 / 레버리지</th>
+            <th className="px-2 py-2 text-right font-medium">수량 / 노출</th>
+            <th className="px-2 py-2 text-right font-medium">진입 / 청산가</th>
             <th className="px-2 py-2 text-right font-medium">현재가</th>
-            <th className="px-2 py-2 text-right font-medium">손절가</th>
-            <th className="px-2 py-2 text-right font-medium">목표가</th>
+            <th className="px-2 py-2 text-right font-medium">손절 / 목표</th>
             <th className="px-2 py-2 text-right font-medium">마진</th>
-            <th className="px-2 py-2 text-right font-medium">미실현 PnL</th>
-            <th className="px-2 py-2 text-right font-medium">ROE</th>
+            <th className="px-2 py-2 text-right font-medium">수수료</th>
+            <th className="px-2 py-2 text-right font-medium">미실현 PnL / ROE / R</th>
+            <th className="px-2 py-2 text-right font-medium">보유</th>
             <th className="px-2 py-2 text-right font-medium"></th>
           </tr>
         </thead>
@@ -1508,6 +1510,15 @@ function PositionsTable({ positions }: { positions: Position[] }) {
       </table>
     </div>
   );
+}
+
+function formatDuration(ms: number): string {
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return `${minutes}분`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 ${minutes % 60}분`;
+  const days = Math.floor(hours / 24);
+  return `${days}일 ${hours % 24}시간`;
 }
 
 function PositionRow({ pos }: { pos: Position }) {
@@ -1540,6 +1551,32 @@ function PositionRow({ pos }: { pos: Position }) {
   const pnlPct = last != null && pos.entryActual > 0 ? (movement / pos.entryActual) * 100 : 0;
   // ROE = PnL / margin (실효 수익률 — 레버리지 반영된 마진 대비)
   const roe = pos.margin > 0 ? (pnl / pos.margin) * 100 : 0;
+  // R 단위 PnL = (현재가 - 진입가) / |진입가 - 손절가|
+  const stopDist = Math.abs(pos.entryActual - pos.stop);
+  const rPnl = stopDist > 0 ? movement / stopDist : 0;
+  // 청산가 (단순화): 진입가 ± 진입가/레버리지
+  const liqPrice =
+    pos.leverage > 0
+      ? pos.direction === "long"
+        ? pos.entryActual * (1 - 1 / pos.leverage)
+        : pos.entryActual * (1 + 1 / pos.leverage)
+      : 0;
+  // 노출 금액
+  const notional = pos.entryActual * pos.qty;
+  // 수수료 (round-trip × 노출)
+  const totalFees = (pos.feesPct / 100) * notional;
+  // 보유 시간
+  const ageMs = Date.now() - new Date(pos.createdAt).getTime();
+  // TP/SL 진행률
+  const stopProgress =
+    last != null && stopDist > 0
+      ? Math.min(100, Math.max(0, ((stopDist - Math.abs(last - pos.stop)) / stopDist) * 100))
+      : 0;
+  const targetDist = Math.abs(pos.target - pos.entryActual);
+  const targetProgress =
+    last != null && targetDist > 0
+      ? Math.min(100, Math.max(0, ((targetDist - Math.abs(pos.target - last)) / targetDist) * 100))
+      : 0;
   const inProfit = pnl > 0;
   const isLong = pos.direction === "long";
   const baseSym = pos.symbol.replace("USDT", "");
@@ -1558,94 +1595,122 @@ function PositionRow({ pos }: { pos: Position }) {
 
   return (
     <tr className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
-      {/* 심볼 (좌측 컬러 액센트 바 포함) */}
+      {/* 심볼 */}
       <td className="px-2 py-2.5">
         <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")}
-          />
+          <span aria-hidden className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")} />
           <span className="font-mono text-xs font-semibold">{pos.symbol}</span>
         </div>
       </td>
-      {/* 방향 */}
+      {/* 방향 + 레버리지 */}
       <td className="px-2 py-2.5">
-        <Badge
-          className={cn(
-            "border text-[9px]",
-            isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d",
-          )}
-        >
-          {isLong ? "롱" : "숏"}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge
+            className={cn(
+              "border text-[9px]",
+              isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d",
+            )}
+          >
+            {isLong ? "롱" : "숏"}
+          </Badge>
+          <span
+            className={cn(
+              "rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums",
+              pos.leverage >= 20
+                ? "bg-grade-d/15 text-grade-d"
+                : pos.leverage >= 10
+                  ? "bg-amber-500/15 text-amber-400"
+                  : "bg-primary/15 text-primary",
+            )}
+          >
+            {pos.leverage}×
+          </span>
+        </div>
       </td>
-      {/* 수량 */}
-      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">
-        {formatNumber(pos.qty, { maximumFractionDigits: 4 })}
-        <span className="ml-1 text-[10px] text-muted-foreground">{baseSym}</span>
+      {/* 수량 + 노출 */}
+      <td className="px-2 py-2.5 text-right">
+        <div className="font-mono text-xs tabular-nums">
+          {formatNumber(pos.qty, { maximumFractionDigits: 4 })}{" "}
+          <span className="text-[10px] text-muted-foreground">{baseSym}</span>
+        </div>
+        <div className="text-[10px] text-muted-foreground tabular-nums">
+          ${formatNumber(notional, { maximumFractionDigits: 2 })}
+        </div>
       </td>
-      {/* 진입가 */}
-      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-muted-foreground">
-        ${formatNumber(pos.entryActual)}
+      {/* 진입가 + 청산가 */}
+      <td className="px-2 py-2.5 text-right">
+        <div className="font-mono text-xs font-medium tabular-nums">
+          ${formatNumber(pos.entryActual)}
+        </div>
+        <div className="text-[10px] text-muted-foreground tabular-nums" title="청산가 (단순 계산 — 1/레버리지)">
+          청산 ${formatNumber(liqPrice, { maximumFractionDigits: 2 })}
+        </div>
       </td>
       {/* 현재가 */}
       <td className="px-2 py-2.5 text-right font-mono text-xs font-semibold tabular-nums">
         {last != null ? `$${formatNumber(last)}` : "—"}
       </td>
-      {/* 손절가 */}
-      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-grade-d/80">
-        {pos.stop > 0 ? `$${formatNumber(pos.stop)}` : "—"}
-      </td>
-      {/* 목표가 */}
-      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-grade-a/80">
-        {pos.target > 0 ? `$${formatNumber(pos.target)}` : "—"}
+      {/* 손절 / 목표 + 진행 바 */}
+      <td className="px-2 py-2.5 text-right">
+        <div className="flex items-center justify-end gap-1.5 font-mono text-[11px] tabular-nums">
+          <span className="text-grade-d/80">${formatNumber(pos.stop, { maximumFractionDigits: 2 })}</span>
+          <span className="text-muted-foreground/40">/</span>
+          <span className="text-grade-a/80">${formatNumber(pos.target, { maximumFractionDigits: 2 })}</span>
+        </div>
+        {last != null ? (
+          <div className="mt-1 flex items-center gap-1">
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted/30">
+              <div className="h-full bg-grade-d/60" style={{ width: `${stopProgress}%` }} />
+            </div>
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted/30">
+              <div className="h-full bg-grade-a/60" style={{ width: `${targetProgress}%` }} />
+            </div>
+          </div>
+        ) : null}
       </td>
       {/* 마진 */}
       <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">
         ${formatNumber(pos.margin, { maximumFractionDigits: 2 })}
       </td>
-      {/* 미실현 PnL */}
+      {/* 수수료 */}
+      <td className="px-2 py-2.5 text-right">
+        <div className="font-mono text-xs tabular-nums text-muted-foreground">
+          ${formatNumber(totalFees, { maximumFractionDigits: 2 })}
+        </div>
+        <div className="text-[10px] text-muted-foreground/60">왕복 {pos.feesPct.toFixed(2)}%</div>
+      </td>
+      {/* 미실현 PnL / ROE / R */}
       <td className="px-2 py-2.5 text-right">
         {last != null ? (
           <>
-            <div
-              className={cn(
-                "font-mono text-sm font-bold tabular-nums",
-                inProfit ? "text-grade-a" : "text-grade-d",
-              )}
-            >
+            <div className={cn("font-mono text-sm font-bold tabular-nums", inProfit ? "text-grade-a" : "text-grade-d")}>
               {pnl >= 0 ? "+" : ""}
               {formatCurrency(pnl, "USD")}
             </div>
             <div
               className={cn(
-                "text-[10px] font-mono tabular-nums",
+                "flex items-center justify-end gap-2 text-[10px] font-mono tabular-nums",
                 inProfit ? "text-grade-a/70" : "text-grade-d/70",
               )}
             >
-              {pnlPct >= 0 ? "+" : ""}
-              {pnlPct.toFixed(2)}%
+              <span>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%</span>
+              <span className="text-muted-foreground/60">·</span>
+              <span title="마진 대비 수익률 (레버리지 반영)">
+                ROE {roe >= 0 ? "+" : ""}{roe.toFixed(1)}%
+              </span>
+              <span className="text-muted-foreground/60">·</span>
+              <span title="손절폭 기준 R 단위 손익">
+                {rPnl >= 0 ? "+" : ""}{rPnl.toFixed(2)}R
+              </span>
             </div>
           </>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
       </td>
-      {/* ROE */}
-      <td className="px-2 py-2.5 text-right">
-        {last != null && pos.margin > 0 ? (
-          <span
-            className={cn(
-              "font-mono text-xs font-semibold tabular-nums",
-              inProfit ? "text-grade-a" : "text-grade-d",
-            )}
-          >
-            {roe >= 0 ? "+" : ""}
-            {roe.toFixed(2)}%
-          </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
+      {/* 보유 시간 */}
+      <td className="px-2 py-2.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+        {formatDuration(ageMs)}
       </td>
       {/* 청산 */}
       <td className="px-2 py-2.5 text-right">

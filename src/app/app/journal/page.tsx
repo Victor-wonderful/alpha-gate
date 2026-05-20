@@ -7,6 +7,8 @@ import type { Grade } from "@/types/trade";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { ResolveTradesButton } from "./resolve-button";
 
+export const dynamic = "force-dynamic";
+
 export default async function JournalListPage() {
   const supabase = await getSupabaseServer();
   const { data: trades } = await supabase

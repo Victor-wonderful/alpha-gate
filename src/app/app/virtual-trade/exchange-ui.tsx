@@ -259,7 +259,7 @@ function ChartArea({
       rightPriceScale: { borderColor: "rgba(148, 163, 184, 0.1)" },
       crosshair: { mode: 0 }, // normal crosshair
       width: container.clientWidth,
-      height: 420,
+      height: container.clientHeight,
     });
     chartRef.current = chart;
 
@@ -396,7 +396,12 @@ function ChartArea({
     });
 
     const ro = new ResizeObserver(() => {
-      if (chartRef.current && container) chartRef.current.applyOptions({ width: container.clientWidth });
+      if (chartRef.current && container) {
+        chartRef.current.applyOptions({
+          width: container.clientWidth,
+          height: container.clientHeight,
+        });
+      }
     });
     ro.observe(container);
 
@@ -409,10 +414,10 @@ function ChartArea({
   }, [symbol, timeframe]);
 
   return (
-    <Card>
-      <CardContent className="p-3">
+    <Card className="flex flex-col" style={{ height: 540 }}>
+      <CardContent className="flex flex-1 flex-col p-3">
         {/* Top row: symbol + TF picker */}
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex shrink-0 items-center justify-between">
           <div className="text-xs font-semibold text-foreground">
             {symbol} <span className="text-muted-foreground">· {timeframe.toUpperCase()}</span>
           </div>
@@ -437,7 +442,7 @@ function ChartArea({
 
         {/* OHLCV header row */}
         {header ? (
-          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 border-y border-border/30 py-1.5 text-[10px] font-mono tabular-nums">
+          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-y border-border/30 py-1.5 text-[10px] font-mono tabular-nums">
             <HeaderCell label="시" value={header.open} />
             <HeaderCell label="고" value={header.high} tone="up" />
             <HeaderCell label="저" value={header.low} tone="down" />
@@ -481,7 +486,7 @@ function ChartArea({
           </div>
         ) : null}
 
-        <div ref={containerRef} className="relative w-full" style={{ height: 420 }}>
+        <div ref={containerRef} className="relative min-h-0 w-full flex-1">
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
               차트 로딩 중...
@@ -531,7 +536,7 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
   const [groupSize, setGroupSize] = useState<number>(0.1);
 
   return (
-    <Card className="flex flex-col" style={{ height: 480 }}>
+    <Card className="flex flex-col" style={{ height: 540 }}>
       <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
         {/* Tab header */}
         <div className="flex shrink-0 items-center border-b border-border/40 px-3 py-2">

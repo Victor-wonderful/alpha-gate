@@ -32,25 +32,39 @@ interface OpenTrade {
   direction: "long" | "short";
   timeframe: TF;
   entry: number;
+  /** Actual simulated fill price (paper) or actual filled price (live). May be null on older rows. */
+  entry_actual: number | null;
   stop: number;
   target: number;
+  /** Round-trip fee % applied at save time. Defaults to 0.12 if missing. */
+  fees_pct: number | null;
   created_at: string;
 }
 
 interface Resolution {
   exitPrice: number;
+  exitActual: number;
   resultR: number;
   exitReason: "target" | "stop";
   closedAt: string;
 }
 
+/** Compute the realized R using the actual fill price (entry_actual) and
+ *  subtracting round-trip fees expressed in R units.
+ *  Returns null if the candles never touched either side. */
 function resolveTrade(
-  trade: Pick<OpenTrade, "entry" | "stop" | "target" | "direction">,
+  trade: Pick<OpenTrade, "entry_actual" | "entry" | "stop" | "target" | "direction" | "fees_pct">,
   candles: Array<{ high: number; low: number; closeTime: number }>,
 ): Resolution | null {
-  const { entry, stop, target, direction } = trade;
-  const stopDist = Math.abs(entry - stop);
+  // entryActual falls back to user-typed entry for legacy rows.
+  const entryActual = trade.entry_actual ?? trade.entry;
+  const { stop, target, direction } = trade;
+  const stopDist = Math.abs(entryActual - stop);
   if (stopDist === 0) return null;
+
+  // Fees expressed in R units: feePct% of entry / risk-per-unit
+  const feesPct = trade.fees_pct ?? 0.12;
+  const feesR = (entryActual * (feesPct / 100)) / stopDist;
 
   for (const c of candles) {
     if (direction === "long") {
@@ -58,21 +72,31 @@ function resolveTrade(
       const stopHit = c.low <= stop;
       // Conservative: if both touched in same bar, assume stop first.
       if (stopHit) {
-        return { exitPrice: stop, resultR: -1, exitReason: "stop", closedAt: new Date(c.closeTime).toISOString() };
+        const exitActual = stop;
+        const grossR = (exitActual - entryActual) / stopDist; // negative
+        const netR = grossR - feesR;
+        return { exitPrice: stop, exitActual, resultR: netR, exitReason: "stop", closedAt: new Date(c.closeTime).toISOString() };
       }
       if (targetHit) {
-        const r = (target - entry) / stopDist;
-        return { exitPrice: target, resultR: r, exitReason: "target", closedAt: new Date(c.closeTime).toISOString() };
+        const exitActual = target;
+        const grossR = (exitActual - entryActual) / stopDist;
+        const netR = grossR - feesR;
+        return { exitPrice: target, exitActual, resultR: netR, exitReason: "target", closedAt: new Date(c.closeTime).toISOString() };
       }
     } else {
       const targetHit = c.low <= target;
       const stopHit = c.high >= stop;
       if (stopHit) {
-        return { exitPrice: stop, resultR: -1, exitReason: "stop", closedAt: new Date(c.closeTime).toISOString() };
+        const exitActual = stop;
+        const grossR = (entryActual - exitActual) / stopDist; // negative
+        const netR = grossR - feesR;
+        return { exitPrice: stop, exitActual, resultR: netR, exitReason: "stop", closedAt: new Date(c.closeTime).toISOString() };
       }
       if (targetHit) {
-        const r = (entry - target) / stopDist;
-        return { exitPrice: target, resultR: r, exitReason: "target", closedAt: new Date(c.closeTime).toISOString() };
+        const exitActual = target;
+        const grossR = (entryActual - exitActual) / stopDist;
+        const netR = grossR - feesR;
+        return { exitPrice: target, exitActual, resultR: netR, exitReason: "target", closedAt: new Date(c.closeTime).toISOString() };
       }
     }
   }
@@ -88,7 +112,7 @@ export async function GET(req: NextRequest) {
   const svc = getSupabaseService();
   const { data: openTrades, error } = await svc
     .from("trades")
-    .select("id, user_id, symbol, direction, timeframe, entry, stop, target, created_at, mode")
+    .select("id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, created_at, mode")
     .is("closed_at", null)
     .neq("mode", "backtest")
     .order("created_at", { ascending: true })
@@ -125,7 +149,14 @@ export async function GET(req: NextRequest) {
         continue;
       }
       const resolution = resolveTrade(
-        { entry: t.entry, stop: t.stop, target: t.target, direction: t.direction },
+        {
+          entry: t.entry,
+          entry_actual: t.entry_actual,
+          stop: t.stop,
+          target: t.target,
+          direction: t.direction,
+          fees_pct: t.fees_pct,
+        },
         candles,
       );
       if (!resolution) {
@@ -137,10 +168,11 @@ export async function GET(req: NextRequest) {
         .from("trades")
         .update({
           exit_price: resolution.exitPrice,
+          exit_actual: resolution.exitActual,
           result_r: resolution.resultR,
           exit_reason: resolution.exitReason,
           closed_at: resolution.closedAt,
-          note: `자동 정산: ${resolution.exitReason === "target" ? "목표 도달" : "손절 적중"}`,
+          note: `자동 정산: ${resolution.exitReason === "target" ? "목표 도달" : "손절 적중"} (수수료 차감 후 ${resolution.resultR.toFixed(2)}R)`,
         })
         .eq("id", t.id)
         .is("closed_at", null);

@@ -110,7 +110,22 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
             <CardTitle>진입 시 평가</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <Row label="진입가" value={`$${formatNumber(Number(trade.entry))}`} />
+            <Row
+              label="의도 진입가"
+              value={`$${formatNumber(Number(trade.entry))}`}
+              sub="사용자 입력"
+            />
+            {trade.entry_actual != null ? (
+              <Row
+                label="실제 체결가"
+                value={`$${formatNumber(Number(trade.entry_actual))}`}
+                sub={
+                  trade.entry_slippage_pct != null
+                    ? `슬리피지 ${Number(trade.entry_slippage_pct) >= 0 ? "+" : ""}${Number(trade.entry_slippage_pct).toFixed(3)}%`
+                    : "시장가 체결"
+                }
+              />
+            ) : null}
             <Row
               label="손절가"
               value={`$${formatNumber(Number(trade.stop))}`}
@@ -121,6 +136,13 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
               value={`$${formatNumber(Number(trade.target))}`}
               sub={`${targetPct >= 0 ? "+" : ""}${targetPct.toFixed(2)}% · ${Number(trade.pre_rr).toFixed(2)}R`}
             />
+            {trade.exit_actual != null && trade.closed_at ? (
+              <Row
+                label="실제 청산가"
+                value={`$${formatNumber(Number(trade.exit_actual))}`}
+                sub={trade.exit_reason === "target" ? "목표 적중" : trade.exit_reason === "stop" ? "손절 적중" : "수동"}
+              />
+            ) : null}
             <div className="border-t border-border pt-3">
               <Row label="진입 R:R" value={`${Number(trade.pre_rr).toFixed(2)}R`} />
               <Row label="점수" value={`${trade.pre_score}점`} />

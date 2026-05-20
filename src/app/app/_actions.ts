@@ -3,8 +3,39 @@
 import { revalidatePath } from "next/cache";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { dispatch } from "@/lib/notify-dispatch";
-import { fetchKlines } from "@/lib/analysis/binance";
+import { fetchKlines, fetchTicker24h } from "@/lib/analysis/binance";
 import type { GradeResult, SizingResult, TradeInput } from "@/types/trade";
+
+/** Simulated market-order slippage in % for paper trading.
+ *  Direction-aware: long fills slightly higher, short slightly lower (unfavorable side). */
+const PAPER_SLIPPAGE_PCT = 0.05;
+/** Round-trip taker fee assumption (entry + exit, %). Matches ROUND_TRIP_COST_PCT
+ *  used in fee-adjusted R:R thinking elsewhere. */
+const PAPER_FEES_PCT = 0.12;
+
+/** Simulate a market-order fill for paper trading.
+ *  - Fetches Binance current price
+ *  - Applies direction-aware slippage on top
+ *  - Returns the actual fill price + slippage % used
+ *  Falls back to the user-typed entry if the API call fails (graceful degradation). */
+async function simulateMarketFill(
+  symbol: string,
+  direction: "long" | "short",
+  userEntry: number,
+): Promise<{ fillPrice: number; slippagePct: number; fromMarket: boolean }> {
+  try {
+    const ticker = await fetchTicker24h(symbol);
+    const last = ticker.lastPrice;
+    if (!last || !Number.isFinite(last) || last <= 0) {
+      return { fillPrice: userEntry, slippagePct: 0, fromMarket: false };
+    }
+    const slip = direction === "long" ? PAPER_SLIPPAGE_PCT : -PAPER_SLIPPAGE_PCT;
+    const fillPrice = last * (1 + slip / 100);
+    return { fillPrice, slippagePct: slip, fromMarket: true };
+  } catch {
+    return { fillPrice: userEntry, slippagePct: 0, fromMarket: false };
+  }
+}
 
 export async function saveTradeAction(args: {
   input: TradeInput;
@@ -20,6 +51,10 @@ export async function saveTradeAction(args: {
   if (!user) return { error: "로그인이 필요합니다." };
 
   const { input, grade, sizing, leverage, forecast } = args;
+
+  // Paper trading: simulate a market-order fill using the current Binance price.
+  const fill = await simulateMarketFill(input.symbol, input.direction, input.entry);
+
   const { data, error } = await supabase
     .from("trades")
     .insert({
@@ -46,6 +81,10 @@ export async function saveTradeAction(args: {
       pre_actions: grade.actions,
       pre_rr: grade.rr,
       simulation_meta: forecast ? { kind: "monte_carlo_forecast", at: new Date().toISOString(), ...(typeof forecast === "object" && forecast !== null ? forecast : {}) } : null,
+      // Paper-trading simulated fill
+      entry_actual: fill.fillPrice,
+      entry_slippage_pct: fill.slippagePct,
+      fees_pct: PAPER_FEES_PCT,
     })
     .select("id, pre_grade")
     .single();
@@ -132,7 +171,7 @@ export async function resolveMyTradesAction(): Promise<{
 
   const { data: openTrades, error } = await supabase
     .from("trades")
-    .select("id, symbol, direction, timeframe, entry, stop, target, created_at, mode")
+    .select("id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, created_at, mode")
     .eq("user_id", user.id)
     .is("closed_at", null)
     .neq("mode", "backtest")
@@ -162,32 +201,38 @@ export async function resolveMyTradesAction(): Promise<{
         pending++;
         continue;
       }
-      const entry = Number(t.entry);
+      const entryActual = Number(t.entry_actual ?? t.entry);
       const stop = Number(t.stop);
       const target = Number(t.target);
-      const stopDist = Math.abs(entry - stop);
+      const stopDist = Math.abs(entryActual - stop);
       if (stopDist === 0) {
         pending++;
         continue;
       }
-      let hit: { exitPrice: number; resultR: number; exitReason: "target" | "stop"; closedAt: string } | null = null;
+      const feesPct = Number(t.fees_pct ?? 0.12);
+      const feesR = (entryActual * (feesPct / 100)) / stopDist;
+      let hit: { exitPrice: number; exitActual: number; resultR: number; exitReason: "target" | "stop"; closedAt: string } | null = null;
       for (const c of candles) {
         if (t.direction === "long") {
           if (c.low <= stop) {
-            hit = { exitPrice: stop, resultR: -1, exitReason: "stop", closedAt: new Date(c.closeTime).toISOString() };
+            const exitActual = stop;
+            hit = { exitPrice: stop, exitActual, resultR: (exitActual - entryActual) / stopDist - feesR, exitReason: "stop", closedAt: new Date(c.closeTime).toISOString() };
             break;
           }
           if (c.high >= target) {
-            hit = { exitPrice: target, resultR: (target - entry) / stopDist, exitReason: "target", closedAt: new Date(c.closeTime).toISOString() };
+            const exitActual = target;
+            hit = { exitPrice: target, exitActual, resultR: (exitActual - entryActual) / stopDist - feesR, exitReason: "target", closedAt: new Date(c.closeTime).toISOString() };
             break;
           }
         } else {
           if (c.high >= stop) {
-            hit = { exitPrice: stop, resultR: -1, exitReason: "stop", closedAt: new Date(c.closeTime).toISOString() };
+            const exitActual = stop;
+            hit = { exitPrice: stop, exitActual, resultR: (entryActual - exitActual) / stopDist - feesR, exitReason: "stop", closedAt: new Date(c.closeTime).toISOString() };
             break;
           }
           if (c.low <= target) {
-            hit = { exitPrice: target, resultR: (entry - target) / stopDist, exitReason: "target", closedAt: new Date(c.closeTime).toISOString() };
+            const exitActual = target;
+            hit = { exitPrice: target, exitActual, resultR: (entryActual - exitActual) / stopDist - feesR, exitReason: "target", closedAt: new Date(c.closeTime).toISOString() };
             break;
           }
         }
@@ -200,10 +245,11 @@ export async function resolveMyTradesAction(): Promise<{
         .from("trades")
         .update({
           exit_price: hit.exitPrice,
+          exit_actual: hit.exitActual,
           result_r: hit.resultR,
           exit_reason: hit.exitReason,
           closed_at: hit.closedAt,
-          note: `자동 정산: ${hit.exitReason === "target" ? "목표 도달" : "손절 적중"}`,
+          note: `자동 정산: ${hit.exitReason === "target" ? "목표 도달" : "손절 적중"} (수수료 차감 후 ${hit.resultR.toFixed(2)}R)`,
         })
         .eq("id", t.id)
         .eq("user_id", user.id)

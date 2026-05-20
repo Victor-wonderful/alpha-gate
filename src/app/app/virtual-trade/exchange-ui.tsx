@@ -71,19 +71,23 @@ export function ExchangeUI({
     <div className="space-y-3">
       <ExchangeHeader symbol={symbol} onSymbolChange={setSymbol} wallet={wallet} positions={positions} />
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_300px_320px]">
+      <div className="grid gap-3 lg:grid-cols-[1fr_300px_320px] lg:grid-rows-[auto_auto]">
         {/* Chart */}
         <ChartArea symbol={symbol} timeframe={timeframe} onTimeframeChange={setTimeframe} />
 
         {/* Orderbook (matches chart height) */}
         <OrderbookPanel symbol={symbol} />
 
-        {/* Order entry */}
-        <OrderPanel symbol={symbol} wallet={wallet} />
-      </div>
+        {/* Order entry — spans both rows on the right */}
+        <div className="lg:row-span-2 lg:col-start-3 lg:row-start-1">
+          <OrderPanel symbol={symbol} wallet={wallet} />
+        </div>
 
-      {/* Positions / history — full width row */}
-      <PositionsTabs tab={tab} onTabChange={setTab} positions={positions} />
+        {/* Positions / history — spans chart + orderbook columns */}
+        <div className="lg:col-span-2 lg:col-start-1 lg:row-start-2">
+          <PositionsTabs tab={tab} onTabChange={setTab} positions={positions} />
+        </div>
+      </div>
     </div>
   );
 }

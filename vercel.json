@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/resolve-trades",
-      "schedule": "0 0 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/sync-exchange-orders",

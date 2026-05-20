@@ -6,6 +6,7 @@ import { OutcomeForm } from "./outcome-form";
 import { CoachCard } from "./coach-card";
 import { DeleteTradeButton } from "./delete-button";
 import { ResolveTradesButton } from "../resolve-button";
+import { UnrealizedPnl } from "./unrealized-pnl";
 import {
   MARKET_CHECK_KEYS,
   MARKET_CHECK_LABELS,
@@ -57,19 +58,30 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="space-y-6">
       {isOpen ? (
-        <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-primary">🕐</span>
-              <span className="font-semibold text-primary">자동 정산 대기 중</span>
-              <span className="text-muted-foreground">·</span>
-              <span className="text-xs text-muted-foreground">
-                매일 자정 자동 확인 / 지금 즉시 확인하려면 우측 버튼. (만료까지 약 {remainingHours.toFixed(0)}시간)
-              </span>
+        <>
+          <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-primary">🕐</span>
+                <span className="font-semibold text-primary">자동 정산 대기 중</span>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-xs text-muted-foreground">
+                  5분마다 자동 확인 / 즉시 확인하려면 우측 버튼. (만료까지 약 {remainingHours.toFixed(0)}시간)
+                </span>
+              </div>
+              <ResolveTradesButton />
             </div>
-            <ResolveTradesButton />
           </div>
-        </div>
+          <UnrealizedPnl
+            symbol={trade.symbol}
+            direction={trade.direction as "long" | "short"}
+            entryActual={Number(trade.entry_actual ?? trade.entry)}
+            stop={Number(trade.stop)}
+            target={Number(trade.target)}
+            positionQuantity={Number(trade.position_quantity)}
+            feesPct={Number(trade.fees_pct ?? 0.12)}
+          />
+        </>
       ) : autoResolved ? (
         <div className={`rounded-lg border px-4 py-2.5 text-sm ${trade.exit_reason === "target" ? "border-grade-a/40 bg-grade-a/10" : "border-grade-d/40 bg-grade-d/10"}`}>
           <div className="flex flex-wrap items-center gap-2">

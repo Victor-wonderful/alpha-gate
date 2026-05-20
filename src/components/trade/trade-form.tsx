@@ -430,29 +430,61 @@ function TradeFormInner({
     setUserOverride(true);
   }
 
+  // Without an AI scenario this page has no purpose — guide user to either
+  // run an analysis or use the virtual exchange directly.
+  if (!aiMode) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <Card className="overflow-hidden">
+          <CardContent className="space-y-5 p-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+              <Sparkles className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">주문 검토는 AI 분석 후에 사용합니다</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                이 페이지는 AI가 만든 시나리오의 등급·사이징·시장 구조를 확인하고 가상 트레이딩에 진입하는 화면입니다.
+                직접 진입하려면 <span className="text-foreground">가상 트레이딩</span>의 주문 패널을 사용하세요.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Link
+                href="/app/analyze"
+                className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Sparkles className="h-4 w-4" />
+                AI 분석으로
+              </Link>
+              <Link
+                href="/app/virtual-trade"
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-background/40 px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/40"
+              >
+                가상 트레이딩으로 →
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* 모드 배너 + 동적 헤더 */}
-      {aiMode ? (
-        <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <Sparkles className="h-4 w-4 flex-none text-primary" />
-            <span className="font-semibold text-primary">AI 분석 시나리오 모드</span>
-            <span className="text-muted-foreground">·</span>
-            <span className="text-xs text-muted-foreground">
-              진입가·손절·목표·리스크·레버리지가 자동 적용됐습니다. 단계 버튼으로 진입 시점을 조정할 수 있습니다.
-            </span>
-          </div>
+      <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <Sparkles className="h-4 w-4 flex-none text-primary" />
+          <span className="font-semibold text-primary">AI 분석 시나리오 모드</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-xs text-muted-foreground">
+            진입가·손절·목표·리스크·레버리지가 자동 적용됐습니다. 단계 버튼으로 진입 시점을 조정할 수 있습니다.
+          </span>
         </div>
-      ) : null}
+      </div>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {aiMode ? "AI 시나리오 실행" : "수동 주문 검토"}
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">AI 시나리오 실행</h1>
         <p className="text-sm text-muted-foreground">
-          {aiMode
-            ? "AI가 추천한 진입·손절·목표와 자동 사이징을 확인하고 한 번에 거래를 시작하세요."
-            : "AI 분석 없이 직접 주문을 평가합니다. 진입 버튼을 누르기 전 등급·리스크·시장 상황을 한눈에 확인하세요."}
+          AI가 추천한 진입·손절·목표와 자동 사이징을 확인하고 가상 트레이딩에 진입하세요.
         </p>
       </div>
 

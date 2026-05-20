@@ -433,7 +433,7 @@ function OrderbookContent({
     async function tick() {
       try {
         const [depthR, priceR] = await Promise.all([
-          fetch(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=30`),
+          fetch(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=50`),
           fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`),
         ]);
         if (!depthR.ok || !priceR.ok) {

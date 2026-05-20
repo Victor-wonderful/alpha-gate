@@ -33,6 +33,23 @@ export default async function TradePage({
     ? sp.symbol.toUpperCase()
     : "BTCUSDT");
 
+  // Fetch valid (verified) exchange API keys for live trading dropdown.
+  const { data: apiKeysRaw } = user
+    ? await supabase
+        .from("exchange_api_keys")
+        .select("id, exchange, nickname, api_key_masked, verification_status, permissions")
+        .eq("user_id", user.id)
+        .eq("verification_status", "valid")
+        .order("created_at", { ascending: false })
+    : { data: null };
+  const apiKeys = (apiKeysRaw ?? []).map((k) => ({
+    id: k.id as string,
+    exchange: k.exchange as "binance" | "upbit",
+    nickname: (k.nickname as string | null) ?? "(이름 없음)",
+    apiKeyMasked: k.api_key_masked as string,
+    canTrade: Boolean((k.permissions as { canTrade?: boolean } | null)?.canTrade),
+  }));
+
   return (
     <div className="space-y-6">
       <FlowStepper current="trade" />
@@ -42,6 +59,7 @@ export default async function TradePage({
         currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
         initialSymbol={symbol}
         money={EMPTY_MONEY}
+        apiKeys={apiKeys}
       />
     </div>
   );

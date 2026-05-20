@@ -27,6 +27,7 @@ import { gradeTrade } from "@/lib/grading";
 import { sizePosition } from "@/lib/sizing";
 import { ResultPanel } from "./result-panel";
 import { saveTradeAction } from "@/app/app/_actions";
+import { placeLiveTradeAction } from "@/app/app/trade/_actions";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STRATEGY_LABELS } from "@/lib/analysis/strategy";
 import type { AnalysisReport } from "@/lib/analysis/synthesize";
@@ -84,12 +85,21 @@ const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1D"];
 const defaultMarket = Object.fromEntries(MARKET_CHECK_KEYS.map((k) => [k, false])) as TradeInput["market"];
 const defaultTrigger = Object.fromEntries(TRIGGER_CHECK_KEYS.map((k) => [k, false])) as TradeInput["trigger"];
 
+export type ApiKeyOption = {
+  id: string;
+  exchange: "binance" | "upbit";
+  nickname: string;
+  apiKeyMasked: string;
+  canTrade: boolean;
+};
+
 export function TradeForm(props: {
   initialAccountSize: number;
   initialRiskPct: number;
   currency: "USD" | "KRW";
   initialSymbol: string;
   money: MoneyContext;
+  apiKeys?: ApiKeyOption[];
 }) {
   return (
     <Suspense fallback={null}>
@@ -104,12 +114,14 @@ function TradeFormInner({
   currency,
   initialSymbol,
   money,
+  apiKeys = [],
 }: {
   initialAccountSize: number;
   initialRiskPct: number;
   currency: "USD" | "KRW";
   initialSymbol: string;
   money: MoneyContext;
+  apiKeys?: ApiKeyOption[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -250,6 +262,18 @@ function TradeFormInner({
   // has manually overridden either input — that way tier switches / grade changes
   // re-flow the recommendation without overwriting user intent.
   const [userOverride, setUserOverride] = useState(false);
+
+  // Live-trading state
+  const tradableKeys = apiKeys.filter((k) => k.canTrade && k.exchange === "binance");
+  const [mode, setMode] = useState<"paper" | "live">("paper");
+  const [selectedKeyId, setSelectedKeyId] = useState<string>(() => tradableKeys[0]?.id ?? "");
+  const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+  useEffect(() => {
+    // Default to first key if nothing selected after keys load.
+    if (!selectedKeyId && tradableKeys.length > 0) {
+      setSelectedKeyId(tradableKeys[0].id);
+    }
+  }, [selectedKeyId, tradableKeys]);
   const recommendation = useMemo(() => {
     if (!aiMode || !analysisResult) return null;
     const entryN = Number(entry) || 0;
@@ -304,6 +328,11 @@ function TradeFormInner({
       toast.error("입력을 확인하세요. 포지션 사이징이 유효하지 않습니다.");
       return;
     }
+    if (mode === "live") {
+      // Two-step: first click opens the confirm panel (handled in JSX).
+      setShowLiveConfirm(true);
+      return;
+    }
     startTransition(async () => {
       const res = await saveTradeAction({ input, grade, sizing, leverage, forecast: mcResult ?? undefined });
       if (res.error) {
@@ -312,6 +341,43 @@ function TradeFormInner({
       }
       toast.success("거래를 저널에 저장했습니다.");
       router.push(`/app/journal/${res.id}`);
+    });
+  }
+
+  function executeLiveTrade() {
+    if (!sizing.valid) {
+      toast.error("포지션 사이징이 유효하지 않습니다.");
+      return;
+    }
+    if (!selectedKeyId) {
+      toast.error("실거래용 API 키가 선택되지 않았습니다.");
+      return;
+    }
+    setShowLiveConfirm(false);
+    startTransition(async () => {
+      toast.loading("실거래 주문 전송 중...", { id: "live-trade" });
+      const res = await placeLiveTradeAction({
+        input,
+        grade,
+        sizing,
+        leverage,
+        apiKeyId: selectedKeyId,
+        forecast: mcResult ?? undefined,
+      });
+      toast.dismiss("live-trade");
+      if (!res.ok) {
+        toast.error(res.error ?? "실거래 실패", { duration: 10_000 });
+        if (res.tradeId) {
+          // Still navigate so user can inspect the failed trade row.
+          router.push(`/app/journal/${res.tradeId}`);
+        }
+        return;
+      }
+      toast.success(
+        `실거래 진입 완료. 주문 ${res.orders?.length ?? 0}건 등록됨.`,
+        { duration: 6_000 },
+      );
+      if (res.tradeId) router.push(`/app/journal/${res.tradeId}`);
     });
   }
 
@@ -755,17 +821,142 @@ function TradeFormInner({
           leverage={leverage}
           onApplyLeverage={(lv) => { setLeverage(lv); setUserOverride(true); }}
         />
-        <Button className="w-full" size="lg" onClick={save} disabled={pending}>
+
+        {/* Trade execution mode (paper vs live) */}
+        <Card className="overflow-hidden">
+          <CardContent className="space-y-3 p-4">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                실행 모드
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode("paper")}
+                  className={cn(
+                    "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                    mode === "paper"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  페이퍼 (저장만)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (tradableKeys.length === 0) {
+                      toast.error("실거래용 API 키가 없습니다. 설정 → 거래소 API 키에서 먼저 등록하세요.", { duration: 6000 });
+                      return;
+                    }
+                    setMode("live");
+                  }}
+                  className={cn(
+                    "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                    mode === "live"
+                      ? "border-grade-d bg-grade-d/10 text-grade-d"
+                      : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
+                    tradableKeys.length === 0 && "opacity-60",
+                  )}
+                  title={tradableKeys.length === 0 ? "등록된 거래 가능한 키 없음" : ""}
+                >
+                  실거래 (실제 주문)
+                </button>
+              </div>
+            </div>
+
+            {mode === "live" ? (
+              <>
+                <div>
+                  <Label className="text-xs text-muted-foreground">사용할 API 키</Label>
+                  <Select
+                    value={selectedKeyId}
+                    onChange={(e) => setSelectedKeyId(e.target.value)}
+                    className="mt-1.5"
+                  >
+                    {tradableKeys.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.exchange} · {k.nickname} · {k.apiKeyMasked}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-xs text-grade-d">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    실거래 모드
+                  </div>
+                  <p className="mt-1 text-grade-d/80">
+                    실제 거래소에 주문이 전송됩니다. 진입 + 손절 + 익절 3개 주문이 순서대로 등록됩니다.
+                    버튼을 누르기 전에 가격과 수량을 한 번 더 확인하세요.
+                  </p>
+                </div>
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Button
+          className={cn("w-full", mode === "live" && "bg-grade-d hover:bg-grade-d/90")}
+          size="lg"
+          onClick={save}
+          disabled={pending}
+        >
           {pending
-            ? "저장 중..."
-            : aiMode
-              ? "이 계획으로 거래 시작 (저널에 저장)"
-              : "거래 저장"}
+            ? mode === "live"
+              ? "실거래 처리 중..."
+              : "저장 중..."
+            : mode === "live"
+              ? "실거래 시작 (실제 주문 전송)"
+              : aiMode
+                ? "이 계획으로 거래 시작 (저널에 저장)"
+                : "거래 저장"}
         </Button>
         {aiMode ? (
           <p className="text-center text-[11px] text-muted-foreground">
             진입가·손절·목표는 AI 분석에서 가져왔습니다. 위 단계 버튼으로 진입 시점을 바꿀 수 있습니다.
           </p>
+        ) : null}
+
+        {/* Live trade confirmation dialog */}
+        {showLiveConfirm ? (
+          <Card className="border-grade-d/60 bg-grade-d/10">
+            <CardContent className="space-y-3 p-4">
+              <div className="flex items-center gap-2 text-grade-d">
+                <AlertTriangle className="h-4 w-4" />
+                <div className="text-sm font-semibold">실거래 최종 확인</div>
+              </div>
+              <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs font-mono leading-relaxed">
+                <div>심볼: <span className="text-foreground">{input.symbol}</span></div>
+                <div>방향: <span className="text-foreground">{input.direction === "long" ? "롱 (BUY)" : "숏 (SELL)"}</span></div>
+                <div>수량: <span className="text-foreground">{sizing.quantity}</span></div>
+                <div>레버리지: <span className="text-foreground">{leverage}×</span></div>
+                <div>진입: <span className="text-foreground">${formatNumber(Number(entry) || 0)}</span></div>
+                <div>손절: <span className="text-grade-d">${formatNumber(Number(stop) || 0)}</span></div>
+                <div>목표: <span className="text-grade-a">${formatNumber(Number(target) || 0)}</span></div>
+                <div className="mt-1.5 border-t border-border/60 pt-1.5">
+                  노출 금액: <span className="text-foreground">{formatCurrency(sizing.positionSize, currency)}</span> ({((sizing.positionSize / Math.max(Number(accountSize), 1)) * 100).toFixed(1)}%)
+                </div>
+                <div>최대 손실: <span className="text-grade-d">{formatCurrency(sizing.maxLoss, currency)}</span> ({riskPct}% of 계좌)</div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                이 버튼을 누르면 거래소에 즉시 시장가 진입이 전송됩니다.
+                손절·익절 주문이 자동으로 등록되며, 한 번 진입한 후에는 거래소에서 직접 관리해야 합니다.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setShowLiveConfirm(false)} disabled={pending}>
+                  취소
+                </Button>
+                <Button
+                  className="flex-1 bg-grade-d hover:bg-grade-d/90"
+                  onClick={executeLiveTrade}
+                  disabled={pending}
+                >
+                  확인 — 실제 주문 전송
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ) : null}
       </aside>
     </div>

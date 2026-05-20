@@ -426,18 +426,26 @@ function ChartArea({
       });
     });
 
+    let lastW = container.clientWidth;
+    let lastH = container.clientHeight;
+    let rafId: number | null = null;
     const ro = new ResizeObserver(() => {
-      if (chartRef.current && container) {
-        chartRef.current.applyOptions({
-          width: container.clientWidth,
-          height: container.clientHeight,
-        });
-      }
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (!chartRef.current || !container) return;
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        if (w === lastW && h === lastH) return;
+        lastW = w;
+        lastH = h;
+        chartRef.current.applyOptions({ width: w, height: h });
+      });
     });
     ro.observe(container);
 
     return () => {
       alive = false;
+      if (rafId !== null) cancelAnimationFrame(rafId);
       ro.disconnect();
       chart.remove();
       chartRef.current = null;

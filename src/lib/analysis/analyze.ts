@@ -10,7 +10,21 @@ import {
   type MarketDominance,
   type Interval,
 } from "./binance";
-import { classifyTrend, findFVGs, findLiquidityZones, findOrderBlocks, findSwings } from "./smc";
+import {
+  classifyTrend,
+  detectLiquiditySweeps,
+  findFVGs,
+  findLiquidityZones,
+  findOrderBlocks,
+  findSwings,
+  type LiquiditySweep,
+} from "./smc";
+import {
+  detectFundingSqueeze,
+  detectSessionOpenDrive,
+  type FundingSqueezeSignal,
+  type SessionOpenDriveSignal,
+} from "./special-strategies";
 import { classifyTrendComposite } from "./trend";
 import { classifyDominanceRegime } from "./dominance";
 import { computeVolumeProfile } from "./volume-profile";
@@ -120,6 +134,12 @@ export interface AnalysisSnapshot {
   };
   /** Weekly volume profile for longer-term POC reference */
   weeklyVolumeProfile?: { poc: number; vah: number; val: number } | null;
+  /** Recent liquidity sweeps on LTF (ICT/SMC) — fuel for liquidity_grab strategy. */
+  liquiditySweeps?: LiquiditySweep[];
+  /** Funding squeeze signal — fuel for funding_squeeze strategy. */
+  fundingSqueeze?: FundingSqueezeSignal;
+  /** US-session open drive signal — fuel for session_open_drive strategy. */
+  sessionOpenDrive?: SessionOpenDriveSignal;
   /** Trend classification using established indicators (ADX/KER/Choppiness) on style-specific TF */
   trendMetrics?: {
     refTf: Interval;
@@ -248,6 +268,30 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
   // Trend classification via ADX (Wilder) + KER (Kaufman) + Choppiness (Dreiss)
   const trendMetrics = computeTrendMetrics(style, tfData, tfs);
 
+  // Special-strategy signals (ICT liquidity sweeps, funding squeeze, US open drive).
+  const ltfCandles = (tfData as Record<string, (typeof klineSets)[number]>)[preset.ltf];
+  const ltfSwings = findSwings(ltfCandles, 3);
+  const liquiditySweeps = detectLiquiditySweeps(ltfCandles, ltfSwings).slice(0, 4);
+
+  const fundingSqueeze = detectFundingSqueeze({
+    fundingRate: funding.rate,
+    fundingHistory: fundingHistory
+      ? { avg24h: fundingHistory.avg24h, trend: fundingHistory.trend }
+      : null,
+    oiDelta: oiDelta
+      ? {
+          hourChangePct: oiDelta.hourChangePct,
+          fourHourChangePct: oiDelta.fourHourChangePct,
+        }
+      : null,
+  });
+
+  const sessionOpenDrive = detectSessionOpenDrive({
+    session,
+    ltfCandles,
+    style,
+  });
+
   return {
     symbol: sym,
     generatedAt: new Date().toISOString(),
@@ -289,6 +333,9 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     basis,
     session,
     weeklyVolumeProfile: weeklyVp ? { poc: weeklyVp.poc, vah: weeklyVp.vah, val: weeklyVp.val } : null,
+    liquiditySweeps,
+    fundingSqueeze,
+    sessionOpenDrive,
     trendMetrics,
   };
 }

@@ -8,6 +8,9 @@ export type StrategyId =
   | "breakout"
   | "range_fade"
   | "reversal"
+  | "liquidity_grab"
+  | "funding_squeeze"
+  | "session_open_drive"
   | "wait";
 
 export const STRATEGY_LABELS: Record<StrategyId, string> = {
@@ -15,6 +18,9 @@ export const STRATEGY_LABELS: Record<StrategyId, string> = {
   breakout: "돌파 추종",
   range_fade: "박스권 매매",
   reversal: "추세 반전",
+  liquidity_grab: "유동성 사냥 (스윕 후 진입)",
+  funding_squeeze: "펀딩 압착 (군집 청산 노림)",
+  session_open_drive: "세션 개장 추세",
   wait: "관망",
 };
 
@@ -23,6 +29,9 @@ export const STRATEGY_DESCRIPTIONS: Record<StrategyId, string> = {
   breakout: "주요 레벨 돌파 후 재테스트에서 진입",
   range_fade: "박스 상단에서 매도, 박스 하단에서 매수",
   reversal: "추세 종료 신호 후 역방향 진입 (드물고 위험)",
+  liquidity_grab: "스윙 고/저점을 잠깐 깨고 회복 → 반대 방향 진입 (ICT/SMC)",
+  funding_squeeze: "펀딩비 극단 + OI 급증으로 한쪽 군집 → 강제 청산 반대 진입",
+  session_open_drive: "미국 개장 첫 30분 추세 잡힘 → 그 방향 추종 (데이트레이딩)",
   wait: "명확한 우위 없음. 다음 셋업 대기",
 };
 
@@ -41,6 +50,9 @@ const SYSTEM_PROMPT = `당신은 시장 구조 스냅샷을 보고 가장 적합
 - breakout: 가격이 박스 상/하단을 돌파 시도. 돌파 확정 후 추세 추종.
 - range_fade: 박스권 안에 있음. 박스 끝(VAH/VAL 또는 직전 스윙)에서 반대 방향 매매.
 - reversal: HTF 추세에 대한 명확한 반전 신호 (Higher-Low → Lower-High 전환 등). 드물고 위험.
+- liquidity_grab: 직전 스윙 고/저점을 잠깐 깨고 즉시 회복 (sweep). 손절 청산을 노린 큰손 진입의 흔적 → 반대 방향 진입. snapshot.liquiditySweeps 배열에 최근 sweep이 감지되어 있어야 가능. R:R 매우 좋음(3+).
+- funding_squeeze: 펀딩비 극단(절댓값 ≥0.04%) + 펀딩 트렌드 지속 + OI 24h 변화 큼(±15% 이상) → 한쪽 포지션 군집. 강제 청산 캐스케이드 노려 반대 방향 진입. snapshot.fundingSqueeze가 active일 때만 가능. 손절 짧고 시간 한도 짧음.
+- session_open_drive: 미국 개장 직후 첫 30~60분(22:30~23:30 KST = 13:30~14:30 UTC). 첫 30분 캔들 종가가 시가 대비 강한 방향(±0.4% 이상) + 거래량 평균 이상이면 그 방향 추종. snapshot.session.current가 "US"이고 minutesIntoSession이 60 미만일 때만 가능.
 - wait: 트레이딩 우위 없음. 진입 보류.
 
 판단 기준 (가중치):
@@ -82,10 +94,35 @@ const SYSTEM_PROMPT = `당신은 시장 구조 스냅샷을 보고 가장 적합
   · 가격이 명확한 키레벨(POC/VAH/VAL/직전 스윙) 근처면 range_fade
   · 그렇지 않으면 wait 허용
 
+★ 특수 전략 우선 트리거 (위 분류보다 먼저 검사):
+
+이 3개는 특정 신호가 데이터에 명확히 떠 있을 때만 선택 가능. 신호 없으면 절대 고르지 마라.
+
+1) liquidity_grab — snapshot.liquiditySweeps 배열을 본다:
+   · 최근 5봉 이내 sweep이 1개 이상 존재 (recoveredWithinBars ≤ 3) → 강력 후보
+   · sweep된 방향과 회복 방향이 명확:
+     - 고점 sweep + 봉 종가가 sweep 가격 아래로 회복 → 숏 (short)
+     - 저점 sweep + 봉 종가가 sweep 가격 위로 회복 → 롱 (long)
+   · 우선순위: trend_pullback과 동일 방향이면 trend_pullback 유지. 반대 방향이면 liquidity_grab이 이김 (반전 신호 우선).
+
+2) funding_squeeze — snapshot.fundingSqueeze 객체를 본다:
+   · fundingSqueeze.active가 true일 때만 가능
+   · fundingSqueeze.direction이 "long"이면 롱 군집 → 숏 진입 (short)
+   · fundingSqueeze.direction이 "short"이면 숏 군집 → 롱 진입 (long)
+   · classification이 "up"이어도 강한 funding_squeeze (정도 ≥0.7) 신호면 funding_squeeze가 이김
+   · confidence는 fundingSqueeze.intensity를 그대로 사용 (0~1)
+
+3) session_open_drive — snapshot.session을 본다:
+   · session.current === "US" AND minutesIntoSession ≤ 60일 때만 가능
+   · LTF 첫 30분 캔들 (mtfChart.byRole.LTF.candles 마지막 1~2봉) 종가가 시가 대비 ±0.4% 이상 + 거래량 직전 평균 ≥150%
+   · 그 방향으로 long/short. 추세 분류와 정렬되면 더 강함
+   · 스타일이 scalp/day일 때만 의미 있음. swing/position이면 이 전략 무시하고 일반 분류로 가라
+
 엄격한 규칙:
 - 정확히 하나만 고른다. 데이터 추론만.
-- 위 플레이북을 따른 뒤, direction은 추가 신호로 다시 확정 (펀딩, OI, 호가, 흐름).
-- reversal은 명확한 반전 신호일 때만.
+- 위 특수 전략 트리거를 먼저 검사 → 발동 신호 없으면 trendMetrics.classification 플레이북으로.
+- reversal은 명확한 반전 신호일 때만. liquidity_grab과 reversal이 둘 다 가능하면 liquidity_grab 선호 (트리거가 더 명확).
+- 특수 전략 3개는 신호 없을 때 절대 선택 금지. 데이터 없는데 고르면 "wait"보다 나쁘다.
 
 reasoning 작성 규칙 (매우 중요):
 - 일반인이 읽어도 이해할 수 있게 평범한 한국어로 써라.
@@ -114,7 +151,7 @@ reasoning 나쁜 예 (전문 용어 가득):
 
 JSON 스키마:
 {
-  "primary": "trend_pullback" | "breakout" | "range_fade" | "reversal" | "wait",
+  "primary": "trend_pullback" | "breakout" | "range_fade" | "reversal" | "liquidity_grab" | "funding_squeeze" | "session_open_drive" | "wait",
   "direction": "long" | "short" | null,
   "confidence": 0.0 ~ 1.0,
   "reasoning": "왜 이 전략인지 1~2문장. 구체적 레벨/수치 인용.",

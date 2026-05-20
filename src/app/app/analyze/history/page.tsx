@@ -143,6 +143,9 @@ export default async function AnalysisHistoryPage({
                 <option value="breakout">돌파</option>
                 <option value="range_fade">박스 반전</option>
                 <option value="reversal">반전</option>
+                <option value="liquidity_grab">유동성 사냥</option>
+                <option value="funding_squeeze">펀딩 압착</option>
+                <option value="session_open_drive">세션 개장</option>
                 <option value="wait">대기</option>
               </select>
             </label>

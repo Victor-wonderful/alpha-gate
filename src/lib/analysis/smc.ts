@@ -154,6 +154,121 @@ export function findLiquidityZones(swings: Swing[], tolerancePct = 0.0015): Liqu
   ];
 }
 
+export interface LiquiditySweep {
+  /** Index of the candle whose wick swept the prior swing level. */
+  sweepIndex: number;
+  sweepTime: number;
+  /** "bullish" = swing low was swept + recovered → long setup.
+   *  "bearish" = swing high was swept + recovered → short setup. */
+  side: "bullish" | "bearish";
+  /** The prior swing level that got swept. */
+  sweptLevel: number;
+  /** Wick extreme that pierced the level (lowest low for bullish, highest high for bearish). */
+  wickExtreme: number;
+  /** Close that confirmed recovery (close back on the original side of sweptLevel). */
+  recoveryClose: number;
+  /** How many bars after the sweep candle the close recovered (0 = same candle, 1 = next, etc.). */
+  recoveredWithinBars: number;
+  /** Bars since the sweep candle to the last bar (freshness — lower is better). */
+  ageBars: number;
+}
+
+/** Detect recent liquidity sweeps (ICT/SMC).
+ *
+ *  A sweep is when price wicks beyond a recent swing high/low and the close
+ *  comes back to the original side within `maxRecoveryBars` candles. This
+ *  signals stop-loss hunting by larger participants.
+ *
+ *  Only sweeps within the last `maxAgeBars` are returned (older ones are stale).
+ *  The freshest sweep is the most actionable.
+ */
+export function detectLiquiditySweeps(
+  candles: Candle[],
+  swings: Swing[],
+  opts: { maxRecoveryBars?: number; maxAgeBars?: number; minPiercePct?: number } = {},
+): LiquiditySweep[] {
+  const { maxRecoveryBars = 3, maxAgeBars = 8, minPiercePct = 0.0005 } = opts;
+  if (candles.length < 10 || swings.length === 0) return [];
+
+  const lastIdx = candles.length - 1;
+  const out: LiquiditySweep[] = [];
+
+  // Pre-build sorted swings for binary lookup not needed at this scale; linear is fine.
+  for (let i = Math.max(2, candles.length - maxAgeBars - maxRecoveryBars); i <= lastIdx; i++) {
+    const c = candles[i];
+
+    // Find the most recent swing high BEFORE this candle (strict <).
+    let priorHigh: Swing | null = null;
+    let priorLow: Swing | null = null;
+    for (let s = swings.length - 1; s >= 0; s--) {
+      const sw = swings[s];
+      if (sw.index >= i) continue;
+      if (!priorHigh && sw.type === "high") priorHigh = sw;
+      if (!priorLow && sw.type === "low") priorLow = sw;
+      if (priorHigh && priorLow) break;
+    }
+
+    // Bearish sweep: wick above prior swing high, close back below it within N bars.
+    if (priorHigh && c.high > priorHigh.price * (1 + minPiercePct)) {
+      // Check recovery within window.
+      for (let r = 0; r <= maxRecoveryBars && i + r <= lastIdx; r++) {
+        const close = candles[i + r].close;
+        if (close < priorHigh.price) {
+          const age = lastIdx - i;
+          if (age <= maxAgeBars) {
+            out.push({
+              sweepIndex: i,
+              sweepTime: c.openTime,
+              side: "bearish",
+              sweptLevel: priorHigh.price,
+              wickExtreme: c.high,
+              recoveryClose: close,
+              recoveredWithinBars: r,
+              ageBars: age,
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    // Bullish sweep: wick below prior swing low, close back above it within N bars.
+    if (priorLow && c.low < priorLow.price * (1 - minPiercePct)) {
+      for (let r = 0; r <= maxRecoveryBars && i + r <= lastIdx; r++) {
+        const close = candles[i + r].close;
+        if (close > priorLow.price) {
+          const age = lastIdx - i;
+          if (age <= maxAgeBars) {
+            out.push({
+              sweepIndex: i,
+              sweepTime: c.openTime,
+              side: "bullish",
+              sweptLevel: priorLow.price,
+              wickExtreme: c.low,
+              recoveryClose: close,
+              recoveredWithinBars: r,
+              ageBars: age,
+            });
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // Dedup: keep one per (side, sweptLevel ≈ same). Sort by freshness (age asc).
+  const sorted = out.sort((a, b) => a.ageBars - b.ageBars);
+  const seen = new Set<string>();
+  const dedup: LiquiditySweep[] = [];
+  for (const s of sorted) {
+    const key = `${s.side}-${s.sweptLevel.toFixed(2)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    dedup.push(s);
+  }
+  return dedup;
+}
+
 /** Simple trend label from last 50 closes via linear slope sign + EMA cross. */
 export function classifyTrend(candles: Candle[]): "up" | "down" | "range" {
   if (candles.length < 50) return "range";

@@ -298,8 +298,122 @@ function ChartArea({
   );
 }
 
-// ─── Orderbook ───────────────────────────────────────────────────────────
+// ─── Orderbook + Market Trades ──────────────────────────────────────────
+type DepthView = "both" | "bid" | "ask";
+const GROUP_OPTIONS = [0.01, 0.1, 1, 10] as const;
+
 function OrderbookPanel({ symbol }: { symbol: string }) {
+  const [tab, setTab] = useState<"book" | "trades">("book");
+  const [depthView, setDepthView] = useState<DepthView>("both");
+  const [groupSize, setGroupSize] = useState<number>(0.1);
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        {/* Tab header */}
+        <div className="flex items-center border-b border-border/40 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setTab("book")}
+            className={cn(
+              "text-xs font-semibold transition-colors",
+              tab === "book" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            호가창
+          </button>
+          <div className="mx-3 h-3 w-px bg-border/60" />
+          <button
+            type="button"
+            onClick={() => setTab("trades")}
+            className={cn(
+              "text-xs font-semibold transition-colors",
+              tab === "trades" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            최근 체결
+          </button>
+
+          {tab === "book" ? (
+            <div className="ml-auto flex items-center gap-2">
+              {/* Depth view mode */}
+              <div className="flex gap-0.5 rounded border border-border/60 bg-background/40 p-0.5">
+                <DepthIcon active={depthView === "both"} onClick={() => setDepthView("both")} kind="both" />
+                <DepthIcon active={depthView === "bid"} onClick={() => setDepthView("bid")} kind="bid" />
+                <DepthIcon active={depthView === "ask"} onClick={() => setDepthView("ask")} kind="ask" />
+              </div>
+              {/* Group size */}
+              <select
+                value={groupSize}
+                onChange={(e) => setGroupSize(Number(e.target.value))}
+                className="h-6 rounded border border-border/60 bg-background/40 px-1.5 font-mono text-[10px] tabular-nums"
+              >
+                {GROUP_OPTIONS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+        </div>
+
+        {tab === "book" ? (
+          <OrderbookContent symbol={symbol} depthView={depthView} groupSize={groupSize} />
+        ) : (
+          <MarketTradesContent symbol={symbol} />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DepthIcon({
+  active,
+  onClick,
+  kind,
+}: {
+  active: boolean;
+  onClick: () => void;
+  kind: "both" | "bid" | "ask";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex h-5 w-6 items-center justify-center rounded transition-colors",
+        active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+      title={kind === "both" ? "양쪽" : kind === "bid" ? "매수만" : "매도만"}
+    >
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
+        {(kind === "both" || kind === "ask") && (
+          <>
+            <rect x="0" y="0" width="6" height="2" fill="currentColor" className="text-grade-d/70" />
+            <rect x="0" y="3" width="9" height="2" fill="currentColor" className="text-grade-d/70" />
+          </>
+        )}
+        {(kind === "both" || kind === "bid") && (
+          <>
+            <rect x="0" y="7" width="9" height="2" fill="currentColor" className="text-grade-a/70" />
+            <rect x="0" y="10" width="6" height="2" fill="currentColor" className="text-grade-a/70" />
+          </>
+        )}
+      </svg>
+    </button>
+  );
+}
+
+function OrderbookContent({
+  symbol,
+  depthView,
+  groupSize,
+}: {
+  symbol: string;
+  depthView: DepthView;
+  groupSize: number;
+}) {
   const [book, setBook] = useState<{
     bids: [number, number][];
     asks: [number, number][];
@@ -319,15 +433,15 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
     async function tick() {
       try {
         const [depthR, priceR] = await Promise.all([
-          fetch(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=20`),
+          fetch(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=30`),
           fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`),
         ]);
         const depth = (await depthR.json()) as { bids: [string, string][]; asks: [string, string][] };
         const price = (await priceR.json()) as { price: string };
         if (!alive) return;
         setBook((prev) => ({
-          bids: depth.bids.slice(0, 12).map((b) => [parseFloat(b[0]), parseFloat(b[1])]),
-          asks: depth.asks.slice(0, 12).map((a) => [parseFloat(a[0]), parseFloat(a[1])]),
+          bids: depth.bids.map((b) => [parseFloat(b[0]), parseFloat(b[1])]),
+          asks: depth.asks.map((a) => [parseFloat(a[0]), parseFloat(a[1])]),
           last: parseFloat(price.price),
           prevLast: prev.last,
         }));
@@ -345,27 +459,50 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
     };
   }, [symbol]);
 
-  // Cumulative totals from best price outward
+  // Group prices by groupSize (floor for asks → smaller bucket, ceil for bids → bigger bucket)
+  function groupBy(entries: [number, number][], side: "ask" | "bid"): [number, number][] {
+    if (groupSize <= 0) return entries;
+    const map = new Map<number, number>();
+    for (const [p, q] of entries) {
+      const bucket = side === "ask" ? Math.ceil(p / groupSize) * groupSize : Math.floor(p / groupSize) * groupSize;
+      map.set(bucket, (map.get(bucket) ?? 0) + q);
+    }
+    const sorted = Array.from(map.entries()).map(([p, q]) => [p, q] as [number, number]);
+    if (side === "ask") sorted.sort((a, b) => a[0] - b[0]);
+    else sorted.sort((a, b) => b[0] - a[0]);
+    return sorted;
+  }
+
+  const groupedAsks = groupBy(book.asks, "ask").slice(0, 14);
+  const groupedBids = groupBy(book.bids, "bid").slice(0, 14);
+
+  // Cumulative totals (from best outward)
   const askCum: number[] = [];
   let askAcc = 0;
-  for (const a of book.asks) {
+  for (const a of groupedAsks) {
     askAcc += a[1];
     askCum.push(askAcc);
   }
   const bidCum: number[] = [];
   let bidAcc = 0;
-  for (const b of book.bids) {
+  for (const b of groupedBids) {
     bidAcc += b[1];
     bidCum.push(bidAcc);
   }
   const maxCum = Math.max(askAcc, bidAcc, 1);
 
-  const bestBid = book.bids[0]?.[0];
-  const bestAsk = book.asks[0]?.[0];
+  // B/S ratio (depth-weighted)
+  const bidValue = groupedBids.reduce((s, [p, q]) => s + p * q, 0);
+  const askValue = groupedAsks.reduce((s, [p, q]) => s + p * q, 0);
+  const total = bidValue + askValue;
+  const bidPct = total > 0 ? (bidValue / total) * 100 : 50;
+  const askPct = 100 - bidPct;
+
+  const bestBid = groupedBids[0]?.[0];
+  const bestAsk = groupedAsks[0]?.[0];
   const spread = bestBid && bestAsk ? bestAsk - bestBid : 0;
   const spreadPct = bestAsk ? (spread / bestAsk) * 100 : 0;
 
-  // Last-price color: rising / falling / flat
   const lastTone =
     book.last != null && book.prevLast != null
       ? book.last > book.prevLast
@@ -375,28 +512,29 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
           : "flat"
       : "flat";
 
+  const showAsks = depthView === "both" || depthView === "ask";
+  const showBids = depthView === "both" || depthView === "bid";
+  // 단일 view 모드일 때 행 수 늘리기
+  const askRows = depthView === "ask" ? groupedAsks : groupedAsks.slice(0, 12);
+  const bidRows = depthView === "bid" ? groupedBids : groupedBids.slice(0, 12);
+
   return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="flex items-center justify-between border-b border-border/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <span>호가창</span>
-          <span className="font-normal normal-case text-muted-foreground/60">2초 갱신</span>
-        </div>
+    <>
+      {/* Column header */}
+      <div className="grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
+        <span>가격 (USDT)</span>
+        <span className="text-right">수량</span>
+        <span className="text-right">누적</span>
+      </div>
 
-        {/* Column header */}
-        <div className="grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
-          <span>가격 (USDT)</span>
-          <span className="text-right">수량</span>
-          <span className="text-right">누적</span>
-        </div>
-
-        {/* Asks (reversed = highest at top) */}
+      {/* Asks */}
+      {showAsks ? (
         <div className="px-1 py-1">
-          {book.asks.length === 0 ? (
+          {askRows.length === 0 ? (
             <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
           ) : (
-            [...book.asks].reverse().map((a, i) => {
-              const cumIdx = book.asks.length - 1 - i;
+            [...askRows].reverse().map((a, i) => {
+              const cumIdx = askRows.length - 1 - i;
               return (
                 <OrderbookRow
                   key={`a${i}`}
@@ -410,53 +548,66 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
             })
           )}
         </div>
+      ) : null}
 
-        {/* Mid: last price + spread */}
-        <div
-          className={cn(
-            "border-y border-border/40 px-3 py-2",
-            lastTone === "up" && "bg-grade-a/5",
-            lastTone === "down" && "bg-grade-d/5",
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span
-              className={cn(
-                "font-mono text-lg font-bold tabular-nums",
-                lastTone === "up" ? "text-grade-a" : lastTone === "down" ? "text-grade-d" : "text-foreground",
-              )}
-            >
-              {book.last != null ? formatNumber(book.last) : "—"}
-            </span>
-            <span className="text-right">
-              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">스프레드</div>
-              <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                {spread > 0 ? formatNumber(spread, { maximumFractionDigits: 2 }) : "—"}
-                {spreadPct > 0 ? <span className="ml-1">({spreadPct.toFixed(3)}%)</span> : null}
-              </div>
-            </span>
-          </div>
+      {/* Mid: last price + spread */}
+      <div
+        className={cn(
+          "border-y border-border/40 px-3 py-2",
+          lastTone === "up" && "bg-grade-a/5",
+          lastTone === "down" && "bg-grade-d/5",
+        )}
+      >
+        <div className="flex items-center justify-between">
+          <span
+            className={cn(
+              "font-mono text-base font-bold tabular-nums",
+              lastTone === "up" ? "text-grade-a" : lastTone === "down" ? "text-grade-d" : "text-foreground",
+            )}
+          >
+            {book.last != null ? formatNumber(book.last) : "—"}
+          </span>
+          <span className="text-right">
+            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">스프레드</div>
+            <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
+              {spread > 0 ? formatNumber(spread, { maximumFractionDigits: 2 }) : "—"}
+              {spreadPct > 0 ? <span className="ml-1">({spreadPct.toFixed(3)}%)</span> : null}
+            </div>
+          </span>
         </div>
+      </div>
 
-        {/* Bids */}
+      {/* Bids */}
+      {showBids ? (
         <div className="px-1 py-1">
-          {book.bids.length === 0 ? (
+          {bidRows.length === 0 ? (
             <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
           ) : (
-            book.bids.map((b, i) => (
-              <OrderbookRow
-                key={`b${i}`}
-                price={b[0]}
-                qty={b[1]}
-                cum={bidCum[i]}
-                maxCum={maxCum}
-                side="bid"
-              />
+            bidRows.map((b, i) => (
+              <OrderbookRow key={`b${i}`} price={b[0]} qty={b[1]} cum={bidCum[i]} maxCum={maxCum} side="bid" />
             ))
           )}
         </div>
-      </CardContent>
-    </Card>
+      ) : null}
+
+      {/* B/S ratio bar */}
+      <div className="border-t border-border/40 px-3 py-1.5">
+        <div className="flex items-center gap-2 text-[10px]">
+          <span className="font-bold text-grade-a">B</span>
+          <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-grade-d/20">
+            <div
+              className="absolute inset-y-0 left-0 bg-grade-a transition-all"
+              style={{ width: `${bidPct}%` }}
+            />
+          </div>
+          <span className="font-bold text-grade-d">S</span>
+        </div>
+        <div className="mt-0.5 flex items-center justify-between text-[10px] font-mono tabular-nums">
+          <span className="text-grade-a">{bidPct.toFixed(2)}%</span>
+          <span className="text-grade-d">{askPct.toFixed(2)}%</span>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -494,6 +645,86 @@ function OrderbookRow({
         {formatNumber(cum, { maximumFractionDigits: 2 })}
       </span>
     </div>
+  );
+}
+
+function MarketTradesContent({ symbol }: { symbol: string }) {
+  const [trades, setTrades] = useState<Array<{ time: number; price: number; qty: number; isBuy: boolean }>>([]);
+
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function tick() {
+      try {
+        const r = await fetch(`https://fapi.binance.com/fapi/v1/trades?symbol=${symbol}&limit=30`);
+        const arr = (await r.json()) as Array<{
+          time: number;
+          price: string;
+          qty: string;
+          isBuyerMaker: boolean;
+        }>;
+        if (!alive) return;
+        // isBuyerMaker=true → seller takes the trade (sell-side market trade)
+        const parsed = arr
+          .map((t) => ({
+            time: t.time,
+            price: parseFloat(t.price),
+            qty: parseFloat(t.qty),
+            isBuy: !t.isBuyerMaker,
+          }))
+          .reverse(); // newest first
+        setTrades(parsed);
+      } catch {
+        /* skip */
+      } finally {
+        if (alive) timer = setTimeout(tick, 2000);
+      }
+    }
+    tick();
+
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [symbol]);
+
+  return (
+    <>
+      <div className="grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
+        <span>가격</span>
+        <span className="text-right">수량</span>
+        <span className="text-right">시간</span>
+      </div>
+      <div className="max-h-[480px] overflow-y-auto px-1 py-1">
+        {trades.length === 0 ? (
+          <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
+        ) : (
+          trades.map((t, i) => {
+            const d = new Date(t.time);
+            const hh = String(d.getHours()).padStart(2, "0");
+            const mm = String(d.getMinutes()).padStart(2, "0");
+            const ss = String(d.getSeconds()).padStart(2, "0");
+            return (
+              <div
+                key={i}
+                className="grid grid-cols-[1fr_1fr_1fr] items-center px-2 py-[1px] text-[11px] tabular-nums transition-colors hover:bg-muted/30"
+              >
+                <span className={cn("font-mono font-medium", t.isBuy ? "text-grade-a" : "text-grade-d")}>
+                  {formatNumber(t.price, { maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-right font-mono text-foreground/90">
+                  {formatNumber(t.qty, { maximumFractionDigits: 4 })}
+                </span>
+                <span className="text-right font-mono text-muted-foreground/70">
+                  {hh}:{mm}:{ss}
+                </span>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
   );
 }
 

@@ -500,11 +500,13 @@ function OrderbookRow({
 // ─── Order Panel ─────────────────────────────────────────────────────────
 function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
   const [direction, setDirection] = useState<"long" | "short">("long");
-  const [orderType, setOrderType] = useState<"market" | "limit">("market");
+  const [orderType, setOrderType] = useState<"limit" | "market" | "tpsl">("market");
   const [leverage, setLeverage] = useState(5);
+  const [price, setPrice] = useState(""); // Limit 가격
   const [qty, setQty] = useState("");
   const [stop, setStop] = useState("");
   const [target, setTarget] = useState("");
+  const [tpslEnabled, setTpslEnabled] = useState(false);
   const [accountPct, setAccountPct] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -576,87 +578,207 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
     });
   }
 
-  // Auto-derived stop/target % for hint text
-  const stopHintPct = direction === "long" ? -2 : 2;
-  const targetHintPct = direction === "long" ? 4 : -4;
-  const stopRR = stop && Number(stop) > 0 && lastPrice
-    ? `${(Math.abs(lastPrice - Number(stop)) / lastPrice * 100).toFixed(2)}%`
-    : "";
-  const targetRR = target && Number(target) > 0 && lastPrice && stop && Number(stop) > 0
-    ? `${(Math.abs(Number(target) - lastPrice) / Math.abs(lastPrice - Number(stop))).toFixed(2)}R`
-    : "";
+  // Effective price for calc (limit이면 입력가, market이면 lastPrice)
+  const effectivePrice = orderType === "limit" && price ? Number(price) : lastPrice;
+
+  // Recompute derived metrics with effective price
+  const _qtyNum = Number(qty) || 0;
+  const _notional = effectivePrice != null ? effectivePrice * _qtyNum : 0;
+  const _margin = leverage > 0 ? _notional / leverage : 0;
+
+  // Total (USDT) — Amount × Price 자동 계산 표시
+  const totalUsdt = _notional;
+
+  // R:R / 이동 % 계산
+  const stopMovePct =
+    effectivePrice && stop && Number(stop) > 0
+      ? (Math.abs(effectivePrice - Number(stop)) / effectivePrice) * 100
+      : 0;
+  const targetMovePct =
+    effectivePrice && target && Number(target) > 0
+      ? (Math.abs(Number(target) - effectivePrice) / effectivePrice) * 100
+      : 0;
+  const rr =
+    stopMovePct > 0 && targetMovePct > 0 ? targetMovePct / stopMovePct : 0;
+
+  const buttonTone = direction === "long" ? "long" : "short";
+  const buttonLabel = pending
+    ? "주문 처리 중..."
+    : _margin > wallet.available && _margin > 0
+      ? "잔액 부족"
+      : _qtyNum <= 0
+        ? "수량 입력"
+        : `${baseSym} ${direction === "long" ? "매수" : "매도"}`;
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardContent className="space-y-3 p-3">
-        {/* Direction tabs — top */}
-        <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border">
+        {/* 매수/매도 큰 토글 */}
+        <div className="grid grid-cols-2 overflow-hidden rounded-md">
           <button
             type="button"
             onClick={() => setDirection("long")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-colors",
+              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-all",
               direction === "long"
-                ? "bg-grade-a text-white shadow-inner"
-                : "bg-background/40 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                ? "bg-grade-a text-white"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
             )}
           >
-            <ArrowUpRight className="h-4 w-4" />
-            매수 / 롱
+            매수
           </button>
           <button
             type="button"
             onClick={() => setDirection("short")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-colors",
+              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-all",
               direction === "short"
-                ? "bg-grade-d text-white shadow-inner"
-                : "bg-background/40 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                ? "bg-grade-d text-white"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
             )}
           >
-            <ArrowDownRight className="h-4 w-4" />
-            매도 / 숏
+            매도
           </button>
         </div>
 
-        {/* Order type sub-tabs */}
-        <div className="flex gap-0.5 rounded-md border border-border/60 bg-background/40 p-0.5">
-          {(["market", "limit"] as const).map((t) => (
+        {/* 주문 유형 sub-tab */}
+        <div className="flex items-center gap-4 border-b border-border/40 pb-1.5">
+          {(["limit", "market", "tpsl"] as const).map((t) => (
             <button
               key={t}
               type="button"
-              onClick={() => setOrderType(t)}
+              onClick={() => {
+                if (t === "limit") return; // 지정가는 준비 중
+                if (t === "tpsl") {
+                  setTpslEnabled(!tpslEnabled);
+                  return;
+                }
+                setOrderType(t);
+              }}
               disabled={t === "limit"}
               className={cn(
-                "flex-1 rounded px-2 py-1 text-[11px] font-medium uppercase transition-colors",
-                orderType === t
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
+                "relative pb-1.5 text-xs font-medium transition-colors",
+                t === "tpsl"
+                  ? tpslEnabled
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                  : orderType === t
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
                 t === "limit" && "cursor-not-allowed opacity-40",
               )}
-              title={t === "limit" ? "지정가 주문은 준비 중" : ""}
+              title={t === "limit" ? "지정가는 준비 중" : ""}
             >
-              {t === "market" ? "시장가" : "지정가"}
+              {t === "limit" ? "지정가" : t === "market" ? "시장가" : "TP/SL"}
+              {(t === "tpsl" ? tpslEnabled : orderType === t) ? (
+                <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-primary" />
+              ) : null}
+              {t === "limit" ? (
+                <span className="ml-1 rounded bg-muted/50 px-1 py-0.5 text-[8px] uppercase">준비중</span>
+              ) : null}
             </button>
           ))}
         </div>
 
-        {/* Wallet bar */}
-        <div className="flex items-center justify-between rounded-md border border-border/40 bg-background/30 px-2.5 py-1.5 text-[10px]">
+        {/* 잔액 표시 */}
+        <div className="flex items-center justify-between text-[11px]">
           <span className="text-muted-foreground">사용 가능</span>
           <span className="font-mono font-semibold tabular-nums">
-            {formatCurrency(wallet.available, "USD")}
+            {formatNumber(wallet.available, { maximumFractionDigits: 2 })} USDT
           </span>
         </div>
 
-        {/* Leverage */}
+        {/* Price (Limit일 때만 활성) */}
+        {orderType === "limit" ? (
+          <div>
+            <div className="mb-1 flex items-center justify-between text-[10px]">
+              <span className="text-muted-foreground">가격 (USDT)</span>
+            </div>
+            <Input
+              type="number"
+              inputMode="decimal"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder={lastPrice ? String(lastPrice.toFixed(2)) : "—"}
+              className="font-mono"
+            />
+          </div>
+        ) : (
+          <div>
+            <div className="mb-1 flex items-center justify-between text-[10px]">
+              <span className="text-muted-foreground">가격</span>
+              <span className="text-muted-foreground/60">시장가 — 현재가 즉시 체결</span>
+            </div>
+            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-sm tabular-nums">
+              {lastPrice ? `${formatNumber(lastPrice)} USDT` : "—"}
+            </div>
+          </div>
+        )}
+
+        {/* Amount */}
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[10px]">
+            <span className="text-muted-foreground">수량 ({baseSym})</span>
+          </div>
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={qty}
+            onChange={(e) => {
+              setQty(e.target.value);
+              setAccountPct(null);
+            }}
+            placeholder="0.0000"
+            className="font-mono"
+          />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={accountPct ?? 0}
+            onChange={(e) => applyAccountPct(Number(e.target.value))}
+            className="mt-2 w-full accent-primary"
+          />
+          <div className="mt-0.5 grid grid-cols-5 text-[10px] text-muted-foreground/70">
+            {[0, 25, 50, 75, 100].map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => applyAccountPct(p)}
+                className={cn(
+                  "text-center hover:text-foreground",
+                  accountPct === p && "text-primary",
+                )}
+              >
+                {p}%
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Total (USDT) */}
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[10px]">
+            <span className="text-muted-foreground">총액 (USDT)</span>
+          </div>
+          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-sm tabular-nums text-muted-foreground">
+            {totalUsdt > 0 ? formatNumber(totalUsdt, { maximumFractionDigits: 2 }) : "—"}
+          </div>
+        </div>
+
+        {/* 레버리지 */}
         <div>
           <div className="mb-1 flex items-center justify-between">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">레버리지</span>
             <span
               className={cn(
                 "rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums",
-                leverage >= 20 ? "bg-grade-d/15 text-grade-d" : leverage >= 10 ? "bg-amber-500/15 text-amber-400" : "bg-primary/15 text-primary",
+                leverage >= 20
+                  ? "bg-grade-d/15 text-grade-d"
+                  : leverage >= 10
+                    ? "bg-amber-500/15 text-amber-400"
+                    : "bg-primary/15 text-primary",
               )}
             >
               {leverage}×
@@ -689,105 +811,125 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
           </div>
         </div>
 
-        {/* Quantity */}
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">수량</span>
-            <span className="text-[10px] font-mono text-muted-foreground">{baseSym}</span>
-          </div>
-          <Input
-            type="number"
-            inputMode="decimal"
-            value={qty}
-            onChange={(e) => {
-              setQty(e.target.value);
-              setAccountPct(null);
-            }}
-            placeholder="0.0000"
-            className="font-mono text-base"
-          />
-          <div className="mt-1.5 grid grid-cols-5 gap-1">
-            {[10, 25, 50, 75, 100].map((pct) => (
+        {/* TP/SL 확장 영역 */}
+        {tpslEnabled ? (
+          <div className="space-y-2 rounded-md border border-border/40 bg-background/30 p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">TP / SL</span>
               <button
-                key={pct}
                 type="button"
-                onClick={() => applyAccountPct(pct)}
-                className={cn(
-                  "rounded border py-0.5 text-[10px] font-medium transition-colors",
-                  accountPct === pct
-                    ? "border-primary/60 bg-primary/15 text-primary"
-                    : "border-border bg-background/30 text-muted-foreground hover:border-border/80 hover:text-foreground",
-                )}
+                onClick={() => setTpslEnabled(false)}
+                className="text-[10px] text-muted-foreground hover:text-foreground"
               >
-                {pct}%
+                닫기
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Stop / Target */}
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-grade-d">손절</span>
-              {stopRR ? <span className="text-[9px] font-mono text-muted-foreground">{stopRR}</span> : null}
             </div>
-            <Input
-              type="number"
-              inputMode="decimal"
-              value={stop}
-              onChange={(e) => setStop(e.target.value)}
-              placeholder={lastPrice ? formatNumber(lastPrice * (1 + stopHintPct / 100)) : "—"}
-              className="font-mono text-xs"
-            />
-          </div>
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-grade-a">목표</span>
-              {targetRR ? <span className="text-[9px] font-mono text-muted-foreground">{targetRR}</span> : null}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[10px] text-grade-d">손절가</span>
+                  {stopMovePct > 0 ? (
+                    <span className="text-[9px] font-mono text-muted-foreground">{stopMovePct.toFixed(2)}%</span>
+                  ) : null}
+                </div>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={stop}
+                  onChange={(e) => setStop(e.target.value)}
+                  placeholder={
+                    effectivePrice
+                      ? formatNumber(effectivePrice * (direction === "long" ? 0.98 : 1.02), { maximumFractionDigits: 2 })
+                      : "—"
+                  }
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[10px] text-grade-a">목표가</span>
+                  {rr > 0 ? (
+                    <span className="text-[9px] font-mono text-muted-foreground">{rr.toFixed(2)}R</span>
+                  ) : null}
+                </div>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder={
+                    effectivePrice
+                      ? formatNumber(effectivePrice * (direction === "long" ? 1.04 : 0.96), { maximumFractionDigits: 2 })
+                      : "—"
+                  }
+                  className="font-mono text-xs"
+                />
+              </div>
             </div>
-            <Input
-              type="number"
-              inputMode="decimal"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder={lastPrice ? formatNumber(lastPrice * (1 + targetHintPct / 100)) : "—"}
-              className="font-mono text-xs"
-            />
           </div>
-        </div>
+        ) : null}
 
-        {/* Summary */}
-        <div className="space-y-0.5 rounded-md border border-border/40 bg-background/30 p-2.5">
-          <Row label="진입가 (예상)" value={lastPrice ? `$${formatNumber(lastPrice)}` : "—"} mono />
-          <Row label="노출 금액" value={notional > 0 ? `$${formatNumber(notional, { maximumFractionDigits: 2 })}` : "—"} mono />
-          <Row
-            label="필요 마진"
-            value={margin > 0 ? `$${formatNumber(margin, { maximumFractionDigits: 2 })}` : "—"}
-            tone={margin > wallet.available ? "bad" : "default"}
-            mono
-          />
-        </div>
-
-        {/* Submit */}
+        {/* 진입 버튼 */}
         <Button
           type="button"
           onClick={submit}
-          disabled={pending || qtyNum <= 0 || margin > wallet.available}
+          disabled={pending || _qtyNum <= 0 || (_margin > 0 && _margin > wallet.available)}
           className={cn(
-            "w-full font-bold",
-            direction === "long" ? "bg-grade-a hover:bg-grade-a/90" : "bg-grade-d hover:bg-grade-d/90",
+            "w-full font-bold transition-all",
+            buttonTone === "long"
+              ? "bg-grade-a hover:bg-grade-a/90"
+              : "bg-grade-d hover:bg-grade-d/90",
           )}
           size="lg"
         >
-          {pending
-            ? "주문 처리 중..."
-            : margin > wallet.available
-              ? "잔액 부족"
-              : qtyNum <= 0
-                ? "수량 입력"
-                : `${baseSym} ${direction === "long" ? "매수" : "매도"} (시장가)`}
+          {buttonLabel}
         </Button>
+
+        {/* 주문 요약 정보 */}
+        <div className="space-y-1 rounded-md border border-border/30 bg-background/20 p-2.5 text-[10px]">
+          <Row
+            label="예상 체결가"
+            value={lastPrice ? `${formatNumber(lastPrice)} USDT` : "—"}
+            mono
+          />
+          <Row
+            label="노출 금액"
+            value={_notional > 0 ? `${formatNumber(_notional, { maximumFractionDigits: 2 })} USDT` : "—"}
+            mono
+          />
+          <Row
+            label="필요 마진"
+            value={_margin > 0 ? `${formatNumber(_margin, { maximumFractionDigits: 2 })} USDT` : "—"}
+            tone={_margin > wallet.available && _margin > 0 ? "bad" : "default"}
+            mono
+          />
+          <div className="my-1.5 border-t border-border/30" />
+          <Row label="수수료 (Taker)" value="0.05%" mono />
+        </div>
+
+        {/* 지갑 영역 */}
+        <div className="rounded-md border border-border/30 bg-background/20 p-2.5">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">지갑</span>
+            <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+              잔액 ${formatNumber(wallet.usdtBalance, { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Link
+              href="/app/virtual-trade/wallet"
+              className="rounded-md border border-border bg-background/40 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            >
+              자금 추가
+            </Link>
+            <Link
+              href="/app/virtual-trade/wallet"
+              className="rounded-md border border-border bg-background/40 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            >
+              지갑 관리
+            </Link>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

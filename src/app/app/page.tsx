@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GradeBadge } from "@/components/trade/grade-badge";
+import { AnalysisTimingGuide } from "@/components/app/analysis-timing-guide";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { cn, formatNumber } from "@/lib/utils";
 import { fetchTicker24h } from "@/lib/analysis/binance";
@@ -166,6 +167,9 @@ export default async function HomePage() {
           badge={openCount > 0 ? "live" : undefined}
         />
       </div>
+
+      {/* 분석 타이밍 가이드 */}
+      <AnalysisTimingGuide />
 
       {/* Quick start + Tickers */}
       <div className="grid gap-4 lg:grid-cols-3">

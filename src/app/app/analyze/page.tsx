@@ -2,6 +2,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { AnalyzeClient } from "./analyze-client";
 import { AnalysisHistory } from "@/components/analyze/analysis-history";
 import { FlowStepper } from "@/components/app/flow-stepper";
+import { AnalysisTimingGuide } from "@/components/app/analysis-timing-guide";
 
 export default async function AnalyzePage() {
   const supabase = await getSupabaseServer();
@@ -26,6 +27,7 @@ export default async function AnalyzePage() {
           시나리오마다 매매 등급과 권장 포지션이 자동 계산됩니다.
         </p>
       </div>
+      <AnalysisTimingGuide defaultOpen />
       <AnalyzeClient
         accountSize={Number(profile?.default_account_size) || 10000}
         riskPct={Number(profile?.default_risk_pct) || 1}

@@ -436,18 +436,25 @@ function OrderbookContent({
           fetch(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=30`),
           fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`),
         ]);
+        if (!depthR.ok || !priceR.ok) {
+          console.warn("[orderbook] HTTP status", { depth: depthR.status, price: priceR.status });
+          return;
+        }
         const depth = (await depthR.json()) as { bids?: [string, string][]; asks?: [string, string][] };
         const price = (await priceR.json()) as { price?: string };
         if (!alive) return;
-        if (!depth?.bids || !depth?.asks || !price?.price) return; // API 일시 오류, 그냥 다음 tick 대기
+        if (!depth?.bids || !depth?.asks || !price?.price) {
+          console.warn("[orderbook] unexpected response shape", { depth, price });
+          return;
+        }
         setBook((prev) => ({
           bids: depth.bids!.map((b) => [parseFloat(b[0]), parseFloat(b[1])]),
           asks: depth.asks!.map((a) => [parseFloat(a[0]), parseFloat(a[1])]),
           last: parseFloat(price.price!),
           prevLast: prev.last,
         }));
-      } catch {
-        /* skip */
+      } catch (err) {
+        console.error("[orderbook] fetch failed", err);
       } finally {
         if (alive) timer = setTimeout(tick, 2000);
       }

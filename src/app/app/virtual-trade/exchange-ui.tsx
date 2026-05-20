@@ -80,7 +80,9 @@ export function ExchangeUI({
 
         {/* Order entry — spans both rows on the right */}
         <div className="lg:row-span-2 lg:col-start-3 lg:row-start-1">
-          <OrderPanel symbol={symbol} wallet={wallet} />
+          <div className="h-full">
+            <OrderPanel symbol={symbol} wallet={wallet} />
+          </div>
         </div>
 
         {/* Positions / history — spans chart + orderbook columns */}
@@ -1083,8 +1085,8 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
         : `${baseSym} ${direction === "long" ? "매수" : "매도"}`;
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="space-y-3 p-3">
+    <Card className="h-full overflow-hidden">
+      <CardContent className="flex h-full flex-col gap-3 overflow-y-auto p-3">
         {/* 매수/매도 큰 토글 */}
         <div className="grid grid-cols-2 overflow-hidden rounded-md">
           <button

@@ -11,7 +11,18 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import { createChart, ColorType, CandlestickSeries, type IChartApi, type CandlestickData, type Time } from "lightweight-charts";
+import {
+  createChart,
+  ColorType,
+  CandlestickSeries,
+  LineSeries,
+  HistogramSeries,
+  type IChartApi,
+  type CandlestickData,
+  type LineData,
+  type HistogramData,
+  type Time,
+} from "lightweight-charts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -190,6 +201,33 @@ function HeaderStat({ label, value, accent }: { label: string; value: string; ac
 }
 
 // ─── Chart ───────────────────────────────────────────────────────────────
+function calcMA(closes: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) {
+      out.push(null);
+      continue;
+    }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += closes[j];
+    out.push(sum / period);
+  }
+  return out;
+}
+
+type ChartHeaderData = {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  changePct: number;
+  rangePct: number;
+  ma5: number | null;
+  ma10: number | null;
+  ma20: number | null;
+};
+
 function ChartArea({
   symbol,
   timeframe,
@@ -202,6 +240,7 @@ function ChartArea({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [loading, setLoading] = useState(true);
+  const [header, setHeader] = useState<ChartHeaderData | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -213,16 +252,18 @@ function ChartArea({
         textColor: "rgb(148 163 184)",
       },
       grid: {
-        vertLines: { color: "rgba(148, 163, 184, 0.06)" },
-        horzLines: { color: "rgba(148, 163, 184, 0.06)" },
+        vertLines: { color: "rgba(148, 163, 184, 0.05)" },
+        horzLines: { color: "rgba(148, 163, 184, 0.05)" },
       },
       timeScale: { borderColor: "rgba(148, 163, 184, 0.1)", timeVisible: true },
       rightPriceScale: { borderColor: "rgba(148, 163, 184, 0.1)" },
+      crosshair: { mode: 0 }, // normal crosshair
       width: container.clientWidth,
       height: 420,
     });
     chartRef.current = chart;
-    const series = chart.addSeries(CandlestickSeries, {
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "rgb(74 222 128)",
       downColor: "rgb(248 113 113)",
       borderUpColor: "rgb(74 222 128)",
@@ -231,24 +272,128 @@ function ChartArea({
       wickDownColor: "rgb(248 113 113)",
     });
 
+    // MA lines
+    const ma5Series = chart.addSeries(LineSeries, {
+      color: "rgb(250 204 21)", // yellow
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    const ma10Series = chart.addSeries(LineSeries, {
+      color: "rgb(168 85 247)", // purple
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    const ma20Series = chart.addSeries(LineSeries, {
+      color: "rgb(244 114 182)", // pink
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+
+    // Volume histogram (separate pane via priceScaleId)
+    const volSeries = chart.addSeries(HistogramSeries, {
+      color: "rgba(148, 163, 184, 0.4)",
+      priceFormat: { type: "volume" },
+      priceScaleId: "vol",
+    });
+    chart.priceScale("vol").applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+    });
+
     let alive = true;
     setLoading(true);
     fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${timeframe}&limit=300`)
       .then((r) => r.json())
-      .then((arr: unknown[][]) => {
+      .then((arr: unknown) => {
         if (!alive) return;
-        const data: CandlestickData<Time>[] = arr.map((k) => ({
-          time: (Number(k[0]) / 1000) as Time,
-          open: parseFloat(k[1] as string),
-          high: parseFloat(k[2] as string),
-          low: parseFloat(k[3] as string),
-          close: parseFloat(k[4] as string),
-        }));
-        series.setData(data);
+        if (!Array.isArray(arr)) return;
+        const rows = arr as unknown[][];
+        const candles: CandlestickData<Time>[] = [];
+        const closes: number[] = [];
+        const volumes: HistogramData<Time>[] = [];
+
+        for (const k of rows) {
+          const time = (Number(k[0]) / 1000) as Time;
+          const open = parseFloat(k[1] as string);
+          const high = parseFloat(k[2] as string);
+          const low = parseFloat(k[3] as string);
+          const close = parseFloat(k[4] as string);
+          const volume = parseFloat(k[5] as string);
+          candles.push({ time, open, high, low, close });
+          closes.push(close);
+          volumes.push({
+            time,
+            value: volume,
+            color: close >= open ? "rgba(74, 222, 128, 0.35)" : "rgba(248, 113, 113, 0.35)",
+          });
+        }
+
+        candleSeries.setData(candles);
+        volSeries.setData(volumes);
+
+        // MA lines
+        const ma5 = calcMA(closes, 5);
+        const ma10 = calcMA(closes, 10);
+        const ma20 = calcMA(closes, 20);
+
+        const toLine = (vals: (number | null)[]): LineData<Time>[] =>
+          candles
+            .map((c, i) => ({ time: c.time, value: vals[i] }))
+            .filter((d): d is LineData<Time> => d.value != null);
+
+        ma5Series.setData(toLine(ma5));
+        ma10Series.setData(toLine(ma10));
+        ma20Series.setData(toLine(ma20));
+
         chart.timeScale().fitContent();
+
+        // Set initial header to last candle
+        const last = candles[candles.length - 1];
+        const first = candles[candles.length - 2] ?? last;
+        const lastIdx = candles.length - 1;
+        if (last && first) {
+          setHeader({
+            open: last.open,
+            high: last.high,
+            low: last.low,
+            close: last.close,
+            volume: volumes[lastIdx]?.value ?? 0,
+            changePct: ((last.close - first.close) / first.close) * 100,
+            rangePct: ((last.high - last.low) / last.low) * 100,
+            ma5: ma5[lastIdx],
+            ma10: ma10[lastIdx],
+            ma20: ma20[lastIdx],
+          });
+        }
+
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    // Crosshair → update header to hovered bar
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.time || !param.seriesData) return;
+      const candleData = param.seriesData.get(candleSeries) as CandlestickData<Time> | undefined;
+      const volData = param.seriesData.get(volSeries) as HistogramData<Time> | undefined;
+      const ma5Data = param.seriesData.get(ma5Series) as LineData<Time> | undefined;
+      const ma10Data = param.seriesData.get(ma10Series) as LineData<Time> | undefined;
+      const ma20Data = param.seriesData.get(ma20Series) as LineData<Time> | undefined;
+      if (!candleData) return;
+      setHeader({
+        open: candleData.open,
+        high: candleData.high,
+        low: candleData.low,
+        close: candleData.close,
+        volume: volData?.value ?? 0,
+        changePct: candleData.open > 0 ? ((candleData.close - candleData.open) / candleData.open) * 100 : 0,
+        rangePct: candleData.low > 0 ? ((candleData.high - candleData.low) / candleData.low) * 100 : 0,
+        ma5: ma5Data?.value ?? null,
+        ma10: ma10Data?.value ?? null,
+        ma20: ma20Data?.value ?? null,
+      });
+    });
 
     const ro = new ResizeObserver(() => {
       if (chartRef.current && container) chartRef.current.applyOptions({ width: container.clientWidth });
@@ -266,8 +411,11 @@ function ChartArea({
   return (
     <Card>
       <CardContent className="p-3">
+        {/* Top row: symbol + TF picker */}
         <div className="mb-2 flex items-center justify-between">
-          <div className="text-xs font-semibold text-muted-foreground">{symbol} · {timeframe.toUpperCase()}</div>
+          <div className="text-xs font-semibold text-foreground">
+            {symbol} <span className="text-muted-foreground">· {timeframe.toUpperCase()}</span>
+          </div>
           <div className="flex gap-1">
             {TIMEFRAMES.map((tf) => (
               <button
@@ -286,6 +434,53 @@ function ChartArea({
             ))}
           </div>
         </div>
+
+        {/* OHLCV header row */}
+        {header ? (
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 border-y border-border/30 py-1.5 text-[10px] font-mono tabular-nums">
+            <HeaderCell label="시" value={header.open} />
+            <HeaderCell label="고" value={header.high} tone="up" />
+            <HeaderCell label="저" value={header.low} tone="down" />
+            <HeaderCell label="종" value={header.close} />
+            <HeaderCell
+              label="변동"
+              value={`${header.changePct >= 0 ? "+" : ""}${header.changePct.toFixed(2)}%`}
+              tone={header.changePct >= 0 ? "up" : "down"}
+              raw
+            />
+            <HeaderCell
+              label="범위"
+              value={`${header.rangePct.toFixed(2)}%`}
+              raw
+            />
+            <HeaderCell
+              label="거래량"
+              value={formatNumber(header.volume, { maximumFractionDigits: 0 })}
+              raw
+            />
+            <div className="ml-auto flex gap-3">
+              {header.ma5 != null ? (
+                <span className="text-[10px]">
+                  <span className="text-yellow-300/90">MA5</span>{" "}
+                  <span className="font-mono tabular-nums">{formatNumber(header.ma5, { maximumFractionDigits: 2 })}</span>
+                </span>
+              ) : null}
+              {header.ma10 != null ? (
+                <span className="text-[10px]">
+                  <span className="text-purple-400/90">MA10</span>{" "}
+                  <span className="font-mono tabular-nums">{formatNumber(header.ma10, { maximumFractionDigits: 2 })}</span>
+                </span>
+              ) : null}
+              {header.ma20 != null ? (
+                <span className="text-[10px]">
+                  <span className="text-pink-400/90">MA20</span>{" "}
+                  <span className="font-mono tabular-nums">{formatNumber(header.ma20, { maximumFractionDigits: 2 })}</span>
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <div ref={containerRef} className="relative w-full" style={{ height: 420 }}>
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
@@ -295,6 +490,34 @@ function ChartArea({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function HeaderCell({
+  label,
+  value,
+  tone,
+  raw,
+}: {
+  label: string;
+  value: number | string;
+  tone?: "up" | "down";
+  raw?: boolean;
+}) {
+  const displayValue = raw ? String(value) : formatNumber(value as number, { maximumFractionDigits: 2 });
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="text-muted-foreground/70">{label}</span>
+      <span
+        className={cn(
+          "font-mono tabular-nums",
+          tone === "up" && "text-grade-a",
+          tone === "down" && "text-grade-d",
+        )}
+      >
+        {displayValue}
+      </span>
+    </span>
   );
 }
 

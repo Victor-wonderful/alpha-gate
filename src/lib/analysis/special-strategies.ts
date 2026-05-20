@@ -142,8 +142,13 @@ export interface SessionOpenDriveSignal {
   intensity: number;
   reason: string;
   components: {
-    sessionCurrent: string;
+    /** Which session's open this signal describes. */
+    sessionCurrent: "Asia" | "EU" | "US" | "Off";
+    /** Human label for UI ("아시아", "런던", "뉴욕"). */
+    sessionLabel: string;
     minutesIntoSession: number;
+    /** Effective threshold used for this session (move %). */
+    moveThresholdPct: number;
     openPrice: number | null;
     currentPrice: number | null;
     movePct: number | null;
@@ -162,21 +167,40 @@ export interface SessionOpenDriveInput {
   style: "scalp" | "day" | "swing" | "position";
 }
 
-/** Detect the US-session opening drive setup.
+/** Session-specific thresholds (move % required to activate). */
+const SESSION_THRESHOLDS: Record<"Asia" | "EU" | "US", { movePct: number; label: string }> = {
+  Asia: { movePct: 0.3, label: "아시아" },
+  EU: { movePct: 0.4, label: "런던" },
+  US: { movePct: 0.4, label: "뉴욕" },
+};
+
+/** Detect an opening drive setup at the start of ANY major session (Asia/EU/US).
  *
  *  Activation conditions (all must hold):
  *  1. style is "scalp" or "day"
- *  2. session.current === "US" and minutesIntoSession ≤ 60
- *  3. Price has moved at least ±0.4% from the candle that opened nearest the
- *     session start
+ *  2. session.current is one of Asia/EU/US (not Off) and minutesIntoSession ≤ 60
+ *  3. Price has moved at least ±threshold% from the candle that opened nearest
+ *     the session start (Asia 0.3% / EU 0.4% / US 0.4%)
  *  4. Volume of recent bars is ≥ 1.5× the trailing average
  */
 export function detectSessionOpenDrive(input: SessionOpenDriveInput): SessionOpenDriveSignal {
   const { session, ltfCandles, style } = input;
 
+  const sessionCurrent = (session?.current ?? "Off") as "Asia" | "EU" | "US" | "Off";
+  const sessionLabel =
+    sessionCurrent === "Asia"
+      ? "아시아"
+      : sessionCurrent === "EU"
+        ? "런던"
+        : sessionCurrent === "US"
+          ? "뉴욕"
+          : "오프";
+
   const baseComponents = {
-    sessionCurrent: session?.current ?? "Off",
+    sessionCurrent,
+    sessionLabel,
     minutesIntoSession: session?.minutesIntoSession ?? 0,
+    moveThresholdPct: 0.4,
     openPrice: null as number | null,
     currentPrice: null as number | null,
     movePct: null as number | null,
@@ -193,12 +217,12 @@ export function detectSessionOpenDrive(input: SessionOpenDriveInput): SessionOpe
     };
   }
 
-  if (!session || session.current !== "US") {
+  if (!session || sessionCurrent === "Off") {
     return {
       active: false,
       direction: null,
       intensity: 0,
-      reason: `현재 세션 "${session?.current ?? "Off"}" — 미국 개장 아님`,
+      reason: `현재 세션 "${sessionCurrent}" — 세션 외 시간`,
       components: baseComponents,
     };
   }
@@ -208,10 +232,13 @@ export function detectSessionOpenDrive(input: SessionOpenDriveInput): SessionOpe
       active: false,
       direction: null,
       intensity: 0,
-      reason: `미국 개장 후 ${session.minutesIntoSession}분 경과 — 윈도우(60분) 지남`,
+      reason: `${sessionLabel} 개장 후 ${session.minutesIntoSession}분 경과 — 윈도우(60분) 지남`,
       components: baseComponents,
     };
   }
+
+  const threshold = SESSION_THRESHOLDS[sessionCurrent].movePct;
+  baseComponents.moveThresholdPct = threshold;
 
   if (ltfCandles.length < 20) {
     return {
@@ -257,12 +284,12 @@ export function detectSessionOpenDrive(input: SessionOpenDriveInput): SessionOpe
   };
 
   const absMove = Math.abs(movePct);
-  if (absMove < 0.4) {
+  if (absMove < threshold) {
     return {
       active: false,
       direction: null,
-      intensity: absMove / 0.4,
-      reason: `개장 후 ${absMove.toFixed(2)}% 이동 — 임계(0.4%) 미달, 방향성 약함`,
+      intensity: absMove / threshold,
+      reason: `${sessionLabel} 개장 후 ${absMove.toFixed(2)}% 이동 — 임계(${threshold}%) 미달, 방향성 약함`,
       components,
     };
   }
@@ -272,7 +299,7 @@ export function detectSessionOpenDrive(input: SessionOpenDriveInput): SessionOpe
       active: false,
       direction: null,
       intensity: 0.3,
-      reason: `이동(${movePct.toFixed(2)}%)은 있으나 거래량 ${volumeRatio.toFixed(2)}× — 평균 대비 1.5× 미달`,
+      reason: `${sessionLabel} 개장 이동(${movePct.toFixed(2)}%)은 있으나 거래량 ${volumeRatio.toFixed(2)}× — 평균 대비 1.5× 미달`,
       components,
     };
   }
@@ -287,7 +314,7 @@ export function detectSessionOpenDrive(input: SessionOpenDriveInput): SessionOpe
     active: true,
     direction,
     intensity,
-    reason: `미국 개장 ${session.minutesIntoSession}분 — ${movePct >= 0 ? "+" : ""}${movePct.toFixed(2)}% 이동 + 거래량 ${volumeRatio.toFixed(2)}× → ${direction === "long" ? "롱" : "숏"} 추종`,
+    reason: `${sessionLabel} 개장 ${session.minutesIntoSession}분 — ${movePct >= 0 ? "+" : ""}${movePct.toFixed(2)}% 이동 + 거래량 ${volumeRatio.toFixed(2)}× → ${direction === "long" ? "롱" : "숏"} 추종`,
     components,
   };
 }

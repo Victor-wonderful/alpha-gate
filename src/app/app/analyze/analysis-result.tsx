@@ -239,8 +239,12 @@ export function AnalysisResult({
       {/* Big AI recommendation card — what to do now */}
       <SimpleRecommendation strategy={strategy} report={report} />
 
-      {/* Special strategy signal evidence (only rendered for the 3 special strategies) */}
-      <SpecialSignalCard snapshot={snapshot} strategy={strategy} />
+      {/* Special strategy signal evidence (rendered for any special strategy active across scenarios) */}
+      <SpecialSignalCard
+        snapshot={snapshot}
+        strategy={strategy}
+        scenarioHints={report.scenarios.map((s) => s.strategyHint)}
+      />
 
       {/* Chart visualization */}
       {report.scenarios.length > 0 ? (
@@ -740,9 +744,10 @@ function SimpleScenarioCard({
     ? (sizing.positionSize / accountSize) * 100
     : 0;
   const effRR = effectiveRR(entry, scenario.invalidation, scenario.target);
-  const stopCheck = checkStop(stopPct, style, strategy.primary);
-  const targetCheck = checkTarget(targetPct, style, strategy.primary);
-  const rrCheck = checkRR(grade.rr, style, strategy.primary);
+  const effectiveStrategy = scenario.strategyHint ?? strategy.primary;
+  const stopCheck = checkStop(stopPct, style, effectiveStrategy);
+  const targetCheck = checkTarget(targetPct, style, effectiveStrategy);
+  const rrCheck = checkRR(grade.rr, style, effectiveStrategy);
   const riskCheck = checkRiskPct(riskPct);
   const allChecks = [stopCheck, targetCheck, rrCheck, riskCheck];
   const entryVsCurrentPct = ((entry - currentPrice) / currentPrice) * 100;
@@ -803,13 +808,25 @@ function SimpleScenarioCard({
                   지금 진입 가능
                 </Badge>
               ) : null}
-              <Badge
-                title={STRATEGY_DESCRIPTIONS[strategy.primary]}
-                className="border border-primary/30 bg-primary/5 text-primary"
-              >
-                <Sparkles className="mr-1 h-3 w-3" />
-                {STRATEGY_LABELS[strategy.primary]}
-              </Badge>
+              {(() => {
+                const sid = scenario.strategyHint ?? strategy.primary;
+                const isAlt = scenario.strategyHint && scenario.strategyHint !== strategy.primary;
+                return (
+                  <Badge
+                    title={STRATEGY_DESCRIPTIONS[sid]}
+                    className={cn(
+                      "border",
+                      isAlt
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                        : "border-primary/30 bg-primary/5 text-primary",
+                    )}
+                  >
+                    <Sparkles className="mr-1 h-3 w-3" />
+                    {STRATEGY_LABELS[sid]}
+                    {isAlt ? <span className="ml-1 text-[9px] uppercase opacity-70">보조</span> : null}
+                  </Badge>
+                );
+              })()}
             </div>
             <h3 className="mt-1 text-base font-semibold">{scenario.name}</h3>
           </div>

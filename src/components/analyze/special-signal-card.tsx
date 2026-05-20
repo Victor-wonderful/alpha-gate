@@ -11,21 +11,38 @@ import { STRATEGY_LABELS } from "@/lib/analysis/strategy";
 type Props = {
   snapshot: AnalysisSnapshot;
   strategy: StrategyResult;
+  /** Hints found across scenarios — used to render multiple special cards
+   *  when scenarios pull from different special strategies. */
+  scenarioHints?: Array<string | undefined>;
 };
 
-/** Show the data-level evidence for a special strategy selection.
- *  Renders nothing for the generic strategies (trend_pullback / breakout / etc.). */
-export function SpecialSignalCard({ snapshot, strategy }: Props) {
-  switch (strategy.primary) {
-    case "liquidity_grab":
-      return <LiquidityGrabCard snapshot={snapshot} />;
-    case "funding_squeeze":
-      return <FundingSqueezeCard snapshot={snapshot} />;
-    case "session_open_drive":
-      return <SessionDriveCard snapshot={snapshot} />;
-    default:
-      return null;
+/** Show the data-level evidence for each special strategy that drives at least
+ *  one scenario in this analysis. Renders nothing for generic-only analyses. */
+export function SpecialSignalCard({ snapshot, strategy, scenarioHints = [] }: Props) {
+  const ids = new Set<string>();
+  // Always include the main strategy if it's a special one.
+  if (
+    strategy.primary === "liquidity_grab" ||
+    strategy.primary === "funding_squeeze" ||
+    strategy.primary === "session_open_drive"
+  ) {
+    ids.add(strategy.primary);
   }
+  // Add any special strategies referenced by individual scenarios.
+  for (const h of scenarioHints) {
+    if (h === "liquidity_grab" || h === "funding_squeeze" || h === "session_open_drive") {
+      ids.add(h);
+    }
+  }
+  if (ids.size === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      {ids.has("liquidity_grab") ? <LiquidityGrabCard snapshot={snapshot} /> : null}
+      {ids.has("funding_squeeze") ? <FundingSqueezeCard snapshot={snapshot} /> : null}
+      {ids.has("session_open_drive") ? <SessionDriveCard snapshot={snapshot} /> : null}
+    </div>
+  );
 }
 
 function CardShell({
@@ -211,11 +228,13 @@ function SessionDriveCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
   if (!sd) return null;
   const c = sd.components;
   const isLong = sd.direction === "long";
+  const sessionLabel = c.sessionLabel || "세션";
+  const threshold = c.moveThresholdPct ?? 0.4;
   return (
     <CardShell
       icon={<Clock className="h-4 w-4" />}
-      title={STRATEGY_LABELS.session_open_drive}
-      subtitle="미국 개장 첫 30~60분 강한 방향성 — 그 방향 추종. 미국 마감 전 청산 권장."
+      title={`${STRATEGY_LABELS.session_open_drive} (${sessionLabel})`}
+      subtitle={`${sessionLabel} 개장 첫 30~60분 강한 방향성 — 그 방향 추종. 세션 마감 전 청산 권장.`}
       tone={isLong ? "grade-a" : "grade-d"}
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -231,8 +250,8 @@ function SessionDriveCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
         <Stat
           label="이동 폭"
           value={c.movePct !== null ? `${c.movePct >= 0 ? "+" : ""}${c.movePct.toFixed(2)}%` : "—"}
-          hint="0.4% 이상 발동"
-          tone={c.movePct !== null && Math.abs(c.movePct) >= 0.4 ? "good" : "default"}
+          hint={`${threshold}% 이상 발동`}
+          tone={c.movePct !== null && Math.abs(c.movePct) >= threshold ? "good" : "default"}
         />
         <Stat
           label="거래량 배율"
@@ -243,7 +262,7 @@ function SessionDriveCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
       </div>
       <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
         <Layers className="h-3 w-3" />
-        개장 후 {c.minutesIntoSession}분 경과 · 신호 강도 {Math.round(sd.intensity * 100)}%
+        {sessionLabel} 개장 후 {c.minutesIntoSession}분 경과 · 신호 강도 {Math.round(sd.intensity * 100)}%
       </div>
     </CardShell>
   );

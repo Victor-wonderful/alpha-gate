@@ -25,6 +25,7 @@ import { GradeBadge } from "@/components/trade/grade-badge";
 import { ScenarioChart } from "@/components/analyze/scenario-chart";
 import { ChartErrorBoundary } from "@/components/analyze/chart-error-boundary";
 import { DownloadButtons } from "@/components/analyze/download-buttons";
+import { SpecialSignalCard } from "@/components/analyze/special-signal-card";
 import type { AnalysisSnapshot } from "@/lib/analysis/analyze";
 import type { AnalysisReport } from "@/lib/analysis/synthesize";
 import {
@@ -237,6 +238,9 @@ export function AnalysisResult({
 
       {/* Big AI recommendation card — what to do now */}
       <SimpleRecommendation strategy={strategy} report={report} />
+
+      {/* Special strategy signal evidence (only rendered for the 3 special strategies) */}
+      <SpecialSignalCard snapshot={snapshot} strategy={strategy} />
 
       {/* Chart visualization */}
       {report.scenarios.length > 0 ? (
@@ -736,9 +740,9 @@ function SimpleScenarioCard({
     ? (sizing.positionSize / accountSize) * 100
     : 0;
   const effRR = effectiveRR(entry, scenario.invalidation, scenario.target);
-  const stopCheck = checkStop(stopPct, style);
-  const targetCheck = checkTarget(targetPct, style);
-  const rrCheck = checkRR(grade.rr, style);
+  const stopCheck = checkStop(stopPct, style, strategy.primary);
+  const targetCheck = checkTarget(targetPct, style, strategy.primary);
+  const rrCheck = checkRR(grade.rr, style, strategy.primary);
   const riskCheck = checkRiskPct(riskPct);
   const allChecks = [stopCheck, targetCheck, rrCheck, riskCheck];
   const entryVsCurrentPct = ((entry - currentPrice) / currentPrice) * 100;

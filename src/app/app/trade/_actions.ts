@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseService } from "@/lib/supabase/service";
 import { dispatch } from "@/lib/notify-dispatch";
 import { decryptSecret } from "@/lib/crypto";
 import {
@@ -415,3 +416,149 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
     ],
   };
 }
+
+/** Manual sync — refresh order statuses for the current user from Binance.
+ *  Used by a UI button on the journal page so users can re-check without waiting for cron. */
+export async function syncMyOrdersAction(): Promise<{
+  ok: boolean;
+  closed: number;
+  refreshed: number;
+  error?: string;
+}> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, closed: 0, refreshed: 0, error: "로그인이 필요합니다." };
+
+  const service = getSupabaseService();
+
+  const { data: trades, error } = await service
+    .from("trades")
+    .select("id, user_id, symbol, direction, entry, stop, target, exchange_api_key_id")
+    .eq("user_id", user.id)
+    .eq("is_paper", false)
+    .eq("exchange_status", "open")
+    .is("closed_at", null)
+    .limit(50);
+
+  if (error) return { ok: false, closed: 0, refreshed: 0, error: error.message };
+  if (!trades || trades.length === 0) {
+    return { ok: true, closed: 0, refreshed: 0 };
+  }
+
+  let closed = 0;
+  let refreshed = 0;
+
+  for (const trade of trades) {
+    if (!trade.exchange_api_key_id) continue;
+    const { data: keyRow } = await service
+      .from("exchange_api_keys")
+      .select("api_key_encrypted, api_secret_encrypted")
+      .eq("id", trade.exchange_api_key_id)
+      .maybeSingle();
+    if (!keyRow) continue;
+
+    let creds: BinanceCredentials;
+    try {
+      creds = {
+        apiKey: decryptSecret(keyRow.api_key_encrypted as string),
+        apiSecret: decryptSecret(keyRow.api_secret_encrypted as string),
+      };
+    } catch {
+      continue;
+    }
+
+    const { data: orders } = await service
+      .from("exchange_orders")
+      .select("id, kind, status, exchange_order_id")
+      .eq("trade_id", trade.id);
+    if (!orders) continue;
+
+    let exitPrice = 0;
+    let exitReason: "target" | "stop" | null = null;
+    let exitFillAvg = 0;
+    const byKind: Record<string, typeof orders[number]> = {};
+    for (const o of orders) byKind[o.kind as string] = o;
+
+    for (const kind of ["stop_loss", "take_profit"] as const) {
+      const order = byKind[kind];
+      if (!order || !order.exchange_order_id) continue;
+      if (["filled", "canceled", "rejected", "expired"].includes(order.status as string)) continue;
+      try {
+        const remote = await getOrder(creds, trade.symbol as string, parseInt(order.exchange_order_id as string, 10));
+        refreshed++;
+        const newStatus = mapStatus(remote.status);
+        const avgPrice = remote.avgPrice ? parseFloat(remote.avgPrice) : null;
+        await service
+          .from("exchange_orders")
+          .update({
+            status: newStatus,
+            filled_qty: parseFloat(remote.executedQty) || 0,
+            avg_fill_price: avgPrice,
+            raw_response: remote as unknown as object,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", order.id);
+        if (newStatus === "filled") {
+          exitFillAvg = avgPrice ?? (kind === "stop_loss" ? Number(trade.stop) : Number(trade.target));
+          exitPrice = exitFillAvg;
+          exitReason = kind === "stop_loss" ? "stop" : "target";
+
+          const otherKind = kind === "stop_loss" ? "take_profit" : "stop_loss";
+          const other = byKind[otherKind];
+          if (other?.exchange_order_id && !["filled", "canceled", "rejected", "expired"].includes(other.status as string)) {
+            try {
+              await cancelOrder(creds, trade.symbol as string, parseInt(other.exchange_order_id as string, 10));
+              await service
+                .from("exchange_orders")
+                .update({ status: "canceled", updated_at: new Date().toISOString() })
+                .eq("id", other.id);
+            } catch {
+              /* ignore */
+            }
+          }
+
+          const risk = Math.abs(Number(trade.entry) - Number(trade.stop));
+          const realizedDelta =
+            trade.direction === "long" ? exitFillAvg - Number(trade.entry) : Number(trade.entry) - exitFillAvg;
+          const resultR = risk > 0 ? realizedDelta / risk : 0;
+
+          await service
+            .from("trades")
+            .update({
+              exit_price: exitPrice,
+              result_r: resultR,
+              exit_reason: exitReason,
+              closed_at: new Date().toISOString(),
+              exchange_status: "filled",
+            })
+            .eq("id", trade.id);
+          closed++;
+          break;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (closed > 0) {
+    revalidatePath("/app/journal");
+    revalidatePath("/app/dashboard");
+  }
+  return { ok: true, closed, refreshed };
+}
+
+function mapStatus(s: string): string {
+  const m: Record<string, string> = {
+    NEW: "open",
+    PARTIALLY_FILLED: "partial",
+    FILLED: "filled",
+    CANCELED: "canceled",
+    REJECTED: "rejected",
+    EXPIRED: "expired",
+  };
+  return m[s] ?? "submitted";
+}
+

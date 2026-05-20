@@ -33,9 +33,8 @@ export function UnrealizedPnl({
 
   useEffect(() => {
     let alive = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    async function tick() {
+    async function fetchOnce() {
       try {
         const r = await fetch(
           `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${encodeURIComponent(symbol)}`,
@@ -51,15 +50,12 @@ export function UnrealizedPnl({
         if (!alive) return;
         setStale(true);
         setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (alive) timer = setTimeout(tick, 10_000);
       }
     }
-    tick();
+    fetchOnce();
 
     return () => {
       alive = false;
-      if (timer) clearTimeout(timer);
     };
   }, [symbol]);
 
@@ -161,7 +157,7 @@ export function UnrealizedPnl({
       </div>
 
       <div className="mt-2 text-[10px] text-muted-foreground">
-        10초마다 자동 갱신 · 수수료 {feesPct.toFixed(2)}% 차감 반영 · Binance 마크 가격
+        새로고침으로 갱신 · 수수료 {feesPct.toFixed(2)}% 차감 반영 · Binance 마크 가격
       </div>
     </div>
   );

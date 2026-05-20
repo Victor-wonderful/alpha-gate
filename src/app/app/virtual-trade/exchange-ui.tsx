@@ -224,6 +224,7 @@ function calcMA(closes: number[], period: number): (number | null)[] {
 }
 
 type ChartHeaderData = {
+  time: number; // seconds (lightweight-charts Time)
   open: number;
   high: number;
   low: number;
@@ -263,7 +264,13 @@ function ChartArea({
         vertLines: { color: "rgba(148, 163, 184, 0.05)" },
         horzLines: { color: "rgba(148, 163, 184, 0.05)" },
       },
-      timeScale: { borderColor: "rgba(148, 163, 184, 0.1)", timeVisible: true },
+      timeScale: {
+        borderColor: "rgba(148, 163, 184, 0.1)",
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 5,
+        barSpacing: 8,
+      },
       rightPriceScale: { borderColor: "rgba(148, 163, 184, 0.1)" },
       crosshair: { mode: 0 }, // normal crosshair
       width: container.clientWidth,
@@ -363,6 +370,7 @@ function ChartArea({
         const lastIdx = candles.length - 1;
         if (last && first) {
           setHeader({
+            time: Number(last.time),
             open: last.open,
             high: last.high,
             low: last.low,
@@ -390,6 +398,7 @@ function ChartArea({
       const ma20Data = param.seriesData.get(ma20Series) as LineData<Time> | undefined;
       if (!candleData) return;
       setHeader({
+        time: Number(param.time),
         open: candleData.open,
         high: candleData.high,
         low: candleData.low,
@@ -451,6 +460,17 @@ function ChartArea({
         {/* OHLCV header row */}
         {header ? (
           <div className="mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-y border-border/30 py-1.5 text-[10px] font-mono tabular-nums">
+            <span className="text-muted-foreground/90">
+              {new Date(header.time * 1000).toLocaleString("ko-KR", {
+                year: "2-digit",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              })}
+            </span>
+            <span className="text-muted-foreground/40">|</span>
             <HeaderCell label="시" value={header.open} />
             <HeaderCell label="고" value={header.high} tone="up" />
             <HeaderCell label="저" value={header.low} tone="down" />

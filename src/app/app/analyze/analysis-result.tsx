@@ -13,6 +13,7 @@ import {
   Lightbulb,
   ChevronDown,
   Info,
+  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ import { DownloadButtons } from "@/components/analyze/download-buttons";
 import type { AnalysisSnapshot } from "@/lib/analysis/analyze";
 import type { AnalysisReport } from "@/lib/analysis/synthesize";
 import {
+  STRATEGY_DESCRIPTIONS,
   STRATEGY_LABELS,
   type StrategyResult,
 } from "@/lib/analysis/strategy";
@@ -318,6 +320,7 @@ export function AnalysisResult({
                 currentPrice={snapshot.ticker.last}
                 mtfAtrPct={snapshot.atr?.find((a) => a.role === "MTF")?.pctOfPrice}
                 scenario={s}
+                strategy={strategy}
                 entry={entry}
                 grade={grade}
                 sizing={sizing}
@@ -695,6 +698,7 @@ function SimpleScenarioCard({
   currentPrice,
   mtfAtrPct,
   scenario,
+  strategy,
   entry,
   grade,
   sizing,
@@ -710,6 +714,7 @@ function SimpleScenarioCard({
   currentPrice: number;
   mtfAtrPct?: number;
   scenario: AnalysisReport["scenarios"][number];
+  strategy: StrategyResult;
   entry: number;
   grade: ReturnType<typeof gradeTrade>;
   sizing: ReturnType<typeof sizePosition>;
@@ -770,7 +775,7 @@ function SimpleScenarioCard({
             )}
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 시나리오 {String.fromCharCode(65 + index)}
               </span>
@@ -794,6 +799,13 @@ function SimpleScenarioCard({
                   지금 진입 가능
                 </Badge>
               ) : null}
+              <Badge
+                title={STRATEGY_DESCRIPTIONS[strategy.primary]}
+                className="border border-primary/30 bg-primary/5 text-primary"
+              >
+                <Sparkles className="mr-1 h-3 w-3" />
+                {STRATEGY_LABELS[strategy.primary]}
+              </Badge>
             </div>
             <h3 className="mt-1 text-base font-semibold">{scenario.name}</h3>
           </div>

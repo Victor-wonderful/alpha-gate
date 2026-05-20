@@ -300,10 +300,16 @@ function ChartArea({
 
 // ─── Orderbook ───────────────────────────────────────────────────────────
 function OrderbookPanel({ symbol }: { symbol: string }) {
-  const [book, setBook] = useState<{ bids: [number, number][]; asks: [number, number][]; last: number | null }>({
+  const [book, setBook] = useState<{
+    bids: [number, number][];
+    asks: [number, number][];
+    last: number | null;
+    prevLast: number | null;
+  }>({
     bids: [],
     asks: [],
     last: null,
+    prevLast: null,
   });
 
   useEffect(() => {
@@ -319,11 +325,12 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
         const depth = (await depthR.json()) as { bids: [string, string][]; asks: [string, string][] };
         const price = (await priceR.json()) as { price: string };
         if (!alive) return;
-        setBook({
+        setBook((prev) => ({
           bids: depth.bids.slice(0, 12).map((b) => [parseFloat(b[0]), parseFloat(b[1])]),
           asks: depth.asks.slice(0, 12).map((a) => [parseFloat(a[0]), parseFloat(a[1])]),
           last: parseFloat(price.price),
-        });
+          prevLast: prev.last,
+        }));
       } catch {
         /* skip */
       } finally {
@@ -338,55 +345,154 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
     };
   }, [symbol]);
 
-  const maxQty = Math.max(
-    ...book.bids.map((b) => b[1]),
-    ...book.asks.map((a) => a[1]),
-    1,
-  );
+  // Cumulative totals from best price outward
+  const askCum: number[] = [];
+  let askAcc = 0;
+  for (const a of book.asks) {
+    askAcc += a[1];
+    askCum.push(askAcc);
+  }
+  const bidCum: number[] = [];
+  let bidAcc = 0;
+  for (const b of book.bids) {
+    bidAcc += b[1];
+    bidCum.push(bidAcc);
+  }
+  const maxCum = Math.max(askAcc, bidAcc, 1);
+
+  const bestBid = book.bids[0]?.[0];
+  const bestAsk = book.asks[0]?.[0];
+  const spread = bestBid && bestAsk ? bestAsk - bestBid : 0;
+  const spreadPct = bestAsk ? (spread / bestAsk) * 100 : 0;
+
+  // Last-price color: rising / falling / flat
+  const lastTone =
+    book.last != null && book.prevLast != null
+      ? book.last > book.prevLast
+        ? "up"
+        : book.last < book.prevLast
+          ? "down"
+          : "flat"
+      : "flat";
 
   return (
     <Card>
-      <CardContent className="p-3">
-        <div className="mb-2 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between border-b border-border/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           <span>호가창</span>
-          <span className="text-[10px]">2초 갱신</span>
+          <span className="font-normal normal-case text-muted-foreground/60">2초 갱신</span>
         </div>
 
-        <div className="space-y-0.5">
-          {[...book.asks].reverse().map((a, i) => (
-            <OrderbookRow key={`a${i}`} price={a[0]} qty={a[1]} maxQty={maxQty} side="ask" />
-          ))}
+        {/* Column header */}
+        <div className="grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
+          <span>가격 (USDT)</span>
+          <span className="text-right">수량</span>
+          <span className="text-right">누적</span>
         </div>
 
+        {/* Asks (reversed = highest at top) */}
+        <div className="px-1 py-1">
+          {book.asks.length === 0 ? (
+            <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
+          ) : (
+            [...book.asks].reverse().map((a, i) => {
+              const cumIdx = book.asks.length - 1 - i;
+              return (
+                <OrderbookRow
+                  key={`a${i}`}
+                  price={a[0]}
+                  qty={a[1]}
+                  cum={askCum[cumIdx]}
+                  maxCum={maxCum}
+                  side="ask"
+                />
+              );
+            })
+          )}
+        </div>
+
+        {/* Mid: last price + spread */}
         <div
           className={cn(
-            "my-1.5 rounded border border-border/40 bg-background/40 px-2 py-1 text-center font-mono text-base font-bold tabular-nums",
+            "border-y border-border/40 px-3 py-2",
+            lastTone === "up" && "bg-grade-a/5",
+            lastTone === "down" && "bg-grade-d/5",
           )}
         >
-          {book.last != null ? `$${formatNumber(book.last)}` : "—"}
+          <div className="flex items-center justify-between">
+            <span
+              className={cn(
+                "font-mono text-lg font-bold tabular-nums",
+                lastTone === "up" ? "text-grade-a" : lastTone === "down" ? "text-grade-d" : "text-foreground",
+              )}
+            >
+              {book.last != null ? formatNumber(book.last) : "—"}
+            </span>
+            <span className="text-right">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">스프레드</div>
+              <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                {spread > 0 ? formatNumber(spread, { maximumFractionDigits: 2 }) : "—"}
+                {spreadPct > 0 ? <span className="ml-1">({spreadPct.toFixed(3)}%)</span> : null}
+              </div>
+            </span>
+          </div>
         </div>
 
-        <div className="space-y-0.5">
-          {book.bids.map((b, i) => (
-            <OrderbookRow key={`b${i}`} price={b[0]} qty={b[1]} maxQty={maxQty} side="bid" />
-          ))}
+        {/* Bids */}
+        <div className="px-1 py-1">
+          {book.bids.length === 0 ? (
+            <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
+          ) : (
+            book.bids.map((b, i) => (
+              <OrderbookRow
+                key={`b${i}`}
+                price={b[0]}
+                qty={b[1]}
+                cum={bidCum[i]}
+                maxCum={maxCum}
+                side="bid"
+              />
+            ))
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function OrderbookRow({ price, qty, maxQty, side }: { price: number; qty: number; maxQty: number; side: "ask" | "bid" }) {
-  const pct = Math.min(100, (qty / maxQty) * 100);
+function OrderbookRow({
+  price,
+  qty,
+  cum,
+  maxCum,
+  side,
+}: {
+  price: number;
+  qty: number;
+  cum: number;
+  maxCum: number;
+  side: "ask" | "bid";
+}) {
+  const pct = Math.min(100, (cum / maxCum) * 100);
   const isAsk = side === "ask";
   return (
-    <div className="relative grid grid-cols-2 px-1 text-[11px] tabular-nums">
+    <div className="relative grid grid-cols-[1fr_1fr_1fr] items-center px-2 py-[1px] text-[11px] tabular-nums transition-colors hover:bg-muted/30">
       <div
-        className={cn("absolute inset-y-0", isAsk ? "right-0 bg-grade-d/10" : "left-0 bg-grade-a/10")}
+        className={cn(
+          "absolute inset-y-0 transition-all",
+          isAsk ? "right-0 bg-grade-d/15" : "left-0 bg-grade-a/15",
+        )}
         style={{ width: `${pct}%` }}
       />
-      <span className={cn("relative font-mono", isAsk ? "text-grade-d" : "text-grade-a")}>{formatNumber(price)}</span>
-      <span className="relative text-right font-mono text-muted-foreground">{formatNumber(qty, { maximumFractionDigits: 3 })}</span>
+      <span className={cn("relative font-mono font-medium", isAsk ? "text-grade-d" : "text-grade-a")}>
+        {formatNumber(price, { maximumFractionDigits: 2 })}
+      </span>
+      <span className="relative text-right font-mono text-foreground/90">
+        {formatNumber(qty, { maximumFractionDigits: 3 })}
+      </span>
+      <span className="relative text-right font-mono text-muted-foreground/70">
+        {formatNumber(cum, { maximumFractionDigits: 2 })}
+      </span>
     </div>
   );
 }
@@ -394,11 +500,12 @@ function OrderbookRow({ price, qty, maxQty, side }: { price: number; qty: number
 // ─── Order Panel ─────────────────────────────────────────────────────────
 function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
   const [direction, setDirection] = useState<"long" | "short">("long");
+  const [orderType, setOrderType] = useState<"market" | "limit">("market");
   const [leverage, setLeverage] = useState(5);
   const [qty, setQty] = useState("");
   const [stop, setStop] = useState("");
   const [target, setTarget] = useState("");
-  const [accountPct, setAccountPct] = useState(10);
+  const [accountPct, setAccountPct] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
 
   // Latest price (kept fresh by orderbook poll elsewhere, but we fetch our own to avoid prop drilling)
@@ -469,44 +576,91 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
     });
   }
 
+  // Auto-derived stop/target % for hint text
+  const stopHintPct = direction === "long" ? -2 : 2;
+  const targetHintPct = direction === "long" ? 4 : -4;
+  const stopRR = stop && Number(stop) > 0 && lastPrice
+    ? `${(Math.abs(lastPrice - Number(stop)) / lastPrice * 100).toFixed(2)}%`
+    : "";
+  const targetRR = target && Number(target) > 0 && lastPrice && stop && Number(stop) > 0
+    ? `${(Math.abs(Number(target) - lastPrice) / Math.abs(lastPrice - Number(stop))).toFixed(2)}R`
+    : "";
+
   return (
     <Card>
       <CardContent className="space-y-3 p-3">
-        {/* Direction tabs */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Direction tabs — top */}
+        <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border">
           <button
             type="button"
             onClick={() => setDirection("long")}
             className={cn(
-              "rounded-md border py-2 text-sm font-bold transition-colors",
+              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-colors",
               direction === "long"
-                ? "border-grade-a bg-grade-a text-white"
-                : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
+                ? "bg-grade-a text-white shadow-inner"
+                : "bg-background/40 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
             )}
           >
-            <ArrowUpRight className="-mt-0.5 mr-1 inline h-4 w-4" />
-            매수 (롱)
+            <ArrowUpRight className="h-4 w-4" />
+            매수 / 롱
           </button>
           <button
             type="button"
             onClick={() => setDirection("short")}
             className={cn(
-              "rounded-md border py-2 text-sm font-bold transition-colors",
+              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-colors",
               direction === "short"
-                ? "border-grade-d bg-grade-d text-white"
-                : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
+                ? "bg-grade-d text-white shadow-inner"
+                : "bg-background/40 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
             )}
           >
-            <ArrowDownRight className="-mt-0.5 mr-1 inline h-4 w-4" />
-            매도 (숏)
+            <ArrowDownRight className="h-4 w-4" />
+            매도 / 숏
           </button>
+        </div>
+
+        {/* Order type sub-tabs */}
+        <div className="flex gap-0.5 rounded-md border border-border/60 bg-background/40 p-0.5">
+          {(["market", "limit"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setOrderType(t)}
+              disabled={t === "limit"}
+              className={cn(
+                "flex-1 rounded px-2 py-1 text-[11px] font-medium uppercase transition-colors",
+                orderType === t
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+                t === "limit" && "cursor-not-allowed opacity-40",
+              )}
+              title={t === "limit" ? "지정가 주문은 준비 중" : ""}
+            >
+              {t === "market" ? "시장가" : "지정가"}
+            </button>
+          ))}
+        </div>
+
+        {/* Wallet bar */}
+        <div className="flex items-center justify-between rounded-md border border-border/40 bg-background/30 px-2.5 py-1.5 text-[10px]">
+          <span className="text-muted-foreground">사용 가능</span>
+          <span className="font-mono font-semibold tabular-nums">
+            {formatCurrency(wallet.available, "USD")}
+          </span>
         </div>
 
         {/* Leverage */}
         <div>
-          <div className="mb-1 flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">레버리지</span>
-            <span className="font-mono font-semibold">{leverage}x</span>
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">레버리지</span>
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums",
+                leverage >= 20 ? "bg-grade-d/15 text-grade-d" : leverage >= 10 ? "bg-amber-500/15 text-amber-400" : "bg-primary/15 text-primary",
+              )}
+            >
+              {leverage}×
+            </span>
           </div>
           <input
             type="range"
@@ -516,18 +670,20 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
             onChange={(e) => setLeverage(Number(e.target.value))}
             className="w-full accent-primary"
           />
-          <div className="mt-1 flex flex-wrap gap-1">
+          <div className="mt-1.5 grid grid-cols-6 gap-1">
             {LEVERAGE_PRESETS.map((lv) => (
               <button
                 key={lv}
                 type="button"
                 onClick={() => setLeverage(lv)}
                 className={cn(
-                  "rounded border px-1.5 py-0.5 text-[10px]",
-                  leverage === lv ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground",
+                  "rounded border py-0.5 text-[10px] font-medium transition-colors",
+                  leverage === lv
+                    ? "border-primary/60 bg-primary/15 text-primary"
+                    : "border-border bg-background/30 text-muted-foreground hover:border-border/80 hover:text-foreground",
                 )}
               >
-                {lv}x
+                {lv}×
               </button>
             ))}
           </div>
@@ -535,24 +691,32 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
 
         {/* Quantity */}
         <div>
-          <Label className="text-[11px] text-muted-foreground">수량 ({baseSym})</Label>
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">수량</span>
+            <span className="text-[10px] font-mono text-muted-foreground">{baseSym}</span>
+          </div>
           <Input
             type="number"
             inputMode="decimal"
             value={qty}
-            onChange={(e) => setQty(e.target.value)}
+            onChange={(e) => {
+              setQty(e.target.value);
+              setAccountPct(null);
+            }}
             placeholder="0.0000"
-            className="mt-1 font-mono"
+            className="font-mono text-base"
           />
-          <div className="mt-2 flex gap-1">
+          <div className="mt-1.5 grid grid-cols-5 gap-1">
             {[10, 25, 50, 75, 100].map((pct) => (
               <button
                 key={pct}
                 type="button"
                 onClick={() => applyAccountPct(pct)}
                 className={cn(
-                  "flex-1 rounded border py-1 text-[10px]",
-                  accountPct === pct ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground",
+                  "rounded border py-0.5 text-[10px] font-medium transition-colors",
+                  accountPct === pct
+                    ? "border-primary/60 bg-primary/15 text-primary"
+                    : "border-border bg-background/30 text-muted-foreground hover:border-border/80 hover:text-foreground",
                 )}
               >
                 {pct}%
@@ -564,63 +728,84 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
         {/* Stop / Target */}
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <Label className="text-[10px] text-muted-foreground">손절 (선택)</Label>
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-grade-d">손절</span>
+              {stopRR ? <span className="text-[9px] font-mono text-muted-foreground">{stopRR}</span> : null}
+            </div>
             <Input
               type="number"
               inputMode="decimal"
               value={stop}
               onChange={(e) => setStop(e.target.value)}
-              placeholder={lastPrice ? formatNumber(direction === "long" ? lastPrice * 0.98 : lastPrice * 1.02) : "—"}
-              className="mt-1 font-mono text-xs"
+              placeholder={lastPrice ? formatNumber(lastPrice * (1 + stopHintPct / 100)) : "—"}
+              className="font-mono text-xs"
             />
           </div>
           <div>
-            <Label className="text-[10px] text-muted-foreground">목표 (선택)</Label>
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-grade-a">목표</span>
+              {targetRR ? <span className="text-[9px] font-mono text-muted-foreground">{targetRR}</span> : null}
+            </div>
             <Input
               type="number"
               inputMode="decimal"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder={lastPrice ? formatNumber(direction === "long" ? lastPrice * 1.04 : lastPrice * 0.96) : "—"}
-              className="mt-1 font-mono text-xs"
+              placeholder={lastPrice ? formatNumber(lastPrice * (1 + targetHintPct / 100)) : "—"}
+              className="font-mono text-xs"
             />
           </div>
         </div>
 
         {/* Summary */}
-        <div className="rounded-md border border-border/40 bg-background/40 p-2 text-[11px]">
-          <Row label="진입가 (예상)" value={lastPrice ? `$${formatNumber(lastPrice)}` : "—"} />
-          <Row label="노출 금액" value={notional > 0 ? `$${formatNumber(notional)}` : "—"} />
+        <div className="space-y-0.5 rounded-md border border-border/40 bg-background/30 p-2.5">
+          <Row label="진입가 (예상)" value={lastPrice ? `$${formatNumber(lastPrice)}` : "—"} mono />
+          <Row label="노출 금액" value={notional > 0 ? `$${formatNumber(notional, { maximumFractionDigits: 2 })}` : "—"} mono />
           <Row
             label="필요 마진"
-            value={margin > 0 ? `$${formatNumber(margin)}` : "—"}
+            value={margin > 0 ? `$${formatNumber(margin, { maximumFractionDigits: 2 })}` : "—"}
             tone={margin > wallet.available ? "bad" : "default"}
+            mono
           />
-          <Row label="사용 가능" value={`$${formatNumber(wallet.available)}`} />
         </div>
 
+        {/* Submit */}
         <Button
           type="button"
           onClick={submit}
           disabled={pending || qtyNum <= 0 || margin > wallet.available}
           className={cn(
-            "w-full",
+            "w-full font-bold",
             direction === "long" ? "bg-grade-a hover:bg-grade-a/90" : "bg-grade-d hover:bg-grade-d/90",
           )}
           size="lg"
         >
-          {pending ? "주문 처리 중..." : `${direction === "long" ? "매수 진입" : "매도 진입"}`}
+          {pending
+            ? "주문 처리 중..."
+            : margin > wallet.available
+              ? "잔액 부족"
+              : qtyNum <= 0
+                ? "수량 입력"
+                : `${baseSym} ${direction === "long" ? "매수" : "매도"} (시장가)`}
         </Button>
       </CardContent>
     </Card>
   );
 }
 
-function Row({ label, value, tone }: { label: string; value: string; tone?: "default" | "bad" }) {
+function Row({ label, value, tone, mono }: { label: string; value: string; tone?: "default" | "bad"; mono?: boolean }) {
   return (
-    <div className="flex items-center justify-between py-0.5">
+    <div className="flex items-center justify-between py-0.5 text-[11px]">
       <span className="text-muted-foreground">{label}</span>
-      <span className={cn("font-mono tabular-nums", tone === "bad" ? "text-grade-d" : "text-foreground")}>{value}</span>
+      <span
+        className={cn(
+          "tabular-nums font-medium",
+          mono && "font-mono",
+          tone === "bad" ? "text-grade-d" : "text-foreground",
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -684,16 +869,13 @@ function PositionsTable({ positions }: { positions: Position[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
-        <thead className="text-[10px] uppercase text-muted-foreground">
-          <tr>
-            <th className="px-2 py-1.5 text-left">심볼</th>
-            <th className="px-2 py-1.5 text-left">방향</th>
-            <th className="px-2 py-1.5 text-right">수량</th>
-            <th className="px-2 py-1.5 text-right">진입가</th>
-            <th className="px-2 py-1.5 text-right">현재가</th>
-            <th className="px-2 py-1.5 text-right">미실현 PnL</th>
-            <th className="px-2 py-1.5 text-right">마진</th>
-            <th className="px-2 py-1.5 text-right">청산</th>
+        <thead className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
+          <tr className="border-b border-border/40">
+            <th className="px-3 py-2 text-left font-medium">심볼 / 방향</th>
+            <th className="px-3 py-2 text-right font-medium">수량 / 마진</th>
+            <th className="px-3 py-2 text-right font-medium">진입가 → 현재가</th>
+            <th className="px-3 py-2 text-right font-medium">미실현 PnL</th>
+            <th className="px-3 py-2 text-right font-medium"></th>
           </tr>
         </thead>
         <tbody>
@@ -733,8 +915,10 @@ function PositionRow({ pos }: { pos: Position }) {
 
   const movement = last != null ? (pos.direction === "long" ? last - pos.entryActual : pos.entryActual - last) : 0;
   const pnl = movement * pos.qty;
+  const pnlPct = last != null && pos.entryActual > 0 ? (movement / pos.entryActual) * 100 : 0;
   const inProfit = pnl > 0;
   const isLong = pos.direction === "long";
+  const baseSym = pos.symbol.replace("USDT", "");
 
   function close() {
     if (!confirm(`${pos.symbol} ${isLong ? "롱" : "숏"} 포지션을 즉시 청산하시겠습니까?`)) return;
@@ -749,31 +933,68 @@ function PositionRow({ pos }: { pos: Position }) {
   }
 
   return (
-    <tr className="border-t border-border/40 hover:bg-muted/20">
-      <td className="px-2 py-1.5 font-mono font-semibold">{pos.symbol}</td>
-      <td className="px-2 py-1.5">
-        <Badge
-          className={cn(
-            "border text-[9px]",
-            isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d",
-          )}
-        >
-          {isLong ? "롱" : "숏"}
-        </Badge>
+    <tr className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className={cn("h-7 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")}
+          />
+          <div>
+            <div className="font-mono text-xs font-semibold">{pos.symbol}</div>
+            <div className={cn("text-[10px] font-medium uppercase", isLong ? "text-grade-a" : "text-grade-d")}>
+              {isLong ? "롱" : "숏"}
+            </div>
+          </div>
+        </div>
       </td>
-      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{formatNumber(pos.qty, { maximumFractionDigits: 4 })}</td>
-      <td className="px-2 py-1.5 text-right font-mono tabular-nums">${formatNumber(pos.entryActual)}</td>
-      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{last != null ? `$${formatNumber(last)}` : "—"}</td>
-      <td className={cn("px-2 py-1.5 text-right font-mono tabular-nums", inProfit ? "text-grade-a" : last != null ? "text-grade-d" : "text-muted-foreground")}>
-        {last != null ? (pnl >= 0 ? "+" : "") + formatCurrency(pnl, "USD") : "—"}
+      <td className="px-3 py-2.5 text-right">
+        <div className="font-mono text-xs font-medium tabular-nums">
+          {formatNumber(pos.qty, { maximumFractionDigits: 4 })} {baseSym}
+        </div>
+        <div className="text-[10px] text-muted-foreground tabular-nums">
+          마진 ${formatNumber(pos.margin, { maximumFractionDigits: 2 })}
+        </div>
       </td>
-      <td className="px-2 py-1.5 text-right font-mono tabular-nums">${formatNumber(pos.margin)}</td>
-      <td className="px-2 py-1.5 text-right">
+      <td className="px-3 py-2.5 text-right">
+        <div className="font-mono text-xs tabular-nums">
+          <span className="text-muted-foreground">${formatNumber(pos.entryActual)}</span>
+          <span className="mx-1 text-muted-foreground/60">→</span>
+          <span className="font-semibold">{last != null ? `$${formatNumber(last)}` : "—"}</span>
+        </div>
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {last != null ? (
+          <>
+            <div
+              className={cn(
+                "font-mono text-sm font-bold tabular-nums",
+                inProfit ? "text-grade-a" : "text-grade-d",
+              )}
+            >
+              {pnl >= 0 ? "+" : ""}
+              {formatCurrency(pnl, "USD")}
+            </div>
+            <div
+              className={cn(
+                "text-[10px] font-mono tabular-nums",
+                inProfit ? "text-grade-a/70" : "text-grade-d/70",
+              )}
+            >
+              {pnlPct >= 0 ? "+" : ""}
+              {pnlPct.toFixed(2)}%
+            </div>
+          </>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-right">
         <button
           type="button"
           onClick={close}
           disabled={closing}
-          className="inline-flex items-center gap-1 rounded border border-grade-d/40 bg-grade-d/10 px-2 py-0.5 text-[10px] font-semibold text-grade-d hover:bg-grade-d/20"
+          className="inline-flex items-center gap-1 rounded-md border border-grade-d/30 bg-grade-d/10 px-2.5 py-1 text-[11px] font-semibold text-grade-d transition-colors hover:border-grade-d/60 hover:bg-grade-d/20 disabled:opacity-50"
         >
           <X className="h-3 w-3" />
           {closing ? "..." : "청산"}

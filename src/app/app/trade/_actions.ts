@@ -15,6 +15,7 @@ import {
   type BinanceCredentials,
   type BinanceOrderResult,
 } from "@/lib/exchanges/binance";
+import { checkLiveGuards } from "@/lib/live-guards";
 import type { GradeResult, SizingResult, TradeInput } from "@/types/trade";
 
 export interface LiveTradeArgs {
@@ -160,6 +161,19 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
   const { input, grade, sizing, leverage, forecast } = args;
   if (!sizing.valid || sizing.quantity <= 0) {
     return { ok: false, error: "사이징이 유효하지 않습니다. 진입/손절/리스크 확인 후 다시 시도." };
+  }
+
+  // Pre-trade safety guards (daily loss limit, exposure caps, grade D block, dup block).
+  const guard = await checkLiveGuards({
+    userId: user.id,
+    symbol: input.symbol.toUpperCase(),
+    direction: input.direction,
+    grade: grade.grade,
+    notional: sizing.positionSize,
+    accountSize: input.accountSize,
+  });
+  if (!guard.ok) {
+    return { ok: false, error: `안전장치 차단: ${guard.reason}` };
   }
 
   // Step 1: Create trade row.

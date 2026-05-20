@@ -436,13 +436,14 @@ function OrderbookContent({
           fetch(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=30`),
           fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`),
         ]);
-        const depth = (await depthR.json()) as { bids: [string, string][]; asks: [string, string][] };
-        const price = (await priceR.json()) as { price: string };
+        const depth = (await depthR.json()) as { bids?: [string, string][]; asks?: [string, string][] };
+        const price = (await priceR.json()) as { price?: string };
         if (!alive) return;
+        if (!depth?.bids || !depth?.asks || !price?.price) return; // API 일시 오류, 그냥 다음 tick 대기
         setBook((prev) => ({
-          bids: depth.bids.map((b) => [parseFloat(b[0]), parseFloat(b[1])]),
-          asks: depth.asks.map((a) => [parseFloat(a[0]), parseFloat(a[1])]),
-          last: parseFloat(price.price),
+          bids: depth.bids!.map((b) => [parseFloat(b[0]), parseFloat(b[1])]),
+          asks: depth.asks!.map((a) => [parseFloat(a[0]), parseFloat(a[1])]),
+          last: parseFloat(price.price!),
           prevLast: prev.last,
         }));
       } catch {
@@ -663,8 +664,9 @@ function MarketTradesContent({ symbol }: { symbol: string }) {
           price: string;
           qty: string;
           isBuyerMaker: boolean;
-        }>;
+        }> | { code?: number; msg?: string };
         if (!alive) return;
+        if (!Array.isArray(arr)) return; // API 일시 오류
         // isBuyerMaker=true → seller takes the trade (sell-side market trade)
         const parsed = arr
           .map((t) => ({

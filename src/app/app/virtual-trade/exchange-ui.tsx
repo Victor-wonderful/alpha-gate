@@ -209,6 +209,20 @@ function HeaderStat({ label, value, accent }: { label: string; value: string; ac
 }
 
 // ─── Chart ───────────────────────────────────────────────────────────────
+function timeToUnixSeconds(t: Time): number {
+  if (typeof t === "number") return t;
+  if (typeof t === "string") {
+    const d = new Date(t).getTime();
+    return Number.isFinite(d) ? d / 1000 : 0;
+  }
+  // BusinessDay object
+  if (typeof t === "object" && t !== null && "year" in t) {
+    const bd = t as { year: number; month: number; day: number };
+    return Date.UTC(bd.year, bd.month - 1, bd.day) / 1000;
+  }
+  return 0;
+}
+
 function calcMA(closes: number[], period: number): (number | null)[] {
   const out: (number | null)[] = [];
   for (let i = 0; i < closes.length; i++) {
@@ -370,7 +384,7 @@ function ChartArea({
         const lastIdx = candles.length - 1;
         if (last && first) {
           setHeader({
-            time: Number(last.time),
+            time: timeToUnixSeconds(last.time),
             open: last.open,
             high: last.high,
             low: last.low,
@@ -398,7 +412,7 @@ function ChartArea({
       const ma20Data = param.seriesData.get(ma20Series) as LineData<Time> | undefined;
       if (!candleData) return;
       setHeader({
-        time: Number(param.time),
+        time: timeToUnixSeconds(param.time),
         open: candleData.open,
         high: candleData.high,
         low: candleData.low,

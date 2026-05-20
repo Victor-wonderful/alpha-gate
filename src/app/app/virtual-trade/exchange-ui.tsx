@@ -308,8 +308,8 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
   const [groupSize, setGroupSize] = useState<number>(0.1);
 
   return (
-    <Card className="flex h-full flex-col" style={{ minHeight: 480 }}>
-      <CardContent className="flex h-full flex-col p-0">
+    <Card className="flex flex-col" style={{ height: 480 }}>
+      <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
         {/* Tab header */}
         <div className="flex shrink-0 items-center border-b border-border/40 px-3 py-2">
           <button
@@ -358,13 +358,11 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
           ) : null}
         </div>
 
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {tab === "book" ? (
-            <OrderbookContent symbol={symbol} depthView={depthView} groupSize={groupSize} />
-          ) : (
-            <MarketTradesContent symbol={symbol} />
-          )}
-        </div>
+        {tab === "book" ? (
+          <OrderbookContent symbol={symbol} depthView={depthView} groupSize={groupSize} />
+        ) : (
+          <MarketTradesContent symbol={symbol} />
+        )}
       </CardContent>
     </Card>
   );
@@ -522,7 +520,7 @@ function OrderbookContent({
   const bidRows = depthView === "bid" ? groupedBids : groupedBids.slice(0, 12);
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Column header */}
       <div className="shrink-0 grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
         <span>가격 (USDT)</span>
@@ -532,7 +530,7 @@ function OrderbookContent({
 
       {/* Asks */}
       {showAsks ? (
-        <div className="flex-1 overflow-y-auto px-1 py-1 flex flex-col justify-end">
+        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
           {askRows.length === 0 ? (
             <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
           ) : (
@@ -582,7 +580,7 @@ function OrderbookContent({
 
       {/* Bids */}
       {showBids ? (
-        <div className="flex-1 overflow-y-auto px-1 py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
           {bidRows.length === 0 ? (
             <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
           ) : (
@@ -610,7 +608,7 @@ function OrderbookContent({
           <span className="text-grade-d">{askPct.toFixed(2)}%</span>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -694,13 +692,13 @@ function MarketTradesContent({ symbol }: { symbol: string }) {
   }, [symbol]);
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
         <span>가격</span>
         <span className="text-right">수량</span>
         <span className="text-right">시간</span>
       </div>
-      <div className="flex-1 overflow-y-auto px-1 py-1">
+      <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
         {trades.length === 0 ? (
           <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
         ) : (
@@ -728,7 +726,7 @@ function MarketTradesContent({ symbol }: { symbol: string }) {
           })
         )}
       </div>
-    </>
+    </div>
   );
 }
 

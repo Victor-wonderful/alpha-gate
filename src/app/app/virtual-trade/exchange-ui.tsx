@@ -1487,11 +1487,17 @@ function PositionsTable({ positions }: { positions: Position[] }) {
       <table className="w-full text-xs">
         <thead className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
           <tr className="border-b border-border/40">
-            <th className="px-3 py-2 text-left font-medium">심볼 / 방향</th>
-            <th className="px-3 py-2 text-right font-medium">수량 / 마진</th>
-            <th className="px-3 py-2 text-right font-medium">진입가 → 현재가</th>
-            <th className="px-3 py-2 text-right font-medium">미실현 PnL</th>
-            <th className="px-3 py-2 text-right font-medium"></th>
+            <th className="px-2 py-2 text-left font-medium">심볼</th>
+            <th className="px-2 py-2 text-left font-medium">방향</th>
+            <th className="px-2 py-2 text-right font-medium">수량</th>
+            <th className="px-2 py-2 text-right font-medium">진입가</th>
+            <th className="px-2 py-2 text-right font-medium">현재가</th>
+            <th className="px-2 py-2 text-right font-medium">손절가</th>
+            <th className="px-2 py-2 text-right font-medium">목표가</th>
+            <th className="px-2 py-2 text-right font-medium">마진</th>
+            <th className="px-2 py-2 text-right font-medium">미실현 PnL</th>
+            <th className="px-2 py-2 text-right font-medium">ROE</th>
+            <th className="px-2 py-2 text-right font-medium"></th>
           </tr>
         </thead>
         <tbody>
@@ -1532,6 +1538,8 @@ function PositionRow({ pos }: { pos: Position }) {
   const movement = last != null ? (pos.direction === "long" ? last - pos.entryActual : pos.entryActual - last) : 0;
   const pnl = movement * pos.qty;
   const pnlPct = last != null && pos.entryActual > 0 ? (movement / pos.entryActual) * 100 : 0;
+  // ROE = PnL / margin (실효 수익률 — 레버리지 반영된 마진 대비)
+  const roe = pos.margin > 0 ? (pnl / pos.margin) * 100 : 0;
   const inProfit = pnl > 0;
   const isLong = pos.direction === "long";
   const baseSym = pos.symbol.replace("USDT", "");
@@ -1550,36 +1558,54 @@ function PositionRow({ pos }: { pos: Position }) {
 
   return (
     <tr className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
-      <td className="px-3 py-2.5">
+      {/* 심볼 (좌측 컬러 액센트 바 포함) */}
+      <td className="px-2 py-2.5">
         <div className="flex items-center gap-2">
           <span
             aria-hidden
-            className={cn("h-7 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")}
+            className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")}
           />
-          <div>
-            <div className="font-mono text-xs font-semibold">{pos.symbol}</div>
-            <div className={cn("text-[10px] font-medium uppercase", isLong ? "text-grade-a" : "text-grade-d")}>
-              {isLong ? "롱" : "숏"}
-            </div>
-          </div>
+          <span className="font-mono text-xs font-semibold">{pos.symbol}</span>
         </div>
       </td>
-      <td className="px-3 py-2.5 text-right">
-        <div className="font-mono text-xs font-medium tabular-nums">
-          {formatNumber(pos.qty, { maximumFractionDigits: 4 })} {baseSym}
-        </div>
-        <div className="text-[10px] text-muted-foreground tabular-nums">
-          마진 ${formatNumber(pos.margin, { maximumFractionDigits: 2 })}
-        </div>
+      {/* 방향 */}
+      <td className="px-2 py-2.5">
+        <Badge
+          className={cn(
+            "border text-[9px]",
+            isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d",
+          )}
+        >
+          {isLong ? "롱" : "숏"}
+        </Badge>
       </td>
-      <td className="px-3 py-2.5 text-right">
-        <div className="font-mono text-xs tabular-nums">
-          <span className="text-muted-foreground">${formatNumber(pos.entryActual)}</span>
-          <span className="mx-1 text-muted-foreground/60">→</span>
-          <span className="font-semibold">{last != null ? `$${formatNumber(last)}` : "—"}</span>
-        </div>
+      {/* 수량 */}
+      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">
+        {formatNumber(pos.qty, { maximumFractionDigits: 4 })}
+        <span className="ml-1 text-[10px] text-muted-foreground">{baseSym}</span>
       </td>
-      <td className="px-3 py-2.5 text-right">
+      {/* 진입가 */}
+      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-muted-foreground">
+        ${formatNumber(pos.entryActual)}
+      </td>
+      {/* 현재가 */}
+      <td className="px-2 py-2.5 text-right font-mono text-xs font-semibold tabular-nums">
+        {last != null ? `$${formatNumber(last)}` : "—"}
+      </td>
+      {/* 손절가 */}
+      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-grade-d/80">
+        {pos.stop > 0 ? `$${formatNumber(pos.stop)}` : "—"}
+      </td>
+      {/* 목표가 */}
+      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-grade-a/80">
+        {pos.target > 0 ? `$${formatNumber(pos.target)}` : "—"}
+      </td>
+      {/* 마진 */}
+      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">
+        ${formatNumber(pos.margin, { maximumFractionDigits: 2 })}
+      </td>
+      {/* 미실현 PnL */}
+      <td className="px-2 py-2.5 text-right">
         {last != null ? (
           <>
             <div
@@ -1605,7 +1631,24 @@ function PositionRow({ pos }: { pos: Position }) {
           <span className="text-muted-foreground">—</span>
         )}
       </td>
-      <td className="px-3 py-2.5 text-right">
+      {/* ROE */}
+      <td className="px-2 py-2.5 text-right">
+        {last != null && pos.margin > 0 ? (
+          <span
+            className={cn(
+              "font-mono text-xs font-semibold tabular-nums",
+              inProfit ? "text-grade-a" : "text-grade-d",
+            )}
+          >
+            {roe >= 0 ? "+" : ""}
+            {roe.toFixed(2)}%
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </td>
+      {/* 청산 */}
+      <td className="px-2 py-2.5 text-right">
         <button
           type="button"
           onClick={close}

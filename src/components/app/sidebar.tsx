@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ExternalLink,
   Home,
+  KeyRound,
   LineChart,
   LogOut,
   Menu,
@@ -21,7 +22,7 @@ import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
 
-type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell";
+type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key";
 
 export type SidebarItem = {
   href: string;
@@ -36,6 +37,7 @@ const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   book: BookOpen,
   chart: LineChart,
   bell: Bell,
+  key: KeyRound,
 };
 
 const MAIN: SidebarItem[] = [{ href: "/app", label: "홈", icon: "home" }];
@@ -50,7 +52,10 @@ const REVIEW: SidebarItem[] = [
   { href: "/app/dashboard", label: "성과 분석", icon: "chart" },
 ];
 
-const SETTINGS: SidebarItem[] = [{ href: "/app/settings/notify", label: "알림 설정", icon: "bell" }];
+const SETTINGS: SidebarItem[] = [
+  { href: "/app/settings/notify", label: "알림 설정", icon: "bell" },
+  { href: "/app/settings/api-keys", label: "거래소 API 키", icon: "key" },
+];
 
 const BLOG_URL = "https://victor-alpha-neon.vercel.app/";
 

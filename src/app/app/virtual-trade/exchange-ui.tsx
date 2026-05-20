@@ -481,7 +481,7 @@ function ChartArea({
 
         {/* OHLCV header row */}
         {header ? (
-          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-y border-border/30 py-1.5 text-[10px] font-mono tabular-nums">
+          <div className="mb-2 flex h-7 shrink-0 items-center gap-x-3 overflow-x-auto whitespace-nowrap border-y border-border/30 text-[10px] font-mono tabular-nums">
             <span className="text-muted-foreground/90">
               {new Date(header.time * 1000).toLocaleString("ko-KR", {
                 year: "2-digit",

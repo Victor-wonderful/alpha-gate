@@ -163,6 +163,16 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
     setCurrentPrice(p);
   }, []);
 
+  // 목표 캔들의 실제 시가가 확인되면 진입가 갱신
+  const handleTargetCandleOpen = useCallback((openPrice: number) => {
+    setActiveGame((g) => (g ? { ...g, entryPrice: openPrice } : g));
+  }, []);
+
+  // 목표 캔들 시작 시각 (candle_running 진입 후에만 의미 있음)
+  const targetCandleOpenTime = activeGame
+    ? activeGame.candleCloseTime - TF_MS[activeGame.timeframe]
+    : null;
+
   // 페이즈 배너 정보
   const phaseConfig = {
     betting_open: {
@@ -278,8 +288,11 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
           <LiveChart
             symbol={symbol}
             timeframe={activeGame ? activeGame.timeframe : timeframe}
-            entryPrice={activeGame?.entryPrice ?? null}
+            // 캔들이 실제로 시작한 후에만 진입가 라인 표시 (그 전엔 임시값이라 숨김)
+            entryPrice={phase === "candle_running" || phase === "settling" ? activeGame?.entryPrice ?? null : null}
             direction={activeGame?.direction ?? null}
+            targetCandleOpenTime={targetCandleOpenTime}
+            onTargetCandleOpen={handleTargetCandleOpen}
             onCurrentPrice={handleCurrentPrice}
           />
 

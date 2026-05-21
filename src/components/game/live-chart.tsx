@@ -17,6 +17,10 @@ interface Props {
   timeframe?: Timeframe;
   entryPrice?: number | null;
   direction?: "call" | "put" | null;
+  /** 진행 중 게임의 목표 캔들 시작 시각 (Unix ms). 이 값이 있으면 LiveChart가
+   * 폴링 결과에서 해당 캔들의 실제 시가(open)를 찾아 onTargetCandleOpen으로 전달한다. */
+  targetCandleOpenTime?: number | null;
+  onTargetCandleOpen?: (openPrice: number) => void;
   onCurrentPrice?: (p: number) => void;
 }
 
@@ -25,6 +29,8 @@ export function LiveChart({
   timeframe = "1m",
   entryPrice,
   direction,
+  targetCandleOpenTime,
+  onTargetCandleOpen,
   onCurrentPrice,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,6 +40,19 @@ export function LiveChart({
     ISeriesApi<"Candlestick">["createPriceLine"]
   > | null>(null);
   const onCurrentPriceRef = useRef(onCurrentPrice);
+  const onTargetCandleOpenRef = useRef(onTargetCandleOpen);
+  const targetCandleOpenTimeRef = useRef(targetCandleOpenTime);
+  const reportedTargetOpenRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    onTargetCandleOpenRef.current = onTargetCandleOpen;
+  }, [onTargetCandleOpen]);
+
+  useEffect(() => {
+    targetCandleOpenTimeRef.current = targetCandleOpenTime;
+    // 새 게임/타깃 변경 시 이전 보고 리셋
+    reportedTargetOpenRef.current = null;
+  }, [targetCandleOpenTime]);
 
   useEffect(() => {
     onCurrentPriceRef.current = onCurrentPrice;
@@ -133,6 +152,17 @@ export function LiveChart({
 
         const latest = candles[candles.length - 1];
         if (latest) onCurrentPriceRef.current?.(latest.close);
+
+        // 목표 캔들 시가 보고 (1회만)
+        const tgt = targetCandleOpenTimeRef.current;
+        if (tgt && reportedTargetOpenRef.current !== tgt) {
+          const tgtSec = Math.floor(tgt / 1000);
+          const tgtCandle = candles.find((c) => c.time === tgtSec);
+          if (tgtCandle) {
+            reportedTargetOpenRef.current = tgt;
+            onTargetCandleOpenRef.current?.(tgtCandle.open);
+          }
+        }
       } catch {
         // 네트워크 오류 무시
       }

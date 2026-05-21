@@ -7,6 +7,7 @@ import { classifyStrategy, type StrategyResult } from "@/lib/analysis/strategy";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { saveAnalysis, loadAnalysis } from "@/lib/analysis/persist";
 import { revalidatePath } from "next/cache";
+import { getAiCredits, spendAiCredit } from "@/lib/paper-wallet";
 
 export async function runAnalysisAction(
   symbol: string,
@@ -27,6 +28,16 @@ export async function runAnalysisAction(
     return { error: "심볼 형식이 올바르지 않습니다. 예: BTCUSDT" };
 
   if (!STYLE_PRESETS[style]) return { error: "지원하지 않는 트레이딩 스타일입니다." };
+
+  // AI 크레딧 확인 (분석 시작 전 선행 검사)
+  try {
+    const credits = await getAiCredits(user.id);
+    if (credits <= 0) {
+      return { error: "AI 크레딧이 없습니다. 크레딧을 충전하거나 관리자에게 문의하세요." };
+    }
+  } catch {
+    // 크레딧 조회 실패 시 분석은 계속 진행 (best-effort)
+  }
 
   // Stage 1: Market Data (deterministic)
   let snapshot: AnalysisSnapshot;
@@ -69,6 +80,13 @@ export async function runAnalysisAction(
     revalidatePath("/app");
   } catch (e) {
     console.error("Failed to persist analysis:", e);
+  }
+
+  // AI 크레딧 차감 (분석 성공 시에만 — best-effort)
+  try {
+    await spendAiCredit(user.id);
+  } catch (e) {
+    console.error("AI 크레딧 차감 실패 (분석은 완료됨):", e);
   }
 
   return { snapshot, strategy, report };

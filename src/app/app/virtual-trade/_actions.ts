@@ -17,7 +17,7 @@ export async function depositFundsAction(
     return { ok: false, error: "0보다 큰 금액을 입력하세요." };
   }
   if (amount > 1_000_000) {
-    return { ok: false, error: "한 번에 100만 USDT 이하만 가능합니다." };
+    return { ok: false, error: "한 번에 100만 vUSDT 이하만 가능합니다." };
   }
 
   const r = await depositFunds({ userId: user.id, amount });

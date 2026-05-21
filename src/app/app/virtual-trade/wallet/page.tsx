@@ -40,7 +40,7 @@ export default async function WalletPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-bold tracking-tight">지갑 관리</h1>
         <p className="text-sm text-muted-foreground">
-          가상 USDT 잔액 입출금 및 리셋. 진행 중 포지션 마진은 회수되지 않습니다.
+          가상 vUSDT 잔액 입출금 및 리셋. 진행 중 포지션 마진은 회수되지 않습니다.
         </p>
       </div>
 

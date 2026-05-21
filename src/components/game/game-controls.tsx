@@ -113,9 +113,9 @@ export function GameControls({
       {/* 금액 */}
       <div>
         <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          금액{" "}
+          베팅 금액{" "}
           <span className="normal-case font-normal">
-            (보유 {points.toLocaleString()}pt)
+            (보유 {points.toLocaleString()} vUSDT)
           </span>
         </label>
         <div className="mt-1 flex items-center gap-1">
@@ -123,7 +123,7 @@ export function GameControls({
             onClick={() => adjustBet(-10)}
             disabled={disabled}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/40 hover:bg-muted/30 disabled:opacity-50"
-            aria-label="베팅 10pt 감소"
+            aria-label="베팅 10 vUSDT 감소"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
@@ -140,7 +140,7 @@ export function GameControls({
             onClick={() => adjustBet(10)}
             disabled={disabled}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/40 hover:bg-muted/30 disabled:opacity-50"
-            aria-label="베팅 10pt 증가"
+            aria-label="베팅 10 vUSDT 증가"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
@@ -166,10 +166,10 @@ export function GameControls({
           예상 수익
         </div>
         <div className="mt-0.5 font-mono text-xl font-bold tabular-nums text-green-400">
-          +{winPayout} pt
+          +{winPayout} vUSDT
         </div>
         <div className="text-[10px] text-muted-foreground">
-          승리 80% · 패배 -{bet}pt
+          승리 80% · 패배 -{bet} vUSDT
         </div>
       </div>
 

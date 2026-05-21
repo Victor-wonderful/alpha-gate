@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { fetchKlines } from "@/lib/analysis/binance";
 import type { Interval } from "@/lib/analysis/binance";
+import { getOrCreateWallet, debitBalance } from "@/lib/paper-wallet";
 
 export const dynamic = "force-dynamic";
 
@@ -31,37 +32,35 @@ export async function POST(req: Request) {
   if (!bet || bet < 10)
     return NextResponse.json({ error: "Min bet 10pt" }, { status: 400 });
 
-  // 게임 지갑 조회 또는 생성
-  const { data: wallet } = await supabase
-    .from("game_wallets")
-    .select("points")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const currentPoints = wallet ? Number(wallet.points) : 1000;
-  if (!wallet) {
-    await supabase.from("game_wallets").insert({ user_id: user.id, points: 1000 });
-  }
-  if (currentPoints < bet)
+  // vUSDT 지갑 조회 (paper_wallets가 SSOT)
+  const wallet = await getOrCreateWallet(user.id);
+  if (wallet.available < bet) {
     return NextResponse.json({ error: "포인트 부족" }, { status: 400 });
+  }
 
   // ── 다음 캔들 시가→종가 판정 방식 ──
-  // 현재 진행 중인 캔들이 닫힐 때 = 다음 캔들이 시작될 때
-  // 진입가는 다음 캔들의 시가(open), 종가는 같은 캔들의 종가(close)
   const candles = await fetchKlines(symbol, timeframe as Interval, 2);
   const currentCandle = candles[candles.length - 1];
   const tfMs = TF_SECONDS[timeframe] * 1000;
   const targetOpenTime = currentCandle.closeTime; // 다음 캔들 시작 시각
-  const targetCloseTime = targetOpenTime + tfMs; // 다음 캔들 종료 시각
+  const targetCloseTime = targetOpenTime + tfMs;  // 다음 캔들 종료 시각
 
-  // 현재 시세를 임시 진입가로 저장 (정산 시 실제 캔들 시가로 덮어씀)
   const placeholderPrice = Number(currentCandle.close);
 
-  // 포인트 차감
-  await supabase
-    .from("game_wallets")
-    .update({ points: currentPoints - bet, updated_at: new Date().toISOString() })
-    .eq("user_id", user.id);
+  // vUSDT 차감 (paper_wallets.usdt_balance — SSOT)
+  let balanceAfter: number;
+  try {
+    balanceAfter = await debitBalance(user.id, bet, "game_bet", {
+      symbol,
+      timeframe,
+      placeholder_price: placeholderPrice,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "차감 실패" },
+      { status: 400 },
+    );
+  }
 
   // 게임 기록 생성
   const { data: game } = await supabase
@@ -71,7 +70,7 @@ export async function POST(req: Request) {
       symbol,
       direction,
       bet_points: bet,
-      entry_price: placeholderPrice, // 정산 시 실제 시가로 업데이트
+      entry_price: placeholderPrice,
       candle_close_time: targetCloseTime,
       timeframe,
     })
@@ -87,6 +86,8 @@ export async function POST(req: Request) {
     candleCloseTime: targetCloseTime,
     timeframe,
     expirySeconds,
-    pointsRemaining: currentPoints - bet,
+    // 호환 목적 — 둘 다 반환
+    pointsRemaining: balanceAfter,
+    balanceRemaining: balanceAfter,
   });
 }

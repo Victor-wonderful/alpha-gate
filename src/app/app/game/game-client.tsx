@@ -121,7 +121,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         });
         setPoints(data.pointsRemaining);
         setRefreshKey((k) => k + 1);
-        toast.success(`${direction === "call" ? "▲ CALL" : "▼ PUT"} 베팅 · ${bet}pt`);
+        toast.success(`${direction === "call" ? "▲ CALL" : "▼ PUT"} 베팅 · ${bet} vUSDT`);
       } catch {
         toast.error("네트워크 오류");
       }
@@ -148,8 +148,8 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         if (data.won) setWinCount((w) => w + 1);
         toast[data.won ? "success" : "error"](
           data.won
-            ? `🎉 승리! +${data.pnlPoints}pt`
-            : `😢 패배 ${data.pnlPoints}pt`,
+            ? `🎉 승리! +${data.pnlPoints} vUSDT`
+            : `😢 패배 ${data.pnlPoints} vUSDT`,
         );
       } finally {
         setActiveGame(null);
@@ -209,7 +209,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         <div className="flex items-center gap-3 text-sm">
           <span className="flex items-center gap-1 font-mono font-bold">
             <Trophy className="h-4 w-4 text-yellow-500" />
-            {points.toLocaleString()}pt
+            {points.toLocaleString()} vUSDT
           </span>
           <span className="text-muted-foreground text-xs">
             승률 {winRate}% · {games}판
@@ -266,7 +266,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
           <div className="flex items-center gap-3 text-muted-foreground">
             <span className="flex items-center gap-1">
               <Trophy className="h-3.5 w-3.5 text-yellow-500" />
-              <span className="font-mono font-bold text-foreground">{points.toLocaleString()}pt</span>
+              <span className="font-mono font-bold text-foreground">{points.toLocaleString()} vUSDT</span>
             </span>
             <span>승률 <span className="font-mono font-bold text-foreground">{winRate}%</span></span>
             <span>총 <span className="font-mono font-bold text-foreground">{games}판</span></span>

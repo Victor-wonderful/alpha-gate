@@ -945,7 +945,7 @@ function TradeFormInner({
                       </Link>
                     </div>
                     <div className="space-y-0.5 font-mono tabular-nums">
-                      <Row label="USDT 잔액" value={formatCurrency(paperWallet.balance, "USD")} />
+                      <Row label="vUSDT 잔액" value={formatCurrency(paperWallet.balance, "USD")} />
                       <Row label="사용 가능" value={formatCurrency(paperWallet.available, "USD")} />
                       <Row
                         label="필요 마진"

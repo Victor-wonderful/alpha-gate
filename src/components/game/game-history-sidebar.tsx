@@ -158,7 +158,7 @@ export function GameHistorySidebar({ refreshKey, onSettleAvailable }: Props) {
                     {g.direction === "call" ? "CALL" : "PUT"}
                   </span>
                   <span className="text-muted-foreground/60">·</span>
-                  <span className="font-mono">{g.bet_points}pt</span>
+                  <span className="font-mono">{g.bet_points} vU</span>
                   {g.timeframe && (
                     <>
                       <span className="text-muted-foreground/60">·</span>
@@ -199,13 +199,13 @@ export function GameHistorySidebar({ refreshKey, onSettleAvailable }: Props) {
                     g.won ? "text-green-400" : "text-red-400",
                   )}
                 >
-                  {g.won ? `+${g.pnl_points}` : g.pnl_points}pt
+                  {g.won ? `+${g.pnl_points}` : g.pnl_points} vU
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 {g.direction === "call" ? "▲CALL" : "▼PUT"}
                 <span>·</span>
-                <span className="font-mono">{g.bet_points}pt</span>
+                <span className="font-mono">{g.bet_points} vU</span>
                 {g.timeframe && (
                   <>
                     <span>·</span>

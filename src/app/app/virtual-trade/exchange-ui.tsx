@@ -827,7 +827,7 @@ function OrderbookContent({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Column header */}
       <div className="shrink-0 grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
-        <span>가격 (USDT)</span>
+        <span>가격 (vUSDT)</span>
         <span className="text-right">수량</span>
         <span className="text-right">누적</span>
       </div>
@@ -1227,7 +1227,7 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
         <div className="flex items-center justify-between text-[11px]">
           <span className="text-muted-foreground">사용 가능</span>
           <span className="font-mono font-semibold tabular-nums">
-            {formatNumber(wallet.available, { maximumFractionDigits: 2 })} USDT
+            {formatNumber(wallet.available, { maximumFractionDigits: 2 })} vUSDT
           </span>
         </div>
 
@@ -1235,7 +1235,7 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
         {orderType === "limit" ? (
           <div>
             <div className="mb-1 flex items-center justify-between text-[10px]">
-              <span className="text-muted-foreground">가격 (USDT)</span>
+              <span className="text-muted-foreground">가격 (vUSDT)</span>
             </div>
             <Input
               type="number"
@@ -1253,7 +1253,7 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
               <span className="text-muted-foreground/60">시장가 — 현재가 즉시 체결</span>
             </div>
             <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-sm tabular-nums">
-              {lastPrice ? `${formatNumber(lastPrice)} USDT` : "—"}
+              {lastPrice ? `${formatNumber(lastPrice)} vUSDT` : "—"}
             </div>
           </div>
         )}
@@ -1300,10 +1300,10 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
           </div>
         </div>
 
-        {/* Total (USDT) */}
+        {/* Total (vUSDT) */}
         <div>
           <div className="mb-1 flex items-center justify-between text-[10px]">
-            <span className="text-muted-foreground">총액 (USDT)</span>
+            <span className="text-muted-foreground">총액 (vUSDT)</span>
           </div>
           <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-sm tabular-nums text-muted-foreground">
             {totalUsdt > 0 ? formatNumber(totalUsdt, { maximumFractionDigits: 2 }) : "—"}
@@ -1432,17 +1432,17 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
         <div className="space-y-1 rounded-md border border-border/30 bg-background/20 p-2.5 text-[10px]">
           <Row
             label="예상 체결가"
-            value={lastPrice ? `${formatNumber(lastPrice)} USDT` : "—"}
+            value={lastPrice ? `${formatNumber(lastPrice)} vUSDT` : "—"}
             mono
           />
           <Row
             label="노출 금액"
-            value={_notional > 0 ? `${formatNumber(_notional, { maximumFractionDigits: 2 })} USDT` : "—"}
+            value={_notional > 0 ? `${formatNumber(_notional, { maximumFractionDigits: 2 })} vUSDT` : "—"}
             mono
           />
           <Row
             label="필요 마진"
-            value={_margin > 0 ? `${formatNumber(_margin, { maximumFractionDigits: 2 })} USDT` : "—"}
+            value={_margin > 0 ? `${formatNumber(_margin, { maximumFractionDigits: 2 })} vUSDT` : "—"}
             tone={_margin > wallet.available && _margin > 0 ? "bad" : "default"}
             mono
           />

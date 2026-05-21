@@ -46,7 +46,7 @@ export function VirtualTradeClient({ currentBalance }: { currentBalance: number 
     <div className="grid gap-4 sm:grid-cols-2">
       <div>
         <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          가상 자금 추가 (USDT)
+          가상 자금 추가 (vUSDT)
         </Label>
         <div className="mt-2 flex gap-2">
           <Input

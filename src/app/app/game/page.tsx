@@ -1,4 +1,6 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseService } from "@/lib/supabase/service";
+import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { GameClient } from "./game-client";
 
 export default async function GamePage() {
@@ -7,32 +9,29 @@ export default async function GamePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // vUSDT 잔액은 paper_wallets에서 조회 (SSOT)
   let initialPoints = 1000;
   let totalGames = 0;
   let wins = 0;
 
   if (user) {
-    const { data: wallet } = await supabase
+    // vUSDT 잔액 조회 (paper_wallets — SSOT)
+    const wallet = await getOrCreateWallet(user.id);
+    initialPoints = wallet.available; // 가용 잔액 (마진 제외)
+
+    // 게임 통계는 game_wallets에서만 조회 (points는 무시)
+    const svc = getSupabaseService();
+    const { data: gw } = await svc
       .from("game_wallets")
-      .select("points, total_games, wins")
+      .select("total_games, wins")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (wallet) {
-      initialPoints = Number(wallet.points);
-      totalGames = Number(
-        (wallet as { points: number; total_games: number; wins: number })
-          .total_games ?? 0,
-      );
-      wins = Number(
-        (wallet as { points: number; total_games: number; wins: number })
-          .wins ?? 0,
-      );
-    } else {
-      await supabase
-        .from("game_wallets")
-        .insert({ user_id: user.id, points: 1000 });
+    if (gw) {
+      totalGames = Number(gw.total_games ?? 0);
+      wins = Number(gw.wins ?? 0);
     }
+    // game_wallets가 없어도 통계는 0으로 시작 (생성은 settle 시 수행)
   }
 
   return (

@@ -179,7 +179,13 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
           </div>
           <div className="flex items-start gap-2">
             <Sparkles className="h-3.5 w-3.5 mt-0.5 text-yellow-500 flex-none" />
-            <p>vUSDT가 부족하면 충전 페이지에서 AG로 입금하세요 (1 AG = 1,000 vUSDT).</p>
+            <p>
+              vUSDT가 부족하면{" "}
+              <a href="/app/deposit" className="text-primary underline underline-offset-2 hover:text-primary/80">
+                충전 페이지
+              </a>
+              에서 AG로 입금하세요 (1 AG = 1,000 vUSDT).
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -8,6 +8,7 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronDown,
+  Coins,
   ExternalLink,
   Gamepad2,
   Home,
@@ -27,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
 import { useUiModeStore } from "@/lib/stores/ui-mode-store";
 
-type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key" | "wallet" | "gamepad";
+type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key" | "wallet" | "gamepad" | "coins";
 
 type NavItem = {
   href: string;
@@ -45,6 +46,7 @@ const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   key: KeyRound,
   wallet: Wallet,
   gamepad: Gamepad2,
+  coins: Coins,
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -58,6 +60,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const SETTINGS_ITEMS: NavItem[] = [
+  { href: "/app/deposit", label: "vUSDT 충전", icon: "coins" },
   { href: "/app/credits", label: "AI 크레딧", icon: "sparkles" },
   { href: "/app/settings/notify", label: "알림 설정", icon: "bell" },
   { href: "/app/settings/api-keys", label: "거래소 API 키", icon: "key" },

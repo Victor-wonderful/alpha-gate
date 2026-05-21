@@ -2,14 +2,7 @@ import { TradeForm } from "@/components/trade/trade-form";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
-import type { MoneyContext } from "@/types/trade";
-
-const EMPTY_MONEY: MoneyContext = {
-  todayCumulativeR: 0,
-  todayClosedCount: 0,
-  openPositions: [],
-  openExposurePct: 0,
-};
+import { getMoneyContext } from "@/lib/money-management";
 
 export default async function TradePage({
   searchParams,
@@ -55,6 +48,8 @@ export default async function TradePage({
     ? await getOrCreateWallet(user.id)
     : { usdtBalance: 0, available: 0, usedMargin: 0, startingBalance: 10000 };
 
+  const money = await getMoneyContext(accountSize);
+
   return (
     <div className="space-y-6">
       <FlowStepper current="trade" />
@@ -63,7 +58,7 @@ export default async function TradePage({
         initialRiskPct={Number(profile?.default_risk_pct) || 1}
         currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
         initialSymbol={symbol}
-        money={EMPTY_MONEY}
+        money={money}
         apiKeys={apiKeys}
         paperWallet={{
           balance: wallet.usdtBalance,

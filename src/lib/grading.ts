@@ -1,4 +1,5 @@
 import type { GradeResult, ScoreReason, TradeInput } from "@/types/trade";
+import { DAILY_LOSS_LIMIT_R, SAME_DIRECTION_EXPOSURE_PCT } from "@/types/trade";
 
 export function calcRR(entry: number, stop: number, target: number, direction: "long" | "short") {
   const risk = Math.abs(entry - stop);
@@ -57,6 +58,31 @@ export function gradeTrade(input: TradeInput): GradeResult {
     reasons.push({ code: "candle_unconfirmed", label: "미확정 캔들에서 진입", points: -1 });
   if (!input.trigger.trigger_confirmed)
     reasons.push({ code: "trigger_missing", label: "트리거 조건 미확인", points: -1 });
+
+  // ─── 자금 관리 자동 감지 ──────────────────────────────
+  const { todayCumulativeR, openPositions, openExposurePct } = input.money;
+  if (todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5) {
+    reasons.push({
+      code: "daily_loss_limit",
+      label: `오늘 누적 ${todayCumulativeR.toFixed(2)}R — 일일 손실 한도 근접`,
+      points: -2,
+    });
+  }
+  const duplicateSymbol = openPositions.some((p) => p.symbol === input.symbol);
+  if (duplicateSymbol) {
+    reasons.push({
+      code: "duplicate_symbol",
+      label: `${input.symbol} 포지션이 이미 진행 중 (중복 노출)`,
+      points: -1,
+    });
+  }
+  if (openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT) {
+    reasons.push({
+      code: "overexposed",
+      label: `진행 중 포지션 노출 ${openExposurePct.toFixed(0)}% — 과노출`,
+      points: -2,
+    });
+  }
 
   // ─── 시장 컨텍스트 자동 감지 ──────────────────────────
   if (

@@ -57,6 +57,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app/game", label: "가격 예측 게임", icon: "gamepad" },
   { href: "/app/journal", label: "내 거래", icon: "book" },
   { href: "/app/dashboard", label: "성과 분석", icon: "chart" },
+  { href: "/app/wallet", label: "내 지갑", icon: "coins" },
 ];
 
 const SETTINGS_ITEMS: NavItem[] = [

@@ -19,6 +19,7 @@ import {
   Settings,
   Settings2,
   Sparkles,
+  Trophy,
   User,
   Wallet,
   X,
@@ -28,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
 import { useUiModeStore } from "@/lib/stores/ui-mode-store";
 
-type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key" | "wallet" | "gamepad" | "coins";
+type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key" | "wallet" | "gamepad" | "coins" | "trophy";
 
 type NavItem = {
   href: string;
@@ -47,6 +48,7 @@ const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   wallet: Wallet,
   gamepad: Gamepad2,
   coins: Coins,
+  trophy: Trophy,
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -57,6 +59,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app/game", label: "가격 예측 게임", icon: "gamepad" },
   { href: "/app/journal", label: "내 거래", icon: "book" },
   { href: "/app/dashboard", label: "성과 분석", icon: "chart" },
+  { href: "/app/rankings", label: "랭킹", icon: "trophy" },
   { href: "/app/wallet", label: "내 지갑", icon: "coins" },
 ];
 

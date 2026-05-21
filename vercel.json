@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/fill-limit-orders",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/distribute-rankings",
+      "schedule": "0 15 * * 0"
     }
   ]
 }

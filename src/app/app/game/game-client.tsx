@@ -22,6 +22,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
   const [games, setGames] = useState(totalGames);
   const [winCount, setWinCount] = useState(wins);
   const [symbol, setSymbol] = useState<string>("BTCUSDT");
+  const [timeframe, setTimeframe] = useState<Timeframe>("1m");
   const [activeGame, setActiveGame] = useState<{
     id: string;
     entryPrice: number;
@@ -189,9 +190,8 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         <div className="flex-1 relative">
           <LiveChart
             symbol={symbol}
+            timeframe={activeGame ? (activeGame.timeframe as Timeframe) : timeframe}
             entryPrice={activeGame?.entryPrice ?? null}
-            entryTime={activeGame ? Date.now() : null}
-            candleCloseTime={activeGame?.candleCloseTime ?? null}
             direction={activeGame?.direction ?? null}
             onCurrentPrice={handleCurrentPrice}
           />
@@ -272,7 +272,9 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         <GameControls
           points={points}
           symbol={symbol}
+          timeframe={timeframe}
           onSymbolChange={setSymbol}
+          onTimeframeChange={setTimeframe}
           onPlace={place}
           disabled={!!activeGame}
         />

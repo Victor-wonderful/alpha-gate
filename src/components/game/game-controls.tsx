@@ -10,7 +10,9 @@ type Direction = "call" | "put";
 interface Props {
   points: number;
   symbol: string;
+  timeframe: Timeframe;
   onSymbolChange: (s: string) => void;
+  onTimeframeChange: (t: Timeframe) => void;
   onPlace: (direction: Direction, timeframe: Timeframe, bet: number) => void;
   disabled?: boolean;
 }
@@ -32,11 +34,12 @@ const QUICK_BETS = [10, 50, 100, 500] as const;
 export function GameControls({
   points,
   symbol,
+  timeframe,
   onSymbolChange,
+  onTimeframeChange,
   onPlace,
   disabled,
 }: Props) {
-  const [timeframe, setTimeframe] = useState<Timeframe>("1m");
   const [bet, setBet] = useState(100);
 
   const winPayout = Math.round(bet * 0.8);
@@ -81,7 +84,7 @@ export function GameControls({
           {(["1m", "3m"] as Timeframe[]).map((t) => (
             <button
               key={t}
-              onClick={() => setTimeframe(t)}
+              onClick={() => onTimeframeChange(t)}
               disabled={disabled}
               className={cn(
                 "rounded-md py-2 text-sm font-bold transition-colors",

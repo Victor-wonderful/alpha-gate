@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { fetchKlines } from "@/lib/analysis/binance";
+import type { Interval } from "@/lib/analysis/binance";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +39,11 @@ export async function POST(
       { status: 400 },
     );
 
+  // DB의 timeframe 컬럼 활용 (없으면 '1m' fallback)
+  const timeframe = (game.timeframe ?? "1m") as Interval;
+
   // 종가 조회
-  const candles = await fetchKlines(game.symbol as string, "1m", 3);
+  const candles = await fetchKlines(game.symbol as string, timeframe, 3);
   // candle_close_time 이후의 캔들 찾기
   const settledCandle =
     candles.find(

@@ -6,6 +6,11 @@ import type { Interval } from "@/lib/analysis/binance";
 
 export const dynamic = "force-dynamic";
 
+const TF_SECONDS: Record<string, number> = {
+  "1m": 60,
+  "3m": 180,
+};
+
 export async function POST() {
   const supabase = await getSupabaseServer();
   const {
@@ -29,27 +34,36 @@ export async function POST() {
   for (const game of pending) {
     try {
       const timeframe = (game.timeframe ?? "1m") as Interval;
-      const candles = await fetchKlines(game.symbol as string, timeframe, 3);
-      const settledCandle =
-        candles.find(
-          (c) =>
-            c.openTime >= Number(game.candle_close_time) - 60_000 * 16 &&
-            c.closeTime <= Number(game.candle_close_time) + 5_000,
-        ) ?? candles[candles.length - 2];
-      const exitPrice = Number(settledCandle?.close ?? candles[candles.length - 1].close);
-      const entryPrice = Number(game.entry_price);
+      const tfMs = (TF_SECONDS[timeframe] ?? 60) * 1000;
+      const targetCloseTime = Number(game.candle_close_time);
+      const targetOpenTime = targetCloseTime - tfMs;
+
+      const candles = await fetchKlines(game.symbol as string, timeframe, 5);
+      const targetCandle =
+        candles.find((c) => Math.abs(c.openTime - targetOpenTime) < 1000) ??
+        candles[candles.length - 2];
+
+      if (!targetCandle) continue;
+
+      const entryPrice = Number(targetCandle.open);
+      const exitPrice = Number(targetCandle.close);
       const direction = game.direction as "call" | "put";
-      const won = direction === "call" ? exitPrice > entryPrice : exitPrice < entryPrice;
+      const won =
+        direction === "call" ? exitPrice > entryPrice : exitPrice < entryPrice;
       const betPoints = Number(game.bet_points);
       const pnlPoints = won ? Math.round(betPoints * 0.8) : -betPoints;
 
-      // 게임 업데이트
       await supabase
         .from("binary_games")
-        .update({ exit_price: exitPrice, won, pnl_points: pnlPoints, status: "settled" })
+        .update({
+          entry_price: entryPrice,
+          exit_price: exitPrice,
+          won,
+          pnl_points: pnlPoints,
+          status: "settled",
+        })
         .eq("id", game.id);
 
-      // 지갑 업데이트
       const { data: wallet } = await supabase
         .from("game_wallets")
         .select("points, total_games, wins")
@@ -67,7 +81,7 @@ export async function POST() {
         .eq("user_id", user.id);
       settledCount++;
     } catch {
-      // 개별 게임 정산 실패 시 다음 게임 계속 처리
+      // 개별 실패 무시
     }
   }
 

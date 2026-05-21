@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus, Minus, TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Timeframe = "1m" | "5m" | "15m";
+type Timeframe = "1m" | "3m";
 type Direction = "call" | "put";
 
 interface Props {
@@ -24,8 +24,7 @@ const SYMBOL_LABELS: Record<string, string> = {
 
 const TIMEFRAME_LABELS: Record<Timeframe, string> = {
   "1m": "1분",
-  "5m": "5분",
-  "15m": "15분",
+  "3m": "3분",
 };
 
 const QUICK_BETS = [10, 50, 100, 500] as const;
@@ -78,8 +77,8 @@ export function GameControls({
         <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
           시간
         </label>
-        <div className="mt-1 grid grid-cols-3 gap-1">
-          {(["1m", "5m", "15m"] as Timeframe[]).map((t) => (
+        <div className="mt-1 grid grid-cols-2 gap-1">
+          {(["1m", "3m"] as Timeframe[]).map((t) => (
             <button
               key={t}
               onClick={() => setTimeframe(t)}

@@ -6,6 +6,11 @@ import type { Interval } from "@/lib/analysis/binance";
 
 export const dynamic = "force-dynamic";
 
+const TF_SECONDS: Record<string, number> = {
+  "1m": 60,
+  "3m": 180,
+};
+
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ gameId: string }> },
@@ -29,6 +34,7 @@ export async function POST(
     return NextResponse.json({
       won: game.won,
       exitPrice: game.exit_price,
+      entryPrice: game.entry_price,
       pnlPoints: game.pnl_points,
     });
 
@@ -39,23 +45,28 @@ export async function POST(
       { status: 400 },
     );
 
-  // DB의 timeframe 컬럼 활용 (없으면 '1m' fallback)
   const timeframe = (game.timeframe ?? "1m") as Interval;
+  const tfMs = (TF_SECONDS[timeframe] ?? 60) * 1000;
+  const targetCloseTime = Number(game.candle_close_time);
+  const targetOpenTime = targetCloseTime - tfMs;
 
-  // 종가 조회
-  const candles = await fetchKlines(game.symbol as string, timeframe, 3);
-  // candle_close_time 이후의 캔들 찾기
-  const settledCandle =
+  // ── 다음 캔들 시가→종가 방식 ──
+  // 목표 캔들 = openTime === targetOpenTime 인 봉
+  const candles = await fetchKlines(game.symbol as string, timeframe, 5);
+  const targetCandle =
     candles.find(
-      (c) =>
-        c.openTime >= Number(game.candle_close_time) - 60_000 &&
-        c.closeTime <= Number(game.candle_close_time) + 5_000,
+      (c) => Math.abs(c.openTime - targetOpenTime) < 1000, // 1초 이내 매칭
     ) ?? candles[candles.length - 2];
-  const exitPrice = Number(
-    settledCandle?.close ?? candles[candles.length - 1].close,
-  );
 
-  const entryPrice = Number(game.entry_price);
+  if (!targetCandle) {
+    return NextResponse.json(
+      { error: "캔들 데이터를 찾을 수 없습니다" },
+      { status: 500 },
+    );
+  }
+
+  const entryPrice = Number(targetCandle.open); // 캔들 시가
+  const exitPrice = Number(targetCandle.close); // 캔들 종가
   const direction = game.direction as "call" | "put";
   const won =
     direction === "call" ? exitPrice > entryPrice : exitPrice < entryPrice;
@@ -70,7 +81,8 @@ export async function POST(
     .eq("user_id", user.id)
     .single();
 
-  const newPoints = Number(wallet?.points ?? 0) + (won ? betPoints + pnlPoints : 0);
+  const newPoints =
+    Number(wallet?.points ?? 0) + (won ? betPoints + pnlPoints : 0);
   await supabase
     .from("game_wallets")
     .update({
@@ -81,10 +93,11 @@ export async function POST(
     })
     .eq("user_id", user.id);
 
-  // 게임 기록 업데이트
+  // 게임 기록 업데이트 (entry_price를 실제 캔들 시가로 덮어씀)
   await supabase
     .from("binary_games")
     .update({
+      entry_price: entryPrice,
       exit_price: exitPrice,
       won,
       pnl_points: pnlPoints,
@@ -92,5 +105,11 @@ export async function POST(
     })
     .eq("id", gameId);
 
-  return NextResponse.json({ won, exitPrice, pnlPoints, pointsTotal: newPoints });
+  return NextResponse.json({
+    won,
+    entryPrice,
+    exitPrice,
+    pnlPoints,
+    pointsTotal: newPoints,
+  });
 }

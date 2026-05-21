@@ -40,7 +40,7 @@ export default async function GamePage() {
       <div>
         <h1 className="text-xl font-bold">가격 예측 게임</h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          실제 바이낸스 선물 시세 기반 · 1분/5분/15분 캔들 종가 예측
+          다음 캔들 시가→종가 방향 예측 · 1분/3분 · 바이낸스 선물 시세
         </p>
       </div>
       <GameClient

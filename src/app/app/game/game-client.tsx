@@ -9,7 +9,7 @@ import { GameHistorySidebar } from "@/components/game/game-history-sidebar";
 import { GameControls } from "@/components/game/game-controls";
 
 type Direction = "call" | "put";
-type Timeframe = "1m" | "5m" | "15m";
+type Timeframe = "1m" | "3m";
 
 interface Props {
   initialPoints: number;

@@ -15,7 +15,7 @@ export type Candle = {
   buyVolume: number; // taker buy base
 };
 
-export type Interval = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+export type Interval = "1m" | "3m" | "5m" | "15m" | "1h" | "4h" | "1d";
 
 async function jget<T>(url: string, timeoutMs = 8000): Promise<T> {
   const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });

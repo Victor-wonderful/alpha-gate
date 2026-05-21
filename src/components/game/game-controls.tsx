@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 type Timeframe = "1m" | "3m";
 type Direction = "call" | "put";
 
+type DisabledReason = "betting_closing" | "active_game" | "settling";
+
 interface Props {
   points: number;
   symbol: string;
@@ -15,7 +17,14 @@ interface Props {
   onTimeframeChange: (t: Timeframe) => void;
   onPlace: (direction: Direction, timeframe: Timeframe, bet: number) => void;
   disabled?: boolean;
+  disabledReason?: DisabledReason;
 }
+
+const DISABLED_LABELS: Record<DisabledReason, string> = {
+  betting_closing: "베팅 마감 임박 — 다음 캔들 대기",
+  active_game: "베팅 진행 중 — 결과 대기",
+  settling: "정산 중...",
+};
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"] as const;
 const SYMBOL_LABELS: Record<string, string> = {
@@ -39,6 +48,7 @@ export function GameControls({
   onTimeframeChange,
   onPlace,
   disabled,
+  disabledReason,
 }: Props) {
   const [bet, setBet] = useState(100);
 
@@ -165,6 +175,11 @@ export function GameControls({
 
       {/* UP / DOWN 버튼 */}
       <div className="mt-auto space-y-2">
+        {disabled && disabledReason && (
+          <div className="rounded-md border border-border/40 bg-muted/30 px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground">
+            {DISABLED_LABELS[disabledReason]}
+          </div>
+        )}
         <button
           onClick={() => onPlace("call", timeframe, bet)}
           disabled={!canPlay}

@@ -39,11 +39,13 @@ export async function POST(req: Request) {
   }
 
   // ── 다음 캔들 시가→종가 판정 방식 ──
+  // 주의: Binance closeTime = openTime + tfMs - 1 (이번 캔들 마지막 ms)
+  // 다음 캔들의 openTime = 이번 캔들 openTime + tfMs (정확히 정시 경계)
   const candles = await fetchKlines(symbol, timeframe as Interval, 2);
   const currentCandle = candles[candles.length - 1];
   const tfMs = TF_SECONDS[timeframe] * 1000;
-  const targetOpenTime = currentCandle.closeTime; // 다음 캔들 시작 시각
-  const targetCloseTime = targetOpenTime + tfMs;  // 다음 캔들 종료 시각
+  const targetOpenTime = currentCandle.openTime + tfMs;  // 다음 캔들 시작 시각 (정확)
+  const targetCloseTime = targetOpenTime + tfMs;          // 다음 캔들 끝 시각
 
   const placeholderPrice = Number(currentCandle.close);
 

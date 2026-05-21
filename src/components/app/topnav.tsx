@@ -9,12 +9,14 @@ import {
   CheckCircle2,
   ChevronDown,
   ExternalLink,
+  Gamepad2,
   Home,
   KeyRound,
   LineChart,
   LogOut,
   Menu,
   Settings,
+  Settings2,
   Sparkles,
   User,
   Wallet,
@@ -23,8 +25,9 @@ import {
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
+import { useUiModeStore } from "@/lib/stores/ui-mode-store";
 
-type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key" | "wallet";
+type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key" | "wallet" | "gamepad";
 
 type NavItem = {
   href: string;
@@ -41,6 +44,7 @@ const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   bell: Bell,
   key: KeyRound,
   wallet: Wallet,
+  gamepad: Gamepad2,
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -48,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app/analyze", label: "AI 분석", icon: "sparkles" },
   { href: "/app/trade", label: "주문 검토", icon: "check" },
   { href: "/app/virtual-trade", label: "가상 트레이딩", icon: "wallet" },
+  { href: "/app/game", label: "가격 예측 게임", icon: "gamepad" },
   { href: "/app/journal", label: "내 거래", icon: "book" },
   { href: "/app/dashboard", label: "성과 분석", icon: "chart" },
 ];
@@ -141,6 +146,21 @@ function SettingsDropdown({ pathname }: { pathname: string }) {
   );
 }
 
+function UiModeToggle() {
+  const { mode, toggle } = useUiModeStore();
+  const isBeginner = mode === "beginner";
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+    >
+      {isBeginner ? <Settings2 className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+      {isBeginner ? "고급 모드로 전환" : "초보 모드로 전환"}
+    </button>
+  );
+}
+
 function UserDropdown({ email }: { email: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -189,6 +209,7 @@ function UserDropdown({ email }: { email: string }) {
             <User className="h-3.5 w-3.5" />
             내 홈
           </Link>
+          <UiModeToggle />
           <a
             href={BLOG_URL}
             target="_blank"
@@ -296,6 +317,7 @@ function MobileDrawer({
             <ExternalLink className="h-3 w-3" />
           </a>
           <div className="px-3 py-1 text-xs text-muted-foreground">{email}</div>
+          <UiModeToggle />
           <button
             type="button"
             onClick={signOut}

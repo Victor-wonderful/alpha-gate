@@ -16,6 +16,10 @@ export interface PlaceOrderInput {
   target?: number;
   /** Trading style — controls timeframe & defaults. */
   timeframe?: "15m" | "1h" | "4h" | "1D";
+  /** Order type: 'market' (default) or 'limit'. */
+  orderType?: "market" | "limit";
+  /** Required when orderType === 'limit'. Target fill price. */
+  limitPrice?: number;
 }
 
 export interface PlaceOrderResult {
@@ -26,6 +30,10 @@ export interface PlaceOrderResult {
   newBalance?: number;
   newAvailable?: number;
   error?: string;
+  /** Limit 주문일 때 반환 */
+  orderType?: "market" | "limit";
+  limitPrice?: number;
+  status?: "filled" | "pending";
 }
 
 const PAPER_SLIPPAGE_PCT = 0.05;
@@ -51,7 +59,97 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
   }
 
   const symbol = input.symbol.toUpperCase();
+  const isLimit = input.orderType === "limit";
 
+  // ── 지정가 주문 분기 ─────────────────────────────────────────────────────
+  if (isLimit) {
+    if (!Number.isFinite(input.limitPrice) || (input.limitPrice ?? 0) <= 0) {
+      return { ok: false, error: "지정가를 입력하세요." };
+    }
+    const limitPrice = input.limitPrice!;
+
+    // stop/target 기본값 (지정가 기준 ±2% / ±4%)
+    const stop = input.stop ?? (input.direction === "long" ? limitPrice * 0.98 : limitPrice * 1.02);
+    const target = input.target ?? (input.direction === "long" ? limitPrice * 1.04 : limitPrice * 0.96);
+    const timeframe = input.timeframe ?? "1h";
+
+    // 잔액 확인 (예약 없이 주문만 등록하므로 실제 lock은 체결 시점에)
+    const afford = await canAffordMargin(user.id, 0);
+    const balance = afford.balance;
+
+    // trades 행 삽입 (pending 상태, entry_actual은 체결 시점에 채워짐)
+    const { data: trade, error: insertErr } = await supabase
+      .from("trades")
+      .insert({
+        user_id: user.id,
+        symbol,
+        direction: input.direction,
+        timeframe,
+        entry: limitPrice,
+        stop,
+        target,
+        account_size: balance,
+        allowed_loss_pct: 1,
+        position_quantity: input.quantity,
+        market_checks: {},
+        psych_checks: {},
+        context_flags: {
+          leverage: input.leverage,
+          directOrder: true,
+          limitOrder: true,
+        },
+        pre_grade: "B",
+        pre_score: 5,
+        pre_score_breakdown: [],
+        pre_actions: [],
+        pre_rr: Math.abs((target - limitPrice) / (limitPrice - stop)),
+        simulation_meta: null,
+        entry_actual: null,
+        entry_slippage_pct: 0,
+        fees_pct: PAPER_FEES_PCT,
+        paper_margin: null, // 체결 시점에 결정
+        is_paper: true,
+        order_type: "limit",
+        limit_price: limitPrice,
+        order_status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (insertErr || !trade) {
+      return { ok: false, error: `거래 생성 실패: ${insertErr?.message ?? "unknown"}` };
+    }
+
+    // pending_limit_orders 에 주문 등록
+    const { error: ploErr } = await supabase.from("pending_limit_orders").insert({
+      user_id: user.id,
+      trade_id: trade.id,
+      symbol,
+      direction: input.direction,
+      limit_price: limitPrice,
+      quantity: input.quantity,
+      leverage: input.leverage,
+      stop,
+      target,
+    });
+
+    if (ploErr) {
+      // 주문 등록 실패 시 trades 행도 정리
+      await supabase.from("trades").delete().eq("id", trade.id);
+      return { ok: false, error: `지정가 주문 등록 실패: ${ploErr.message}` };
+    }
+
+    revalidatePath("/app/virtual-trade");
+    return {
+      ok: true,
+      tradeId: trade.id,
+      orderType: "limit",
+      limitPrice,
+      status: "pending",
+    };
+  }
+
+  // ── 시장가 주문 (기존 로직 유지) ─────────────────────────────────────────
   // Get current market price + apply slippage
   let lastPrice: number;
   try {
@@ -127,6 +225,8 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
       fees_pct: PAPER_FEES_PCT,
       paper_margin: margin,
       is_paper: true,
+      order_type: "market",
+      order_status: "filled",
     })
     .select("id")
     .single();
@@ -160,6 +260,45 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
     newBalance: lock.wallet?.usdtBalance,
     newAvailable: lock.wallet?.available,
   };
+}
+
+/** Cancel a pending limit order (before it is filled). */
+export async function cancelLimitOrderAction(
+  orderId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  "use server";
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
+
+  // 주문 조회 (본인 것인지 RLS로 검증)
+  const { data: order, error: fetchErr } = await supabase
+    .from("pending_limit_orders")
+    .select("id, trade_id, status")
+    .eq("id", orderId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (fetchErr || !order) return { ok: false, error: "주문을 찾을 수 없습니다." };
+  if (order.status !== "open") return { ok: false, error: "이미 처리된 주문입니다." };
+
+  // pending_limit_orders 취소
+  const { error: cancelErr } = await supabase
+    .from("pending_limit_orders")
+    .update({ status: "canceled" })
+    .eq("id", orderId);
+  if (cancelErr) return { ok: false, error: `주문 취소 실패: ${cancelErr.message}` };
+
+  // trades order_status 취소
+  await supabase
+    .from("trades")
+    .update({ order_status: "canceled" })
+    .eq("id", order.trade_id);
+
+  revalidatePath("/app/virtual-trade");
+  return { ok: true };
 }
 
 /** Manually close a virtual position at the current market price. */

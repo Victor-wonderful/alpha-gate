@@ -30,6 +30,7 @@ import { ResultPanel } from "./result-panel";
 import { saveTradeAction } from "@/app/app/_actions";
 import { placeLiveTradeAction } from "@/app/app/trade/_actions";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
+import { useUiModeStore } from "@/lib/stores/ui-mode-store";
 import { STRATEGY_LABELS } from "@/lib/analysis/strategy";
 import type { AnalysisReport } from "@/lib/analysis/synthesize";
 import { recommendTradeParams } from "@/lib/recommend";
@@ -136,6 +137,8 @@ function TradeFormInner({
   const router = useRouter();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
+
+  const isAdvanced = useUiModeStore((s) => s.mode === "advanced");
 
   // Pull scenario context from analysis store (set during AI analysis flow).
   const analysisResult = useAnalysisStore((s) => s.result);
@@ -497,6 +500,7 @@ function TradeFormInner({
             strategyLabel={activeStrategy ? STRATEGY_LABELS[activeStrategy.primary] : null}
             strategyConfidence={activeStrategy ? activeStrategy.confidence : null}
             trend={activeTrend}
+            isAdvanced={isAdvanced}
             selectedTier={selectedTier}
             onSelectTier={selectTier}
             recommendation={recommendation}
@@ -707,23 +711,25 @@ function TradeFormInner({
                 onChange={(e) => { setLeverage(Number(e.target.value)); setUserOverride(true); }}
                 className="w-full accent-primary"
               />
-              <div className="flex flex-wrap gap-1">
-                {[1, 3, 5, 10, 20, 50].map((lv) => (
-                  <button
-                    key={lv}
-                    type="button"
-                    onClick={() => { setLeverage(lv); setUserOverride(true); }}
-                    className={cn(
-                      "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
-                      leverage === lv
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
-                    )}
-                  >
-                    {lv}x
-                  </button>
-                ))}
-              </div>
+              {isAdvanced && (
+                <div className="flex flex-wrap gap-1">
+                  {[1, 3, 5, 10, 20, 50].map((lv) => (
+                    <button
+                      key={lv}
+                      type="button"
+                      onClick={() => { setLeverage(lv); setUserOverride(true); }}
+                      className={cn(
+                        "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
+                        leverage === lv
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
+                      )}
+                    >
+                      {lv}x
+                    </button>
+                  ))}
+                </div>
+              )}
               <p className="text-[10px] text-muted-foreground">
                 레버리지는 손익비/등급과 무관. 필요 마진만 달라집니다.
               </p>
@@ -733,61 +739,83 @@ function TradeFormInner({
 
         {/* 2. 시장 구조 체크리스트 — AI 모드에서는 분석이 이미 평가했으므로 숨김 */}
         {!aiMode ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>시장 구조 체크리스트</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {MARKET_CHECK_KEYS.map((k) => (
-              <Checkbox
-                key={k}
-                checked={market[k]}
-                onChange={(e) => setMarket({ ...market, [k]: e.target.checked })}
-                label={MARKET_CHECK_LABELS[k]}
-              />
-            ))}
-          </CardContent>
-        </Card>
+        <details open={isAdvanced} className="group">
+          <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
+            <span className="transition-transform group-open:rotate-90">▶</span>
+            시장 구조 체크리스트
+          </summary>
+          <div className="mt-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>시장 구조 체크리스트</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                {MARKET_CHECK_KEYS.map((k) => (
+                  <Checkbox
+                    key={k}
+                    checked={market[k]}
+                    onChange={(e) => setMarket({ ...market, [k]: e.target.checked })}
+                    label={MARKET_CHECK_LABELS[k]}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </details>
         ) : null}
 
         {/* 3. 트리거 검증 — AI 모드에서는 시나리오 클릭으로 암묵 확인되므로 숨김 */}
         {!aiMode ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>트리거 검증</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {triggerHint ? (
-              <div className="rounded-md border border-border bg-background/30 p-3 text-sm">
-                <div className="text-[11px] uppercase text-muted-foreground">AI 시나리오 트리거</div>
-                <div className="mt-1">{triggerHint}</div>
-              </div>
-            ) : (
-              <div className="rounded-md border border-dashed border-border bg-background/20 p-3 text-xs text-muted-foreground">
-                AI 분석 페이지에서 시나리오를 선택하면 트리거 조건이 자동으로 채워집니다.
-              </div>
-            )}
-            <div className="space-y-1">
-              {TRIGGER_CHECK_KEYS.map((k) => (
-                <Checkbox
-                  key={k}
-                  checked={trigger[k]}
-                  onChange={(e) => setTrigger({ ...trigger, [k]: e.target.checked })}
-                  label={TRIGGER_CHECK_LABELS[k]}
-                />
-              ))}
-            </div>
-            {entryNum > 0 ? (
-              <div className="text-[11px] text-muted-foreground">
-                계획 진입 구간 (±{ENTRY_BAND_PCT}%): {entryBandLow.toFixed(2)} ~ {entryBandHigh.toFixed(2)}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+        <details open={isAdvanced} className="group">
+          <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
+            <span className="transition-transform group-open:rotate-90">▶</span>
+            트리거 검증
+          </summary>
+          <div className="mt-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>트리거 검증</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {triggerHint ? (
+                  <div className="rounded-md border border-border bg-background/30 p-3 text-sm">
+                    <div className="text-[11px] uppercase text-muted-foreground">AI 시나리오 트리거</div>
+                    <div className="mt-1">{triggerHint}</div>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed border-border bg-background/20 p-3 text-xs text-muted-foreground">
+                    AI 분석 페이지에서 시나리오를 선택하면 트리거 조건이 자동으로 채워집니다.
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {TRIGGER_CHECK_KEYS.map((k) => (
+                    <Checkbox
+                      key={k}
+                      checked={trigger[k]}
+                      onChange={(e) => setTrigger({ ...trigger, [k]: e.target.checked })}
+                      label={TRIGGER_CHECK_LABELS[k]}
+                    />
+                  ))}
+                </div>
+                {entryNum > 0 ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    계획 진입 구간 (±{ENTRY_BAND_PCT}%): {entryBandLow.toFixed(2)} ~ {entryBandHigh.toFixed(2)}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          </div>
+        </details>
         ) : null}
 
         {/* 4. 시장 컨텍스트 — AI 모드에서는 분석 결과에 이미 포함되므로 숨김 */}
         {!aiMode ? (
+        <details open={isAdvanced} className="group">
+          <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
+            <span className="transition-transform group-open:rotate-90">▶</span>
+            시장 컨텍스트 (BTC/펀딩비)
+          </summary>
+          <div className="mt-2">
         <Card>
           <CardHeader>
             <CardTitle>시장 컨텍스트</CardTitle>
@@ -850,6 +878,8 @@ function TradeFormInner({
             ) : null}
           </CardContent>
         </Card>
+          </div>
+        </details>
         ) : null}
       </div>
 
@@ -1073,6 +1103,7 @@ function ScenarioContextCard({
   onApplyRecommendation,
   mcResult,
   mtfTf,
+  isAdvanced,
 }: {
   scenario: AnalysisReport["scenarios"][number];
   strategyLabel: string | null;
@@ -1090,6 +1121,7 @@ function ScenarioContextCard({
   onApplyRecommendation: () => void;
   mcResult: MonteCarloResult | null;
   mtfTf: string | null;
+  isAdvanced: boolean;
 }) {
   const isLong = scenario.direction === "long";
   const entries = scenario.entries ?? [];
@@ -1165,16 +1197,24 @@ function ScenarioContextCard({
               ))}
             </div>
             {/* 단계별 상세 — 진입가에 따라 손절폭/목표폭/R:R/수량이 어떻게 달라지는지 */}
-            <TierMetricsTable
-              entries={entries}
-              avgPrice={avgPrice ?? 0}
-              invalidation={scenario.invalidation}
-              target={scenario.target}
-              accountSize={accountSize}
-              riskPct={riskPct}
-              currency={currency}
-              selectedTier={selectedTier}
-            />
+            <details open={isAdvanced} className="group">
+              <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
+                <span className="transition-transform group-open:rotate-90">▶</span>
+                진입 단계 상세 보기
+              </summary>
+              <div className="mt-2">
+                <TierMetricsTable
+                  entries={entries}
+                  avgPrice={avgPrice ?? 0}
+                  invalidation={scenario.invalidation}
+                  target={scenario.target}
+                  accountSize={accountSize}
+                  riskPct={riskPct}
+                  currency={currency}
+                  selectedTier={selectedTier}
+                />
+              </div>
+            </details>
           </div>
         ) : null}
         {/* AI 권장 사이징 — 즉시 적용된 값 + 도출 근거 */}
@@ -1238,7 +1278,17 @@ function ScenarioContextCard({
         ) : null}
 
         {/* Monte Carlo 결과 시뮬레이션 */}
-        {mcResult ? <MonteCarloPreview mc={mcResult} mtfTf={mtfTf} /> : null}
+        {mcResult ? (
+          <details open={isAdvanced} className="group">
+            <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
+              <span className="transition-transform group-open:rotate-90">▶</span>
+              시뮬레이션 결과 보기
+            </summary>
+            <div className="mt-2">
+              <MonteCarloPreview mc={mcResult} mtfTf={mtfTf} />
+            </div>
+          </details>
+        ) : null}
 
         {scenario.qualityIssues && scenario.qualityIssues.length > 0 ? (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5">

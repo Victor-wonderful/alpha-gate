@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/sync-exchange-orders",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/fill-limit-orders",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

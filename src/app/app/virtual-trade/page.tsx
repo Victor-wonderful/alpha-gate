@@ -34,22 +34,50 @@ export default async function VirtualTradePage({
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const positions = (openTrades ?? []).map((t) => {
-    const ctx = (t.context_flags ?? {}) as { leverage?: number };
-    return {
-      id: t.id as string,
-      symbol: t.symbol as string,
-      direction: t.direction as "long" | "short",
-      entryActual: Number(t.entry_actual ?? t.entry),
-      qty: Number(t.position_quantity ?? 0),
-      margin: Number(t.paper_margin ?? 0),
-      stop: Number(t.stop),
-      target: Number(t.target),
-      leverage: Number(ctx.leverage ?? 1),
-      feesPct: Number(t.fees_pct ?? 0.12),
-      createdAt: t.created_at as string,
-    };
-  });
+  const positions = (openTrades ?? [])
+    .filter((t) => {
+      // pending 지정가 주문은 포지션 탭에서 제외 (주문 탭에 따로 표시)
+      const status = (t as { order_status?: string }).order_status;
+      return status !== "pending";
+    })
+    .map((t) => {
+      const ctx = (t.context_flags ?? {}) as { leverage?: number };
+      return {
+        id: t.id as string,
+        symbol: t.symbol as string,
+        direction: t.direction as "long" | "short",
+        entryActual: Number(t.entry_actual ?? t.entry),
+        qty: Number(t.position_quantity ?? 0),
+        margin: Number(t.paper_margin ?? 0),
+        stop: Number(t.stop),
+        target: Number(t.target),
+        leverage: Number(ctx.leverage ?? 1),
+        feesPct: Number(t.fees_pct ?? 0.12),
+        createdAt: t.created_at as string,
+      };
+    });
+
+  // 미체결 지정가 주문 조회
+  const { data: openOrders } = await supabase
+    .from("pending_limit_orders")
+    .select("id, symbol, direction, limit_price, quantity, leverage, stop, target, expires_at, created_at")
+    .eq("user_id", user.id)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const pendingOrders = (openOrders ?? []).map((o) => ({
+    id: o.id as string,
+    symbol: o.symbol as string,
+    direction: o.direction as "long" | "short",
+    limitPrice: Number(o.limit_price),
+    quantity: Number(o.quantity),
+    leverage: Number(o.leverage),
+    stop: o.stop != null ? Number(o.stop) : null,
+    target: o.target != null ? Number(o.target) : null,
+    expiresAt: o.expires_at as string,
+    createdAt: o.created_at as string,
+  }));
 
   return (
     <div className="space-y-3">
@@ -78,6 +106,7 @@ export default async function VirtualTradePage({
           startingBalance: wallet.startingBalance,
         }}
         positions={positions}
+        pendingOrders={pendingOrders}
       />
     </div>
   );

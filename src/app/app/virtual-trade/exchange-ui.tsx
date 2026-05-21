@@ -29,7 +29,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
-import { closeVirtualPositionAction, placeVirtualOrderAction } from "./order-actions";
+import {
+  cancelLimitOrderAction,
+  closeVirtualPositionAction,
+  placeVirtualOrderAction,
+} from "./order-actions";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT"] as const;
 const TIMEFRAMES = ["15m", "1h", "4h", "1d"] as const;
@@ -56,18 +60,33 @@ type Position = {
   createdAt: string;
 };
 
+type PendingOrder = {
+  id: string;
+  symbol: string;
+  direction: "long" | "short";
+  limitPrice: number;
+  quantity: number;
+  leverage: number;
+  stop: number | null;
+  target: number | null;
+  expiresAt: string;
+  createdAt: string;
+};
+
 export function ExchangeUI({
   initialSymbol,
   wallet,
   positions,
+  pendingOrders = [],
 }: {
   initialSymbol: string;
   wallet: Wallet;
   positions: Position[];
+  pendingOrders?: PendingOrder[];
 }) {
   const [symbol, setSymbol] = useState<string>(initialSymbol);
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAMES)[number]>("1h");
-  const [tab, setTab] = useState<"positions" | "history">("positions");
+  const [tab, setTab] = useState<"positions" | "orders" | "history">("positions");
 
   return (
     <div className="space-y-3">
@@ -87,9 +106,9 @@ export function ExchangeUI({
           </div>
         </div>
 
-        {/* Positions / history — spans chart + orderbook columns */}
+        {/* Positions / orders / history — spans chart + orderbook columns */}
         <div className="lg:col-span-2 lg:col-start-1 lg:row-start-2">
-          <PositionsTabs tab={tab} onTabChange={setTab} positions={positions} />
+          <PositionsTabs tab={tab} onTabChange={setTab} positions={positions} pendingOrders={pendingOrders} />
         </div>
       </div>
     </div>
@@ -1072,7 +1091,11 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
       toast.error("수량을 입력하세요.");
       return;
     }
-    if (margin > wallet.available) {
+    if (orderType === "limit" && (!price || Number(price) <= 0)) {
+      toast.error("지정가를 입력하세요.");
+      return;
+    }
+    if (orderType === "market" && margin > wallet.available) {
       toast.error(`가상 잔액 부족 — 필요 $${margin.toFixed(2)}, 가능 $${wallet.available.toFixed(2)}`);
       return;
     }
@@ -1084,15 +1107,24 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
         leverage,
         stop: stop ? Number(stop) : undefined,
         target: target ? Number(target) : undefined,
+        orderType: orderType === "limit" ? "limit" : "market",
+        limitPrice: orderType === "limit" ? Number(price) : undefined,
       });
       if (!r.ok) {
         toast.error(r.error ?? "주문 실패");
         return;
       }
-      toast.success(`${direction === "long" ? "롱" : "숏"} 진입 완료 · 체결가 $${formatNumber(r.fillPrice ?? 0)} · 마진 $${formatNumber(r.margin ?? 0)}`);
+      if (r.orderType === "limit") {
+        toast.success(
+          `지정가 주문 등록 · ${direction === "long" ? "롱" : "숏"} ${symbol} @ $${formatNumber(r.limitPrice ?? 0)} · 24시간 내 미체결 시 만료`,
+        );
+      } else {
+        toast.success(`${direction === "long" ? "롱" : "숏"} 진입 완료 · 체결가 $${formatNumber(r.fillPrice ?? 0)} · 마진 $${formatNumber(r.margin ?? 0)}`);
+      }
       setQty("");
       setStop("");
       setTarget("");
+      setPrice("");
     });
   }
 
@@ -1166,14 +1198,12 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
               key={t}
               type="button"
               onClick={() => {
-                if (t === "limit") return; // 지정가는 준비 중
                 if (t === "tpsl") {
                   setTpslEnabled(!tpslEnabled);
                   return;
                 }
                 setOrderType(t);
               }}
-              disabled={t === "limit"}
               className={cn(
                 "relative pb-1.5 text-xs font-medium transition-colors",
                 t === "tpsl"
@@ -1183,16 +1213,11 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
                   : orderType === t
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",
-                t === "limit" && "cursor-not-allowed opacity-40",
               )}
-              title={t === "limit" ? "지정가는 준비 중" : ""}
             >
               {t === "limit" ? "지정가" : t === "market" ? "시장가" : "TP/SL"}
               {(t === "tpsl" ? tpslEnabled : orderType === t) ? (
                 <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-primary" />
-              ) : null}
-              {t === "limit" ? (
-                <span className="ml-1 rounded bg-muted/50 px-1 py-0.5 text-[8px] uppercase">준비중</span>
               ) : null}
             </button>
           ))}
@@ -1470,15 +1495,17 @@ function Row({ label, value, tone, mono }: { label: string; value: string; tone?
   );
 }
 
-// ─── Positions / History Tabs ───────────────────────────────────────────
+// ─── Positions / Orders / History Tabs ──────────────────────────────────
 function PositionsTabs({
   tab,
   onTabChange,
   positions,
+  pendingOrders,
 }: {
-  tab: "positions" | "history";
-  onTabChange: (t: "positions" | "history") => void;
+  tab: "positions" | "orders" | "history";
+  onTabChange: (t: "positions" | "orders" | "history") => void;
   positions: Position[];
+  pendingOrders: PendingOrder[];
 }) {
   return (
     <Card>
@@ -1486,6 +1513,9 @@ function PositionsTabs({
         <div className="mb-3 flex gap-3 border-b border-border/40">
           <TabButton active={tab === "positions"} onClick={() => onTabChange("positions")}>
             진행 중 포지션 ({positions.length})
+          </TabButton>
+          <TabButton active={tab === "orders"} onClick={() => onTabChange("orders")}>
+            미체결 주문 ({pendingOrders.length})
           </TabButton>
           <TabButton active={tab === "history"} onClick={() => onTabChange("history")}>
             거래 내역
@@ -1497,6 +1527,12 @@ function PositionsTabs({
           ) : (
             <PositionsTable positions={positions} />
           )
+        ) : tab === "orders" ? (
+          pendingOrders.length === 0 ? (
+            <div className="py-6 text-center text-xs text-muted-foreground">미체결 지정가 주문이 없습니다.</div>
+          ) : (
+            <PendingOrdersTable orders={pendingOrders} />
+          )
         ) : (
           <div className="py-6 text-center text-xs text-muted-foreground">
             <Link href="/app/journal" className="text-primary underline-offset-2 hover:underline">
@@ -1507,6 +1543,108 @@ function PositionsTabs({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Pending Orders Table ─────────────────────────────────────────────────
+function PendingOrdersTable({ orders }: { orders: PendingOrder[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[700px] text-xs">
+        <thead className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
+          <tr className="border-b border-border/40">
+            <th className="px-2 py-2 text-left font-medium">심볼</th>
+            <th className="px-2 py-2 text-left font-medium">방향</th>
+            <th className="px-2 py-2 text-right font-medium">지정가</th>
+            <th className="px-2 py-2 text-right font-medium">수량</th>
+            <th className="px-2 py-2 text-right font-medium">손절 / 목표</th>
+            <th className="px-2 py-2 text-right font-medium">만료</th>
+            <th className="px-2 py-2 text-right font-medium"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o) => (
+            <PendingOrderRow key={o.id} order={o} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PendingOrderRow({ order }: { order: PendingOrder }) {
+  const [canceling, startCancelTransition] = useTransition();
+  const isLong = order.direction === "long";
+  const expiresIn = Math.max(0, new Date(order.expiresAt).getTime() - Date.now());
+  const expiresHours = Math.floor(expiresIn / 3_600_000);
+  const expiresMinutes = Math.floor((expiresIn % 3_600_000) / 60_000);
+
+  function cancel() {
+    if (!confirm(`${order.symbol} 지정가 ${isLong ? "매수" : "매도"} 주문을 취소하시겠습니까?`)) return;
+    startCancelTransition(async () => {
+      const r = await cancelLimitOrderAction(order.id);
+      if (!r.ok) {
+        toast.error(r.error ?? "취소 실패");
+        return;
+      }
+      toast.success("지정가 주문이 취소되었습니다.");
+    });
+  }
+
+  return (
+    <tr className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
+      <td className="px-2 py-2.5">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")} />
+          <span className="font-mono text-xs font-semibold">{order.symbol}</span>
+        </div>
+      </td>
+      <td className="px-2 py-2.5">
+        <Badge
+          className={cn(
+            "border text-[9px]",
+            isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d",
+          )}
+        >
+          {isLong ? "롱" : "숏"}
+        </Badge>
+      </td>
+      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">
+        ${formatNumber(order.limitPrice)}
+      </td>
+      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">
+        {formatNumber(order.quantity, { maximumFractionDigits: 4 })}
+      </td>
+      <td className="px-2 py-2.5 text-right">
+        <div className="flex items-center justify-end gap-1.5 font-mono text-[11px] tabular-nums">
+          {order.stop != null ? (
+            <span className="text-grade-d/80">${formatNumber(order.stop, { maximumFractionDigits: 2 })}</span>
+          ) : (
+            <span className="text-muted-foreground/40">—</span>
+          )}
+          <span className="text-muted-foreground/40">/</span>
+          {order.target != null ? (
+            <span className="text-grade-a/80">${formatNumber(order.target, { maximumFractionDigits: 2 })}</span>
+          ) : (
+            <span className="text-muted-foreground/40">—</span>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-2.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+        {expiresHours > 0 ? `${expiresHours}시간 ${expiresMinutes}분` : `${expiresMinutes}분`}
+      </td>
+      <td className="px-2 py-2.5 text-right">
+        <button
+          type="button"
+          onClick={cancel}
+          disabled={canceling}
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-background/40 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-grade-d/40 hover:text-grade-d disabled:opacity-50"
+        >
+          <X className="h-3 w-3" />
+          {canceling ? "..." : "취소"}
+        </button>
+      </td>
+    </tr>
   );
 }
 

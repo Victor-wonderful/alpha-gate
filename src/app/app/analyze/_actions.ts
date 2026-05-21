@@ -33,7 +33,7 @@ export async function runAnalysisAction(
   try {
     const credits = await getAiCredits(user.id);
     if (credits <= 0) {
-      return { error: "AI 크레딧이 없습니다. 크레딧을 충전하거나 관리자에게 문의하세요." };
+      return { error: "AI 크레딧이 없습니다. 우측 상단 [설정 → AI 크레딧]에서 패키지를 구매하세요." };
     }
   } catch {
     // 크레딧 조회 실패 시 분석은 계속 진행 (best-effort)

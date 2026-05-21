@@ -58,6 +58,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const SETTINGS_ITEMS: NavItem[] = [
+  { href: "/app/credits", label: "AI 크레딧", icon: "sparkles" },
   { href: "/app/settings/notify", label: "알림 설정", icon: "bell" },
   { href: "/app/settings/api-keys", label: "거래소 API 키", icon: "key" },
 ];

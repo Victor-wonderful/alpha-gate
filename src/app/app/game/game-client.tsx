@@ -218,11 +218,11 @@ export function GameClient({
     pnlPoints: number;
   } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState(recentGames);
-  const [streak, setStreak] = useState(initStreak);
+  const [history, setHistory] = useState(recentGames ?? []);
+  const [streak, setStreak] = useState(initStreak ?? 0);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
-  const [games, setGames] = useState(totalGames);
-  const [winCount, setWinCount] = useState(wins);
+  const [games, setGames] = useState(totalGames ?? 0);
+  const [winCount, setWinCount] = useState(wins ?? 0);
 
   const bet = Number(betInput) || 0;
   const winPayout = Math.round(bet * 0.8);

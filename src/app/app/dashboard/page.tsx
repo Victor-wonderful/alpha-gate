@@ -1,4 +1,5 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GradeBadge } from "@/components/trade/grade-badge";
@@ -18,18 +19,27 @@ interface ClosedRow {
   symbol: string;
   direction: "long" | "short";
   exit_reason: "target" | "stop" | "manual" | null;
+  paper_realized_pnl: number | null;
 }
 
 export default async function DashboardPage() {
   const supabase = await getSupabaseServer();
-  const { data } = await supabase
-    .from("trades")
-    .select("pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode")
-    .not("closed_at", "is", null)
-    .neq("mode", "backtest")
-    .order("closed_at", { ascending: true });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const rows = ((data ?? []) as unknown as ClosedRow[]).filter((r) => r.result_r != null);
+  const [tradesRes, wallet] = await Promise.all([
+    supabase
+      .from("trades")
+      .select("pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl")
+      .not("closed_at", "is", null)
+      .neq("mode", "backtest")
+      .order("closed_at", { ascending: true }),
+    user ? getOrCreateWallet(user.id).catch(() => null) : Promise.resolve(null),
+  ]);
+
+  const rows = ((tradesRes.data ?? []) as unknown as ClosedRow[]).filter((r) => r.result_r != null);
+  const startingBalance = wallet?.startingBalance ?? 10000;
 
   // ── Headline KPIs ────────────────────────────────────────
   const n = rows.length;
@@ -44,6 +54,13 @@ export default async function DashboardPage() {
   const profitFactor = avgLoss < 0 ? (wins * avgWin) / Math.abs(losses * avgLoss) : 0;
   const best = rows.reduce((b, r) => (Number(r.result_r) > b ? Number(r.result_r) : b), -Infinity);
   const worst = rows.reduce((w, r) => (Number(r.result_r) < w ? Number(r.result_r) : w), Infinity);
+
+  // PnL · ROI — vUSDT 절대 금액 + 시작 잔액 대비 수익률
+  const totalPnl = rows.reduce(
+    (s, r) => s + (r.paper_realized_pnl != null ? Number(r.paper_realized_pnl) : 0),
+    0,
+  );
+  const roiPct = startingBalance > 0 ? (totalPnl / startingBalance) * 100 : 0;
 
   // ── Equity curve points ──────────────────────────────────
   let cum = 0;
@@ -112,18 +129,31 @@ export default async function DashboardPage() {
       ) : (
         <>
           {/* ── Hero KPIs ────────────────────────────────────── */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Kpi
               label="누적 R"
               value={`${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)}R`}
-              sub={`${n}건 (승 ${wins} · 패 ${losses}${breakeven ? ` · BE ${breakeven}` : ""})`}
+              sub={`${n}건 · 거래당 평균 ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R`}
               tone={totalR >= 0 ? "good" : "bad"}
               icon={totalR >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
             />
             <Kpi
+              label="누적 PnL"
+              value={`${totalPnl >= 0 ? "+" : ""}${totalPnl.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}`}
+              sub="vUSDT — 종료된 거래의 실현 손익 합계"
+              tone={totalPnl >= 0 ? "good" : "bad"}
+              icon={totalPnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+            />
+            <Kpi
+              label="ROI"
+              value={`${roiPct >= 0 ? "+" : ""}${roiPct.toFixed(2)}%`}
+              sub={`시작 잔액 ${startingBalance.toLocaleString("ko-KR")} vUSDT 기준`}
+              tone={roiPct >= 0 ? "good" : "bad"}
+            />
+            <Kpi
               label="승률"
               value={`${winRate.toFixed(1)}%`}
-              sub={`평균 ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R / 거래`}
+              sub={`승 ${wins} · 패 ${losses}${breakeven ? ` · BE ${breakeven}` : ""}`}
               tone={winRate >= 50 ? "good" : winRate >= 35 ? "neutral" : "bad"}
             />
             <Kpi

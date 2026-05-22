@@ -36,6 +36,7 @@ interface TradeRow {
   account_size: number | null;
   fees_pct: number | null;
   exit_reason: "target" | "stop" | "manual" | null;
+  paper_realized_pnl: number | null;
 }
 
 export default async function JournalListPage() {
@@ -43,7 +44,7 @@ export default async function JournalListPage() {
   const { data: tradesRaw } = await supabase
     .from("trades")
     .select(
-      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason, order_type, order_status, limit_price",
+      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason, order_type, order_status, limit_price, paper_realized_pnl",
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -323,47 +324,75 @@ export default async function JournalListPage() {
                   <th className="px-4 py-2 text-left">등급</th>
                   <th className="px-4 py-2 text-right">진입 R:R</th>
                   <th className="px-4 py-2 text-right">실현 R</th>
+                  <th className="px-4 py-2 text-right">실현 PnL</th>
+                  <th className="px-4 py-2 text-right">ROI</th>
                   <th className="px-4 py-2 text-left">사유</th>
                 </tr>
               </thead>
               <tbody>
-                {closed.map((t) => (
-                  <tr key={t.id} className="border-t border-border hover:bg-accent/40">
-                    <td className="px-4 py-2">
-                      <Link href={`/app/journal/${t.id}`} className="text-foreground hover:underline">
-                        {new Date(t.created_at).toLocaleDateString("ko-KR")}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 font-mono">{t.symbol}</td>
-                    <td className="px-4 py-2">{t.direction === "long" ? "롱" : "숏"}</td>
-                    <td className="px-4 py-2">{t.timeframe}</td>
-                    <td className="px-4 py-2">
-                      <GradeBadge grade={t.pre_grade as Grade} size="sm" />
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono">{Number(t.pre_rr ?? 0).toFixed(2)}</td>
-                    <td className="px-4 py-2 text-right font-mono">
-                      {t.result_r != null ? (
-                        <span className={Number(t.result_r) >= 0 ? "text-grade-a" : "text-grade-d"}>
-                          {Number(t.result_r) >= 0 ? "+" : ""}
-                          {Number(t.result_r).toFixed(2)}R
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-xs">
-                      {t.exit_reason === "target" ? (
-                        <span className="text-grade-a">목표 도달</span>
-                      ) : t.exit_reason === "stop" ? (
-                        <span className="text-grade-d">손절 적중</span>
-                      ) : t.exit_reason === "manual" ? (
-                        <span className="text-muted-foreground">수동</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {closed.map((t) => {
+                  const pnl = t.paper_realized_pnl != null ? Number(t.paper_realized_pnl) : null;
+                  const acct = t.account_size != null ? Number(t.account_size) : null;
+                  const roiPct = pnl != null && acct && acct > 0 ? (pnl / acct) * 100 : null;
+                  return (
+                    <tr key={t.id} className="border-t border-border hover:bg-accent/40">
+                      <td className="px-4 py-2">
+                        <Link href={`/app/journal/${t.id}`} className="text-foreground hover:underline">
+                          {new Date(t.created_at).toLocaleDateString("ko-KR")}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 font-mono">{t.symbol}</td>
+                      <td className="px-4 py-2">{t.direction === "long" ? "롱" : "숏"}</td>
+                      <td className="px-4 py-2">{t.timeframe}</td>
+                      <td className="px-4 py-2">
+                        <GradeBadge grade={t.pre_grade as Grade} size="sm" />
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">{Number(t.pre_rr ?? 0).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {t.result_r != null ? (
+                          <span className={Number(t.result_r) >= 0 ? "text-grade-a" : "text-grade-d"}>
+                            {Number(t.result_r) >= 0 ? "+" : ""}
+                            {Number(t.result_r).toFixed(2)}R
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {pnl != null ? (
+                          <span className={pnl >= 0 ? "text-grade-a" : "text-grade-d"}>
+                            {pnl >= 0 ? "+" : ""}
+                            {formatNumber(pnl, { maximumFractionDigits: 2 })}{" "}
+                            <span className="text-[10px] text-muted-foreground">vUSDT</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {roiPct != null ? (
+                          <span className={roiPct >= 0 ? "text-grade-a" : "text-grade-d"}>
+                            {roiPct >= 0 ? "+" : ""}
+                            {roiPct.toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-xs">
+                        {t.exit_reason === "target" ? (
+                          <span className="text-grade-a">목표 도달</span>
+                        ) : t.exit_reason === "stop" ? (
+                          <span className="text-grade-d">손절 적중</span>
+                        ) : t.exit_reason === "manual" ? (
+                          <span className="text-muted-foreground">수동</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

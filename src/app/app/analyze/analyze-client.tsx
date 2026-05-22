@@ -11,6 +11,7 @@ import { runAnalysisAction, loadAnalysisAction } from "./_actions";
 import { AnalysisResult } from "./analysis-result";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
+import { AnalysisTimingHint } from "@/components/analyze/analysis-timing-hint";
 import { AnalysisInfo } from "@/components/analyze/analysis-info";
 
 const PRESETS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"];
@@ -173,6 +174,8 @@ function AnalyzeClientInner({
               })}
             </div>
           </div>
+
+          <AnalysisTimingHint style={style} />
 
           <div className="flex justify-end">
             <Button onClick={run} disabled={pending} size="lg">

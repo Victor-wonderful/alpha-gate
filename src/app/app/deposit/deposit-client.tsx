@@ -80,7 +80,7 @@ export function DepositClient({ initialBalance }: Props) {
             </div>
           </div>
           <div className="text-right text-xs text-muted-foreground">
-            <div>≈ {(balance / VUSDT_PER_AG).toFixed(3)} AG</div>
+            <div>≈ {(balance / VUSDT_PER_AG).toFixed(3)} AAG</div>
             <div className="mt-0.5">≈ ${(balance / VUSDT_PER_AG).toFixed(2)}</div>
           </div>
         </CardContent>
@@ -129,7 +129,7 @@ export function DepositClient({ initialBalance }: Props) {
                     <span className="font-mono text-3xl font-black tabular-nums">
                       {pkg.ag}
                     </span>
-                    <span className="text-sm text-muted-foreground">AG</span>
+                    <span className="text-sm text-muted-foreground">AAG</span>
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
                     ≈ ${pkg.ag} USDT
@@ -189,14 +189,14 @@ export function DepositClient({ initialBalance }: Props) {
           <p className="flex items-start gap-2">
             <Coins className="h-3.5 w-3.5 mt-0.5 text-primary flex-none" />
             <span>
-              <strong className="text-foreground">환율</strong> · 1 AG = 1 USDT(실제) = 1,000 vUSDT(플랫폼 가상화폐).{" "}
+              <strong className="text-foreground">환율</strong> · 1 AAG = 1 USDT(실제) = 1,000 vUSDT(플랫폼 가상화폐).{" "}
               vUSDT는 플랫폼 내에서만 사용 가능합니다 (가상 트레이딩, 가격 예측 게임, AI 분석 크레딧).
             </span>
           </p>
           <p className="flex items-start gap-2">
             <Gift className="h-3.5 w-3.5 mt-0.5 text-yellow-500 flex-none" />
             <span>
-              <strong className="text-foreground">보너스</strong> · 50 AG 이상부터 10%, 200 AG부터 20% 보너스 vUSDT가 추가 지급됩니다.
+              <strong className="text-foreground">보너스</strong> · 50 AAG 이상부터 10%, 200 AAG부터 20% 보너스 vUSDT가 추가 지급됩니다.
             </span>
           </p>
         </CardContent>

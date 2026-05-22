@@ -16,7 +16,7 @@ export default async function DepositPage() {
       <div>
         <h1 className="text-2xl font-bold">vUSDT 충전</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          1 AG = 1 USDT(실제) = 1,000 vUSDT (플랫폼 가상화폐)
+          1 AAG = 1 USDT(실제) = 1,000 vUSDT (플랫폼 가상화폐)
         </p>
       </div>
       <DepositClient initialBalance={balance} />

@@ -88,7 +88,7 @@ export default async function WalletPage() {
               <span className="text-base text-muted-foreground font-medium">vUSDT</span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              ≈ {(balance / 1000).toFixed(3)} AG · ≈ ${(balance / 1000).toFixed(2)} USDT
+              ≈ {(balance / 1000).toFixed(3)} AAG · ≈ ${(balance / 1000).toFixed(2)} USDT
             </div>
             <div className="mt-4 flex gap-2">
               <Link
@@ -251,7 +251,7 @@ export default async function WalletPage() {
       <Card>
         <CardContent className="py-3 px-4 text-xs text-muted-foreground">
           <p>
-            <strong className="text-foreground">환율</strong> · 1 AG = 1 USDT(실제) = 1,000 vUSDT(플랫폼).{" "}
+            <strong className="text-foreground">환율</strong> · 1 AAG = 1 USDT(실제) = 1,000 vUSDT(플랫폼).{" "}
             vUSDT는 플랫폼 내에서만 사용 가능합니다.
           </p>
         </CardContent>

@@ -184,7 +184,7 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
               <a href="/app/deposit" className="text-primary underline underline-offset-2 hover:text-primary/80">
                 충전 페이지
               </a>
-              에서 AG로 입금하세요 (1 AG = 1,000 vUSDT).
+              에서 AAG로 입금하세요 (1 AAG = 1,000 vUSDT).
             </p>
           </div>
         </CardContent>

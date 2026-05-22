@@ -5,10 +5,10 @@ import { creditBalance, getBalance } from "@/lib/paper-wallet";
 
 export const dynamic = "force-dynamic";
 
-// 1 AG = 1 USDT(실제) = 1,000 vUSDT(플랫폼)
+// 1 AAG = 1 USDT(실제) = 1,000 vUSDT(플랫폼)
 export const VUSDT_PER_AG = 1000;
 
-// AG 패키지 — 큰 패키지일수록 보너스 vUSDT
+// AAG 패키지 — 큰 패키지일수록 보너스 vUSDT
 export const AG_PACKAGES = {
   starter: { id: "starter", ag: 1, bonusPct: 0, label: "시작" },
   basic: { id: "basic", ag: 10, bonusPct: 0, label: "베이직" },

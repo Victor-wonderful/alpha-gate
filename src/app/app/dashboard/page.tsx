@@ -7,7 +7,8 @@ import { ArrowDownRight, ArrowUpRight, Minus, TrendingUp } from "lucide-react";
 import type { Grade } from "@/types/trade";
 import { cn } from "@/lib/utils";
 import { FlowStepper } from "@/components/app/flow-stepper";
-import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
+import { ClusterTabs } from "@/components/app/cluster-tabs";
+import { clusters } from "@/components/app/cluster-tabs-config";
 
 interface ClosedRow {
   pre_grade: Grade;

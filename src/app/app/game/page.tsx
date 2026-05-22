@@ -2,7 +2,8 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { GameClient } from "./game-client";
-import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
+import { ClusterTabs } from "@/components/app/cluster-tabs";
+import { clusters } from "@/components/app/cluster-tabs-config";
 
 export default async function GamePage() {
   const supabase = await getSupabaseServer();

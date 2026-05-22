@@ -1,5 +1,6 @@
 import { RankingsClient } from "./rankings-client";
-import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
+import { ClusterTabs } from "@/components/app/cluster-tabs";
+import { clusters } from "@/components/app/cluster-tabs-config";
 
 export default function RankingsPage() {
   const cluster = clusters.results();

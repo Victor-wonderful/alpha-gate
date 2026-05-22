@@ -8,7 +8,8 @@ import type { Grade } from "@/types/trade";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { ResolveTradesButton } from "./resolve-button";
 import { CancelPendingButton } from "./cancel-pending-button";
-import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
+import { ClusterTabs } from "@/components/app/cluster-tabs";
+import { clusters } from "@/components/app/cluster-tabs-config";
 import { fetchTicker24h } from "@/lib/analysis/binance";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 

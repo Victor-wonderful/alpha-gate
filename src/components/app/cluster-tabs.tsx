@@ -3,15 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import type { ClusterTab } from "./cluster-tabs-config";
 
-export type ClusterTab = {
-  href: string;
-  label: string;
-  /** Optional icon emoji or single-character glyph. */
-  icon?: string;
-  /** Optional count badge (e.g. open positions). */
-  badge?: number | string;
-};
+export type { ClusterTab } from "./cluster-tabs-config";
 
 /** Shared tab bar that visually unifies sibling pages under one IA "cluster".
  *
@@ -22,6 +16,10 @@ export type ClusterTab = {
  * Pages remain separate routes — this component just renders a tab strip and
  * highlights the matching one based on the current pathname. Switching is a
  * normal client-side navigation.
+ *
+ * Cluster definitions (title/tabs/etc) live in cluster-tabs-config.ts so that
+ * server components can call the factory functions — this client module
+ * doesn't expose them across the RSC boundary.
  */
 export function ClusterTabs({
   title,
@@ -79,27 +77,3 @@ export function ClusterTabs({
     </div>
   );
 }
-
-/** Pre-configured cluster definitions to avoid duplicating tab arrays
- *  across pages. Import and pass `clusters.trading` / `clusters.results`. */
-export const clusters = {
-  trading: (opts?: { rightSlot?: React.ReactNode }) => ({
-    title: "트레이딩",
-    description: "가상 자금으로 거래소 실습 또는 1·3분 가격 예측 게임. 두 활동 모두 같은 vUSDT 잔액을 사용합니다.",
-    tabs: [
-      { href: "/app/virtual-trade", label: "가상 거래소", icon: "💼" },
-      { href: "/app/game", label: "가격 예측 게임", icon: "🎮" },
-    ] satisfies ClusterTab[],
-    rightSlot: opts?.rightSlot,
-  }),
-  results: (opts?: { openCount?: number; rightSlot?: React.ReactNode }) => ({
-    title: "내 결과",
-    description: "지금까지 진입한 거래, 누적 성과 통계, 다른 사용자 대비 순위를 한 곳에서.",
-    tabs: [
-      { href: "/app/journal", label: "내 거래", icon: "📓", badge: opts?.openCount },
-      { href: "/app/dashboard", label: "성과 분석", icon: "📊" },
-      { href: "/app/rankings", label: "랭킹", icon: "🏆" },
-    ] satisfies ClusterTab[],
-    rightSlot: opts?.rightSlot,
-  }),
-};

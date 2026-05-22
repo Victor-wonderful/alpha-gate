@@ -3,7 +3,8 @@ import { Settings } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { ExchangeUI } from "./exchange-ui";
-import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
+import { ClusterTabs } from "@/components/app/cluster-tabs";
+import { clusters } from "@/components/app/cluster-tabs-config";
 
 export const dynamic = "force-dynamic";
 

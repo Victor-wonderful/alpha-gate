@@ -37,6 +37,8 @@ interface TradeRow {
   fees_pct: number | null;
   exit_reason: "target" | "stop" | "manual" | null;
   paper_realized_pnl: number | null;
+  exit_price: number | null;
+  exit_actual: number | null;
 }
 
 export default async function JournalListPage() {
@@ -44,7 +46,7 @@ export default async function JournalListPage() {
   const { data: tradesRaw } = await supabase
     .from("trades")
     .select(
-      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason, order_type, order_status, limit_price, paper_realized_pnl",
+      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual",
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -331,7 +333,21 @@ export default async function JournalListPage() {
               </thead>
               <tbody>
                 {closed.map((t) => {
-                  const pnl = t.paper_realized_pnl != null ? Number(t.paper_realized_pnl) : null;
+                  // Prefer the value stored by resolve-trades cron / closeVirtualPositionAction.
+                  // For older trades (pre-paper-wallet) compute from price fields as a fallback
+                  // so PnL/ROI never show "—" if we have the underlying data.
+                  let pnl: number | null = t.paper_realized_pnl != null ? Number(t.paper_realized_pnl) : null;
+                  if (pnl == null && t.position_quantity != null) {
+                    const entry = Number(t.entry_actual ?? t.entry ?? 0);
+                    const exit = Number(t.exit_actual ?? t.exit_price ?? 0);
+                    const qty = Number(t.position_quantity);
+                    const feesPct = Number(t.fees_pct ?? 0.12);
+                    if (entry > 0 && exit > 0 && qty > 0) {
+                      const move = t.direction === "long" ? exit - entry : entry - exit;
+                      const fees = entry * (feesPct / 100) * qty;
+                      pnl = move * qty - fees;
+                    }
+                  }
                   const acct = t.account_size != null ? Number(t.account_size) : null;
                   const roiPct = pnl != null && acct && acct > 0 ? (pnl / acct) * 100 : null;
                   return (

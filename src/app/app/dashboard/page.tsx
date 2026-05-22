@@ -20,6 +20,25 @@ interface ClosedRow {
   direction: "long" | "short";
   exit_reason: "target" | "stop" | "manual" | null;
   paper_realized_pnl: number | null;
+  entry: number | null;
+  entry_actual: number | null;
+  exit_price: number | null;
+  exit_actual: number | null;
+  position_quantity: number | null;
+  fees_pct: number | null;
+}
+
+/** Realized PnL fallback for trades closed before paper-wallet system filled
+ *  paper_realized_pnl. Uses entry/exit prices and quantity to recompute. */
+function realizedPnlOrFallback(r: ClosedRow): number {
+  if (r.paper_realized_pnl != null) return Number(r.paper_realized_pnl);
+  const entry = Number(r.entry_actual ?? r.entry ?? 0);
+  const exit = Number(r.exit_actual ?? r.exit_price ?? 0);
+  const qty = Number(r.position_quantity ?? 0);
+  const feesPct = Number(r.fees_pct ?? 0.12);
+  if (entry <= 0 || exit <= 0 || qty <= 0) return 0;
+  const move = r.direction === "long" ? exit - entry : entry - exit;
+  return move * qty - entry * (feesPct / 100) * qty;
 }
 
 export default async function DashboardPage() {
@@ -31,7 +50,9 @@ export default async function DashboardPage() {
   const [tradesRes, wallet] = await Promise.all([
     supabase
       .from("trades")
-      .select("pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl")
+      .select(
+        "pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
+      )
       .not("closed_at", "is", null)
       .neq("mode", "backtest")
       .order("closed_at", { ascending: true }),
@@ -56,10 +77,8 @@ export default async function DashboardPage() {
   const worst = rows.reduce((w, r) => (Number(r.result_r) < w ? Number(r.result_r) : w), Infinity);
 
   // PnL · ROI — vUSDT 절대 금액 + 시작 잔액 대비 수익률
-  const totalPnl = rows.reduce(
-    (s, r) => s + (r.paper_realized_pnl != null ? Number(r.paper_realized_pnl) : 0),
-    0,
-  );
+  // realizedPnlOrFallback handles trades closed before paper_realized_pnl existed.
+  const totalPnl = rows.reduce((s, r) => s + realizedPnlOrFallback(r), 0);
   const roiPct = startingBalance > 0 ? (totalPnl / startingBalance) * 100 : 0;
 
   // ── Equity curve points ──────────────────────────────────

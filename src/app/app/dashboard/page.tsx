@@ -11,6 +11,7 @@ import { FlowStepper } from "@/components/app/flow-stepper";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
+import { ViewTabs, parseView, type View } from "@/components/app/view-tabs";
 
 interface ClosedRow {
   pre_grade: Grade;
@@ -41,13 +42,19 @@ function realizedPnlOrFallback(r: ClosedRow): number {
   return move * qty - entry * (feesPct / 100) * qty;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const sp = await searchParams;
+  const view: View = parseView(sp.view);
   const supabase = await getSupabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [tradesRes, wallet] = await Promise.all([
+  const [tradesRes, gamesRes, wallet] = await Promise.all([
     supabase
       .from("trades")
       .select(
@@ -56,10 +63,25 @@ export default async function DashboardPage() {
       .not("closed_at", "is", null)
       .neq("mode", "backtest")
       .order("closed_at", { ascending: true }),
+    user
+      ? supabase
+          .from("binary_games")
+          .select("won, pnl_points, bet_points, created_at, direction")
+          .eq("user_id", user.id)
+          .eq("status", "settled")
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] as Array<{ won: boolean | null; pnl_points: number | null; bet_points: number; created_at: string; direction: "call" | "put" }> }),
     user ? getOrCreateWallet(user.id).catch(() => null) : Promise.resolve(null),
   ]);
 
   const rows = ((tradesRes.data ?? []) as unknown as ClosedRow[]).filter((r) => r.result_r != null);
+  const games = (gamesRes.data ?? []) as Array<{
+    won: boolean | null;
+    pnl_points: number | null;
+    bet_points: number;
+    created_at: string;
+    direction: "call" | "put";
+  }>;
   const startingBalance = wallet?.startingBalance ?? 10000;
 
   // ── Headline KPIs ────────────────────────────────────────
@@ -80,6 +102,22 @@ export default async function DashboardPage() {
   // realizedPnlOrFallback handles trades closed before paper_realized_pnl existed.
   const totalPnl = rows.reduce((s, r) => s + realizedPnlOrFallback(r), 0);
   const roiPct = startingBalance > 0 ? (totalPnl / startingBalance) * 100 : 0;
+
+  // ── Game stats ──────────────────────────────────────────────
+  const totalGames = games.length;
+  const gameWins = games.filter((g) => g.won === true).length;
+  const gameLosses = games.filter((g) => g.won === false).length;
+  const gameWinRate = totalGames > 0 ? (gameWins / totalGames) * 100 : 0;
+  const gamePnl = games.reduce((s, g) => s + (g.pnl_points != null ? Number(g.pnl_points) : 0), 0);
+  const gameRoi = startingBalance > 0 ? (gamePnl / startingBalance) * 100 : 0;
+  const totalBet = games.reduce((s, g) => s + Number(g.bet_points), 0);
+  // Combined stats (전체)
+  const combinedPnl = totalPnl + gamePnl;
+  const combinedRoi = startingBalance > 0 ? (combinedPnl / startingBalance) * 100 : 0;
+  const combinedWins = wins + gameWins;
+  const combinedLosses = losses + gameLosses;
+  const combinedN = n + totalGames;
+  const combinedWinRate = combinedN > 0 ? (combinedWins / combinedN) * 100 : 0;
 
   // ── Equity curve points ──────────────────────────────────
   let cum = 0;
@@ -126,22 +164,40 @@ export default async function DashboardPage() {
   const cluster = clusters.results({
     rightSlot: <HelpLink href="/app/guide/results" />,
   });
+
+  // Empty state depends on view: 'games' needs games, others need trades
+  const hasData = view === "games" ? totalGames > 0 : view === "all" ? combinedN > 0 : n > 0;
+
   return (
     <div className="space-y-5">
       <FlowStepper current="dashboard" />
       <ClusterTabs
         title={cluster.title}
-        description={`종료된 라이브 거래 ${n}건 기준. 백테스트 결과는 제외됩니다.`}
+        description={
+          view === "games"
+            ? `종료된 게임 ${totalGames}건 기준.`
+            : view === "all"
+              ? `종료된 거래 ${n}건 + 게임 ${totalGames}건 기준.`
+              : `종료된 라이브 거래 ${n}건 기준. 백테스트 결과는 제외됩니다.`
+        }
         tabs={cluster.tabs}
         rightSlot={cluster.rightSlot}
       />
 
-      {n === 0 ? (
+      <ViewTabs
+        basePath="/app/dashboard"
+        current={view}
+        counts={{ all: n + totalGames, trades: n, games: totalGames }}
+      />
+
+      {!hasData ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-3 p-16 text-center">
             <TrendingUp className="h-8 w-8 text-muted-foreground/40" />
             <div className="text-sm text-muted-foreground">
-              종료된 거래가 없습니다. 거래를 저장하고 손절·목표 도달 시 자동 정산되면 여기에 표시됩니다.
+              {view === "games"
+                ? "아직 종료된 게임이 없습니다. 가격 예측 게임에서 베팅을 시작하세요."
+                : "종료된 거래가 없습니다. 거래를 저장하고 손절·목표 도달 시 자동 정산되면 여기에 표시됩니다."}
             </div>
           </CardContent>
         </Card>
@@ -149,52 +205,135 @@ export default async function DashboardPage() {
         <>
           {/* ── Hero KPIs ────────────────────────────────────── */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Kpi
-              label="누적 R"
-              value={`${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)}R`}
-              sub={`${n}건 · 거래당 평균 ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R`}
-              tone={totalR >= 0 ? "good" : "bad"}
-              icon={totalR >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-            />
-            <Kpi
-              label="누적 PnL"
-              value={`${totalPnl >= 0 ? "+" : ""}${totalPnl.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}`}
-              sub="vUSDT — 종료된 거래의 실현 손익 합계"
-              tone={totalPnl >= 0 ? "good" : "bad"}
-              icon={totalPnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-            />
-            <Kpi
-              label="ROI"
-              value={`${roiPct >= 0 ? "+" : ""}${roiPct.toFixed(2)}%`}
-              sub={`시작 잔액 ${startingBalance.toLocaleString("ko-KR")} vUSDT 기준`}
-              tone={roiPct >= 0 ? "good" : "bad"}
-            />
-            <Kpi
-              label="승률"
-              value={`${winRate.toFixed(1)}%`}
-              sub={`승 ${wins} · 패 ${losses}${breakeven ? ` · BE ${breakeven}` : ""}`}
-              tone={winRate >= 50 ? "good" : winRate >= 35 ? "neutral" : "bad"}
-            />
-            <Kpi
-              label="Profit Factor"
-              value={profitFactor > 0 ? profitFactor.toFixed(2) : "—"}
-              sub={profitFactor >= 1 ? "장기 수익 우위" : "장기 손실 우위"}
-              tone={profitFactor >= 1.5 ? "good" : profitFactor >= 1 ? "neutral" : "bad"}
-            />
-            <Kpi
-              label="현재 연속"
-              value={streak > 0 ? `${streakSign === "win" ? "🔥 " : streakSign === "loss" ? "🥶 " : ""}${streak}` : "—"}
-              sub={
-                streakSign === "win"
-                  ? `${streak}연승 진행 중`
-                  : streakSign === "loss"
-                    ? `${streak}연패 — 리스크 절반 권장`
-                    : "기록 없음"
-              }
-              tone={streakSign === "win" ? "good" : streakSign === "loss" ? "bad" : "neutral"}
-            />
+            {view === "games" ? (
+              <>
+                <Kpi
+                  label="누적 게임 PnL"
+                  value={`${gamePnl >= 0 ? "+" : ""}${gamePnl.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}`}
+                  sub="vUSDT — 전체 게임 손익"
+                  tone={gamePnl >= 0 ? "good" : "bad"}
+                  icon={gamePnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                />
+                <Kpi
+                  label="ROI"
+                  value={`${gameRoi >= 0 ? "+" : ""}${gameRoi.toFixed(2)}%`}
+                  sub={`시작 잔액 ${startingBalance.toLocaleString("ko-KR")} vUSDT 기준`}
+                  tone={gameRoi >= 0 ? "good" : "bad"}
+                />
+                <Kpi
+                  label="승률"
+                  value={`${gameWinRate.toFixed(1)}%`}
+                  sub={`승 ${gameWins} · 패 ${gameLosses}`}
+                  tone={gameWinRate >= 50 ? "good" : gameWinRate >= 35 ? "neutral" : "bad"}
+                />
+                <Kpi
+                  label="총 베팅"
+                  value={`${totalGames}판`}
+                  sub={`누적 베팅 ${totalBet.toLocaleString("ko-KR")} vUSDT`}
+                />
+                <Kpi
+                  label="평균 베팅"
+                  value={totalGames > 0 ? Math.round(totalBet / totalGames).toLocaleString("ko-KR") : "—"}
+                  sub="vUSDT / 판"
+                />
+                <Kpi
+                  label="상승 vs 하락"
+                  value={`${games.filter((g) => g.direction === "call").length} / ${games.filter((g) => g.direction === "put").length}`}
+                  sub="콜(call) / 풋(put) 베팅 수"
+                />
+              </>
+            ) : view === "all" ? (
+              <>
+                <Kpi
+                  label="통합 PnL"
+                  value={`${combinedPnl >= 0 ? "+" : ""}${combinedPnl.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}`}
+                  sub={`vUSDT · 거래 ${formatSigned(totalPnl, 0)} · 게임 ${formatSigned(gamePnl, 0)}`}
+                  tone={combinedPnl >= 0 ? "good" : "bad"}
+                  icon={combinedPnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                />
+                <Kpi
+                  label="통합 ROI"
+                  value={`${combinedRoi >= 0 ? "+" : ""}${combinedRoi.toFixed(2)}%`}
+                  sub={`시작 잔액 ${startingBalance.toLocaleString("ko-KR")} vUSDT 기준`}
+                  tone={combinedRoi >= 0 ? "good" : "bad"}
+                />
+                <Kpi
+                  label="통합 승률"
+                  value={`${combinedWinRate.toFixed(1)}%`}
+                  sub={`승 ${combinedWins} · 패 ${combinedLosses} (거래+게임)`}
+                  tone={combinedWinRate >= 50 ? "good" : combinedWinRate >= 35 ? "neutral" : "bad"}
+                />
+                <Kpi
+                  label="거래 누적 R"
+                  value={`${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)}R`}
+                  sub={`${n}건 · 거래당 평균 ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R`}
+                  tone={totalR >= 0 ? "good" : "bad"}
+                />
+                <Kpi
+                  label="Profit Factor (거래)"
+                  value={profitFactor > 0 ? profitFactor.toFixed(2) : "—"}
+                  sub={profitFactor >= 1 ? "장기 수익 우위" : "장기 손실 우위"}
+                  tone={profitFactor >= 1.5 ? "good" : profitFactor >= 1 ? "neutral" : "bad"}
+                />
+                <Kpi
+                  label="활동 수"
+                  value={`${combinedN}건`}
+                  sub={`거래 ${n} · 게임 ${totalGames}`}
+                />
+              </>
+            ) : (
+              <>
+                <Kpi
+                  label="누적 R"
+                  value={`${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)}R`}
+                  sub={`${n}건 · 거래당 평균 ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R`}
+                  tone={totalR >= 0 ? "good" : "bad"}
+                  icon={totalR >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                />
+                <Kpi
+                  label="누적 PnL"
+                  value={`${totalPnl >= 0 ? "+" : ""}${totalPnl.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}`}
+                  sub="vUSDT — 종료된 거래의 실현 손익 합계"
+                  tone={totalPnl >= 0 ? "good" : "bad"}
+                  icon={totalPnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                />
+                <Kpi
+                  label="ROI"
+                  value={`${roiPct >= 0 ? "+" : ""}${roiPct.toFixed(2)}%`}
+                  sub={`시작 잔액 ${startingBalance.toLocaleString("ko-KR")} vUSDT 기준`}
+                  tone={roiPct >= 0 ? "good" : "bad"}
+                />
+                <Kpi
+                  label="승률"
+                  value={`${winRate.toFixed(1)}%`}
+                  sub={`승 ${wins} · 패 ${losses}${breakeven ? ` · BE ${breakeven}` : ""}`}
+                  tone={winRate >= 50 ? "good" : winRate >= 35 ? "neutral" : "bad"}
+                />
+                <Kpi
+                  label="Profit Factor"
+                  value={profitFactor > 0 ? profitFactor.toFixed(2) : "—"}
+                  sub={profitFactor >= 1 ? "장기 수익 우위" : "장기 손실 우위"}
+                  tone={profitFactor >= 1.5 ? "good" : profitFactor >= 1 ? "neutral" : "bad"}
+                />
+                <Kpi
+                  label="현재 연속"
+                  value={streak > 0 ? `${streakSign === "win" ? "🔥 " : streakSign === "loss" ? "🥶 " : ""}${streak}` : "—"}
+                  sub={
+                    streakSign === "win"
+                      ? `${streak}연승 진행 중`
+                      : streakSign === "loss"
+                        ? `${streak}연패 — 리스크 절반 권장`
+                        : "기록 없음"
+                  }
+                  tone={streakSign === "win" ? "good" : streakSign === "loss" ? "bad" : "neutral"}
+                />
+              </>
+            )}
           </div>
 
+          {/* Equity Curve / Breakdowns are trade-based — hide in 'games' view */}
+          {view !== "games" ? (
+          <>
           {/* ── Equity Curve ─────────────────────────────────── */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
@@ -284,10 +423,18 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           </div>
+          </>
+          ) : null}
         </>
       )}
     </div>
   );
+}
+
+/** Formats a number with sign prefix (used in KPI sub text). */
+function formatSigned(n: number, digits = 2): string {
+  const v = n.toLocaleString("ko-KR", { maximumFractionDigits: digits });
+  return n >= 0 ? `+${v}` : v;
 }
 
 function aggregateDir(rows: ClosedRow[], dir: "long" | "short") {

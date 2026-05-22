@@ -11,6 +11,21 @@ import { CancelPendingButton } from "./cancel-pending-button";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
+import { ViewTabs, parseView, type View } from "@/components/app/view-tabs";
+
+interface GameRow {
+  id: string;
+  symbol: string;
+  direction: "call" | "put";
+  bet_points: number;
+  entry_price: number;
+  exit_price: number | null;
+  won: boolean | null;
+  pnl_points: number | null;
+  status: "pending" | "settled";
+  entry_time: string;
+  created_at: string;
+}
 import { fetchTicker24h } from "@/lib/analysis/binance";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
@@ -41,15 +56,40 @@ interface TradeRow {
   exit_actual: number | null;
 }
 
-export default async function JournalListPage() {
+export default async function JournalListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const sp = await searchParams;
+  const view: View = parseView(sp.view);
   const supabase = await getSupabaseServer();
-  const { data: tradesRaw } = await supabase
-    .from("trades")
-    .select(
-      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual",
-    )
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [tradesRes, gamesRes] = await Promise.all([
+    supabase
+      .from("trades")
+      .select(
+        "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual",
+      )
+      .order("created_at", { ascending: false })
+      .limit(100),
+    user
+      ? supabase
+          .from("binary_games")
+          .select(
+            "id, symbol, direction, bet_points, entry_price, exit_price, won, pnl_points, status, entry_time, created_at",
+          )
+          .eq("user_id", user.id)
+          .eq("status", "settled")
+          .order("created_at", { ascending: false })
+          .limit(50)
+      : Promise.resolve({ data: [] as GameRow[] }),
+  ]);
+  const tradesRaw = tradesRes.data;
+  const games = (gamesRes.data ?? []) as GameRow[];
 
   const trades = (tradesRaw ?? []) as (TradeRow & {
     order_type?: "market" | "limit" | null;
@@ -150,6 +190,37 @@ export default async function JournalListPage() {
     .filter((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc && t.result_r != null)
     .reduce((s, t) => s + Number(t.result_r ?? 0), 0);
 
+  // ── Game stats ──────────────────────────────────────────────
+  const totalGames = games.length;
+  const gameWins = games.filter((g) => g.won === true).length;
+  const gameLosses = games.filter((g) => g.won === false).length;
+  const gamePnl = games.reduce((s, g) => s + (g.pnl_points != null ? Number(g.pnl_points) : 0), 0);
+  const gameWinRate = totalGames > 0 ? (gameWins / totalGames) * 100 : 0;
+  const todayGames = games.filter(
+    (g) => new Date(g.created_at) >= kstStartUtc,
+  );
+  const todayGamePnl = todayGames.reduce(
+    (s, g) => s + (g.pnl_points != null ? Number(g.pnl_points) : 0),
+    0,
+  );
+
+  // Closed-trades realized PnL (for combined display in "all" view)
+  function tradeRealizedPnl(t: typeof trades[number]): number {
+    if (t.paper_realized_pnl != null) return Number(t.paper_realized_pnl);
+    if (!t.position_quantity) return 0;
+    const entry = Number(t.entry_actual ?? t.entry ?? 0);
+    const exit = Number(t.exit_actual ?? t.exit_price ?? 0);
+    const qty = Number(t.position_quantity);
+    const feesPct = Number(t.fees_pct ?? 0.12);
+    if (entry <= 0 || exit <= 0 || qty <= 0) return 0;
+    const move = t.direction === "long" ? exit - entry : entry - exit;
+    return move * qty - entry * (feesPct / 100) * qty;
+  }
+  const totalTradePnl = closed.reduce((s, t) => s + tradeRealizedPnl(t), 0);
+  const todayTradePnl = closed
+    .filter((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
+    .reduce((s, t) => s + tradeRealizedPnl(t), 0);
+
   const cluster = clusters.results({
     openCount: open.length + pendingLimits.length,
     rightSlot: (
@@ -169,53 +240,135 @@ export default async function JournalListPage() {
         rightSlot={cluster.rightSlot}
       />
 
-      {/* KPI cards */}
+      {/* View sub-tabs: 전체 / 거래 / 게임 */}
+      <ViewTabs
+        basePath="/app/journal"
+        current={view}
+        counts={{ all: closed.length + games.length, trades: closed.length, games: games.length }}
+      />
+
+      {/* KPI cards — content depends on view */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          icon={<Activity className="h-4 w-4" />}
-          label="오늘 실현 R"
-          value={
-            closed.some((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
-              ? `${todayR >= 0 ? "+" : ""}${todayR.toFixed(2)}R`
-              : "—"
-          }
-          tone={todayR > 0 ? "good" : todayR < 0 ? "bad" : "neutral"}
-        />
-        <KpiCard
-          icon={<Layers className="h-4 w-4" />}
-          label="진행 중 포지션"
-          value={`${positions.length}건`}
-          sub={positions.length > 0 ? "아래 카드 참고" : "없음"}
-        />
-        <KpiCard
-          icon={totalUnrealizedR >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-          label="미실현 합계"
-          value={
-            positions.length > 0
-              ? `${totalUnrealizedR >= 0 ? "+" : ""}${totalUnrealizedR.toFixed(2)}R`
-              : "—"
-          }
-          sub={
-            positions.length > 0
-              ? `${totalUnrealizedUsd >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedUsd, "USD")}`
-              : "진행 중 없음"
-          }
-          tone={totalUnrealizedR > 0 ? "good" : totalUnrealizedR < 0 ? "bad" : "neutral"}
-        />
-        <KpiCard
-          icon={<Wallet className="h-4 w-4" />}
-          label="총 노출"
-          value={positions.length > 0 ? `${totalExposurePct.toFixed(1)}%` : "—"}
-          sub={
-            positions.length > 0
-              ? `${formatCurrency(totalNotional, "USD")} / ${formatCurrency(accountSize, "USD")}`
-              : "—"
-          }
-        />
+        {view === "games" ? (
+          <>
+            <KpiCard
+              icon={<Activity className="h-4 w-4" />}
+              label="오늘 게임 PnL"
+              value={
+                todayGames.length > 0
+                  ? `${todayGamePnl >= 0 ? "+" : ""}${formatNumber(todayGamePnl, { maximumFractionDigits: 0 })}`
+                  : "—"
+              }
+              sub={`vUSDT · 오늘 ${todayGames.length}판`}
+              tone={todayGamePnl > 0 ? "good" : todayGamePnl < 0 ? "bad" : "neutral"}
+            />
+            <KpiCard
+              icon={<Layers className="h-4 w-4" />}
+              label="총 게임"
+              value={`${totalGames}판`}
+              sub={`승 ${gameWins} · 패 ${gameLosses}`}
+            />
+            <KpiCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="승률"
+              value={totalGames > 0 ? `${gameWinRate.toFixed(1)}%` : "—"}
+              tone={gameWinRate >= 50 ? "good" : gameWinRate >= 35 ? "neutral" : "bad"}
+            />
+            <KpiCard
+              icon={gamePnl >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+              label="누적 게임 PnL"
+              value={
+                totalGames > 0
+                  ? `${gamePnl >= 0 ? "+" : ""}${formatNumber(gamePnl, { maximumFractionDigits: 0 })}`
+                  : "—"
+              }
+              sub="vUSDT — 전체 게임 합계"
+              tone={gamePnl > 0 ? "good" : gamePnl < 0 ? "bad" : "neutral"}
+            />
+          </>
+        ) : view === "trades" ? (
+          <>
+            <KpiCard
+              icon={<Activity className="h-4 w-4" />}
+              label="오늘 실현 R"
+              value={
+                closed.some((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
+                  ? `${todayR >= 0 ? "+" : ""}${todayR.toFixed(2)}R`
+                  : "—"
+              }
+              tone={todayR > 0 ? "good" : todayR < 0 ? "bad" : "neutral"}
+            />
+            <KpiCard
+              icon={<Layers className="h-4 w-4" />}
+              label="진행 중 포지션"
+              value={`${positions.length}건`}
+              sub={positions.length > 0 ? "아래 카드 참고" : "없음"}
+            />
+            <KpiCard
+              icon={totalUnrealizedR >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+              label="미실현 합계"
+              value={
+                positions.length > 0
+                  ? `${totalUnrealizedR >= 0 ? "+" : ""}${totalUnrealizedR.toFixed(2)}R`
+                  : "—"
+              }
+              sub={
+                positions.length > 0
+                  ? `${totalUnrealizedUsd >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedUsd, "USD")}`
+                  : "진행 중 없음"
+              }
+              tone={totalUnrealizedR > 0 ? "good" : totalUnrealizedR < 0 ? "bad" : "neutral"}
+            />
+            <KpiCard
+              icon={<Wallet className="h-4 w-4" />}
+              label="총 노출"
+              value={positions.length > 0 ? `${totalExposurePct.toFixed(1)}%` : "—"}
+              sub={
+                positions.length > 0
+                  ? `${formatCurrency(totalNotional, "USD")} / ${formatCurrency(accountSize, "USD")}`
+                  : "—"
+              }
+            />
+          </>
+        ) : (
+          /* all view — combined */
+          <>
+            <KpiCard
+              icon={<Activity className="h-4 w-4" />}
+              label="오늘 통합 PnL"
+              value={
+                todayGames.length > 0 || closed.some((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
+                  ? `${todayTradePnl + todayGamePnl >= 0 ? "+" : ""}${formatNumber(todayTradePnl + todayGamePnl, { maximumFractionDigits: 0 })}`
+                  : "—"
+              }
+              sub={`vUSDT · 거래 ${todayTradePnl >= 0 ? "+" : ""}${formatNumber(todayTradePnl, { maximumFractionDigits: 0 })} · 게임 ${todayGamePnl >= 0 ? "+" : ""}${formatNumber(todayGamePnl, { maximumFractionDigits: 0 })}`}
+              tone={todayTradePnl + todayGamePnl > 0 ? "good" : todayTradePnl + todayGamePnl < 0 ? "bad" : "neutral"}
+            />
+            <KpiCard
+              icon={<Layers className="h-4 w-4" />}
+              label="진행 중 포지션"
+              value={`${positions.length}건`}
+              sub={positions.length > 0 ? "거래만 (게임은 즉시 정산)" : "없음"}
+            />
+            <KpiCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="누적 통합 PnL"
+              value={`${totalTradePnl + gamePnl >= 0 ? "+" : ""}${formatNumber(totalTradePnl + gamePnl, { maximumFractionDigits: 0 })}`}
+              sub={`vUSDT · 거래 ${formatNumber(totalTradePnl, { maximumFractionDigits: 0 })} · 게임 ${formatNumber(gamePnl, { maximumFractionDigits: 0 })}`}
+              tone={totalTradePnl + gamePnl > 0 ? "good" : totalTradePnl + gamePnl < 0 ? "bad" : "neutral"}
+            />
+            <KpiCard
+              icon={<Wallet className="h-4 w-4" />}
+              label="활동 횟수"
+              value={`${closed.length + totalGames}건`}
+              sub={`거래 ${closed.length} · 게임 ${totalGames}`}
+            />
+          </>
+        )}
       </div>
 
-      {/* Pending limit orders */}
-      {pendingLimits.length > 0 ? (
+      {/* Pending limit orders — trades only */}
+      {view !== "games" && pendingLimits.length > 0 ? (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
@@ -288,8 +441,8 @@ export default async function JournalListPage() {
         </section>
       ) : null}
 
-      {/* Open positions board */}
-      {positions.length > 0 ? (
+      {/* Open positions board — trades only */}
+      {view !== "games" && positions.length > 0 ? (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-grade-a" />
@@ -303,7 +456,8 @@ export default async function JournalListPage() {
         </section>
       ) : null}
 
-      {/* Closed trades table */}
+      {/* Closed trades table — hidden in 'games' view */}
+      {view !== "games" ? (
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           종료된 거래 ({closed.length})
@@ -414,6 +568,105 @@ export default async function JournalListPage() {
           </div>
         )}
       </section>
+      ) : null}
+
+      {/* Game history table — shown in 'games' or 'all' view */}
+      {view !== "trades" && games.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            종료된 게임 ({games.length})
+          </h2>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2 text-left">시각</th>
+                  <th className="px-4 py-2 text-left">코인</th>
+                  <th className="px-4 py-2 text-left">방향</th>
+                  <th className="px-4 py-2 text-right">베팅</th>
+                  <th className="px-4 py-2 text-right">진입가</th>
+                  <th className="px-4 py-2 text-right">종가</th>
+                  <th className="px-4 py-2 text-right">PnL</th>
+                  <th className="px-4 py-2 text-right">ROI</th>
+                  <th className="px-4 py-2 text-left">결과</th>
+                </tr>
+              </thead>
+              <tbody>
+                {games.map((g) => {
+                  const bet = Number(g.bet_points);
+                  const pnl = g.pnl_points != null ? Number(g.pnl_points) : null;
+                  const roiPct = pnl != null && bet > 0 ? (pnl / bet) * 100 : null;
+                  return (
+                    <tr key={g.id} className="border-t border-border hover:bg-accent/40">
+                      <td className="px-4 py-2 text-muted-foreground">
+                        {new Date(g.entry_time).toLocaleString("ko-KR", { hour12: false })}
+                      </td>
+                      <td className="px-4 py-2 font-mono">{g.symbol}</td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[11px] font-semibold",
+                            g.direction === "call" ? "bg-grade-a/15 text-grade-a" : "bg-grade-d/15 text-grade-d",
+                          )}
+                        >
+                          {g.direction === "call" ? "상승" : "하락"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">{formatNumber(bet, { maximumFractionDigits: 0 })}</td>
+                      <td className="px-4 py-2 text-right font-mono">{formatNumber(Number(g.entry_price))}</td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {g.exit_price != null ? formatNumber(Number(g.exit_price)) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {pnl != null ? (
+                          <span className={pnl >= 0 ? "text-grade-a" : "text-grade-d"}>
+                            {pnl >= 0 ? "+" : ""}
+                            {formatNumber(pnl, { maximumFractionDigits: 2 })}{" "}
+                            <span className="text-[10px] text-muted-foreground">vUSDT</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {roiPct != null ? (
+                          <span className={roiPct >= 0 ? "text-grade-a" : "text-grade-d"}>
+                            {roiPct >= 0 ? "+" : ""}
+                            {roiPct.toFixed(0)}%
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-xs">
+                        {g.won === true ? (
+                          <span className="text-grade-a font-semibold">WIN</span>
+                        ) : g.won === false ? (
+                          <span className="text-grade-d font-semibold">LOSE</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      {view === "games" && games.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center text-sm text-muted-foreground">
+            아직 종료된 게임이 없습니다.{" "}
+            <Link href="/app/game" className="text-primary underline-offset-2 hover:underline">
+              가격 예측 게임
+            </Link>
+            에서 첫 베팅을 해보세요.
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

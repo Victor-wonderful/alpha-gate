@@ -15,7 +15,6 @@ import {
   LineChart,
   LogOut,
   Menu,
-  Settings2,
   Sparkles,
   User,
   Wallet,
@@ -24,7 +23,6 @@ import {
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
-import { useUiModeStore } from "@/lib/stores/ui-mode-store";
 
 type IconKey = "home" | "sparkles" | "check" | "book" | "chart" | "bell" | "key" | "wallet" | "gamepad";
 
@@ -206,25 +204,6 @@ function UserBlock({ email, onAfterAction }: { email: string; onAfterAction?: ()
   );
 }
 
-function UiModeToggle() {
-  const { mode, toggle } = useUiModeStore();
-  const isBeginner = mode === "beginner";
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-    >
-      {isBeginner ? (
-        <Settings2 className="h-3.5 w-3.5 flex-none" />
-      ) : (
-        <Sparkles className="h-3.5 w-3.5 flex-none" />
-      )}
-      <span>{isBeginner ? "고급 모드로 전환" : "초보 모드로 전환"}</span>
-    </button>
-  );
-}
-
 function SidebarContent({ email, onNavigate }: { email: string; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
@@ -258,7 +237,6 @@ function SidebarContent({ email, onNavigate }: { email: string; onNavigate?: () 
           <span>Victor Alpha 블로그</span>
           <ExternalLink className="h-3 w-3" />
         </a>
-        <UiModeToggle />
         <UserBlock email={email} onAfterAction={onNavigate} />
       </div>
     </div>

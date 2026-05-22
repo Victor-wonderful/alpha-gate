@@ -14,7 +14,6 @@ import {
   LogOut,
   Menu,
   Settings,
-  Settings2,
   Sparkles,
   Wallet,
   X,
@@ -22,7 +21,6 @@ import {
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn, formatNumber } from "@/lib/utils";
 import { Logo } from "./logo";
-import { useUiModeStore } from "@/lib/stores/ui-mode-store";
 
 type IconKey = "sparkles" | "wallet" | "chart";
 
@@ -119,22 +117,6 @@ function WalletChip({
         <span className="text-[10px] text-muted-foreground">AI</span>
       </span>
     </Link>
-  );
-}
-
-function UiModeInlineToggle() {
-  const { mode, toggle } = useUiModeStore();
-  const isBeginner = mode === "beginner";
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      className="hidden lg:inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-      title={isBeginner ? "고급 모드로 전환" : "초보 모드로 전환"}
-    >
-      {isBeginner ? <Settings2 className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
-      <span>{isBeginner ? "초보" : "고급"}</span>
-    </button>
   );
 }
 
@@ -296,7 +278,6 @@ function MobileDrawer({
   credits: number;
 }) {
   const router = useRouter();
-  const { mode, toggle } = useUiModeStore();
   async function signOut() {
     await getSupabaseBrowser().auth.signOut();
     onClose();
@@ -405,14 +386,6 @@ function MobileDrawer({
         </nav>
 
         <div className="space-y-1 border-t border-border p-3">
-          <button
-            type="button"
-            onClick={toggle}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-          >
-            {mode === "beginner" ? <Settings2 className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {mode === "beginner" ? "고급 모드로 전환" : "초보 모드로 전환"}
-          </button>
           <a
             href={BLOG_URL}
             target="_blank"
@@ -474,7 +447,6 @@ export function TopNav({
           {/* Right side */}
           <div className="flex items-center gap-2">
             <WalletChip balance={balance} credits={credits} />
-            <UiModeInlineToggle />
             <div className="hidden lg:block">
               <SettingsDropdown pathname={pathname} />
             </div>

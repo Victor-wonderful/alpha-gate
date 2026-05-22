@@ -3,6 +3,7 @@ import { Settings } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { ExchangeUI } from "./exchange-ui";
+import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -79,23 +80,20 @@ export default async function VirtualTradePage({
     createdAt: o.created_at as string,
   }));
 
+  const cluster = clusters.trading({
+    rightSlot: (
+      <Link
+        href="/app/virtual-trade/wallet"
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Settings className="h-3.5 w-3.5" />
+        지갑 관리
+      </Link>
+    ),
+  });
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">가상 트레이딩</h1>
-          <p className="text-xs text-muted-foreground">
-            Binance Futures USDT-M 시뮬레이션 — 실거래 체험용. AI 분석 → 주문 검토와 같은 거래가 여기서 진행됩니다.
-          </p>
-        </div>
-        <Link
-          href="/app/virtual-trade/wallet"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-        >
-          <Settings className="h-3.5 w-3.5" />
-          지갑 관리
-        </Link>
-      </div>
+    <div className="space-y-4">
+      <ClusterTabs title={cluster.title} description={cluster.description} tabs={cluster.tabs} rightSlot={cluster.rightSlot} />
 
       <ExchangeUI
         initialSymbol={symbol}

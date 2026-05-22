@@ -8,6 +8,7 @@ import type { Grade } from "@/types/trade";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { ResolveTradesButton } from "./resolve-button";
 import { CancelPendingButton } from "./cancel-pending-button";
+import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
 import { fetchTicker24h } from "@/lib/analysis/binance";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
@@ -144,19 +145,19 @@ export default async function JournalListPage() {
     .filter((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc && t.result_r != null)
     .reduce((s, t) => s + Number(t.result_r ?? 0), 0);
 
+  const cluster = clusters.results({
+    openCount: open.length + pendingLimits.length,
+    rightSlot: <ResolveTradesButton />,
+  });
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <FlowStepper current="journal" />
-
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">내 거래</h1>
-          <p className="text-sm text-muted-foreground">
-            5분마다 자동 정산되며, 즉시 확인하려면 우측 버튼을 누르세요. 가격은 페이지 새로고침으로 갱신됩니다.
-          </p>
-        </div>
-        <ResolveTradesButton />
-      </div>
+      <ClusterTabs
+        title={cluster.title}
+        description="5분마다 자동 정산되며, 즉시 확인하려면 우측 버튼을 누르세요. 가격은 페이지 새로고침으로 갱신됩니다."
+        tabs={cluster.tabs}
+        rightSlot={cluster.rightSlot}
+      />
 
       {/* KPI cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -7,6 +7,7 @@ import { ArrowDownRight, ArrowUpRight, Minus, TrendingUp } from "lucide-react";
 import type { Grade } from "@/types/trade";
 import { cn } from "@/lib/utils";
 import { FlowStepper } from "@/components/app/flow-stepper";
+import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
 
 interface ClosedRow {
   pre_grade: Grade;
@@ -84,15 +85,15 @@ export default async function DashboardPage() {
     manual: rows.filter((r) => r.exit_reason === "manual" || !r.exit_reason).length,
   };
 
+  const cluster = clusters.results();
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <FlowStepper current="dashboard" />
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">성과 분석</h1>
-        <p className="text-sm text-muted-foreground">
-          종료된 라이브 거래 {n}건 기준. 백테스트 결과는 제외됩니다.
-        </p>
-      </div>
+      <ClusterTabs
+        title={cluster.title}
+        description={`종료된 라이브 거래 ${n}건 기준. 백테스트 결과는 제외됩니다.`}
+        tabs={cluster.tabs}
+      />
 
       {n === 0 ? (
         <Card>

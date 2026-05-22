@@ -2,6 +2,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { GameClient } from "./game-client";
+import { ClusterTabs, clusters } from "@/components/app/cluster-tabs";
 
 export default async function GamePage() {
   const supabase = await getSupabaseServer();
@@ -34,14 +35,10 @@ export default async function GamePage() {
     // game_wallets가 없어도 통계는 0으로 시작 (생성은 settle 시 수행)
   }
 
+  const cluster = clusters.trading();
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-bold">가격 예측 게임</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          다음 캔들 시가→종가 방향 예측 · 1분/3분 · 바이낸스 선물 시세
-        </p>
-      </div>
+    <div className="space-y-4">
+      <ClusterTabs title={cluster.title} description={cluster.description} tabs={cluster.tabs} />
       <GameClient
         initialPoints={initialPoints}
         totalGames={totalGames}

@@ -7,6 +7,7 @@ import { GradeBadge } from "@/components/trade/grade-badge";
 import type { Grade } from "@/types/trade";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { ResolveTradesButton } from "./resolve-button";
+import { CancelPendingButton } from "./cancel-pending-button";
 import { fetchTicker24h } from "@/lib/analysis/binance";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
@@ -39,17 +40,27 @@ export default async function JournalListPage() {
   const { data: tradesRaw } = await supabase
     .from("trades")
     .select(
-      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason",
+      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason, order_type, order_status, limit_price",
     )
     .order("created_at", { ascending: false })
     .limit(100);
 
-  const trades = (tradesRaw ?? []) as TradeRow[];
-  const open = trades.filter((t) => !t.closed_at);
+  const trades = (tradesRaw ?? []) as (TradeRow & {
+    order_type?: "market" | "limit" | null;
+    order_status?: "pending" | "filled" | "canceled" | "expired" | null;
+    limit_price?: number | null;
+  })[];
+  // Pending limit orders: waiting for price to reach limit_price. Not yet a real position.
+  const pendingLimits = trades.filter(
+    (t) => !t.closed_at && t.order_status === "pending" && t.order_type === "limit",
+  );
+  const open = trades.filter(
+    (t) => !t.closed_at && t.order_status !== "pending" && t.order_status !== "canceled" && t.order_status !== "expired",
+  );
   const closed = trades.filter((t) => t.closed_at);
 
-  // Batch fetch current prices for all unique open-position symbols.
-  const symbols = Array.from(new Set(open.map((t) => t.symbol)));
+  // Batch fetch current prices for all unique open-position + pending-limit symbols.
+  const symbols = Array.from(new Set([...open, ...pendingLimits].map((t) => t.symbol)));
   const priceMap = new Map<string, number>();
   await Promise.all(
     symbols.map(async (s) => {
@@ -191,6 +202,80 @@ export default async function JournalListPage() {
           }
         />
       </div>
+
+      {/* Pending limit orders */}
+      {pendingLimits.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            대기 중 지정가 주문 ({pendingLimits.length})
+          </h2>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2 text-left">등록 시각</th>
+                  <th className="px-4 py-2 text-left">코인</th>
+                  <th className="px-4 py-2 text-left">방향</th>
+                  <th className="px-4 py-2 text-right">지정가</th>
+                  <th className="px-4 py-2 text-right">손절</th>
+                  <th className="px-4 py-2 text-right">목표</th>
+                  <th className="px-4 py-2 text-right">현재가</th>
+                  <th className="px-4 py-2 text-right">진입까지</th>
+                  <th className="px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingLimits.map((t) => {
+                  const limit = Number(t.limit_price ?? t.entry);
+                  const last = priceMap.get(t.symbol) ?? null;
+                  const diffPct = last != null && limit > 0 ? ((last - limit) / limit) * 100 : null;
+                  return (
+                    <tr key={t.id} className="border-t border-border hover:bg-accent/40">
+                      <td className="px-4 py-2 text-muted-foreground">
+                        {new Date(t.created_at).toLocaleString("ko-KR", { hour12: false })}
+                      </td>
+                      <td className="px-4 py-2 font-mono">{t.symbol}</td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[11px] font-semibold",
+                            t.direction === "long" ? "bg-grade-a/15 text-grade-a" : "bg-grade-d/15 text-grade-d",
+                          )}
+                        >
+                          {t.direction === "long" ? "롱" : "숏"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">{formatNumber(limit)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-grade-d">{formatNumber(Number(t.stop))}</td>
+                      <td className="px-4 py-2 text-right font-mono text-grade-a">{formatNumber(Number(t.target))}</td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {last != null ? formatNumber(last) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {diffPct != null ? (
+                          <span className={Math.abs(diffPct) < 0.1 ? "text-grade-a" : "text-muted-foreground"}>
+                            {diffPct >= 0 ? "+" : ""}
+                            {diffPct.toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <CancelPendingButton tradeId={t.id} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            5분마다 가격 확인 후 자동 체결됩니다. 24시간 안에 도달하지 않으면 만료됩니다.
+          </p>
+        </section>
+      ) : null}
 
       {/* Open positions board */}
       {positions.length > 0 ? (

@@ -181,6 +181,7 @@ function TradeFormInner({
     return q === "short" ? "short" : "long";
   });
   const [timeframe, setTimeframe] = useState<Timeframe>("1h");
+  const [orderType, setOrderType] = useState<"market" | "limit">("market");
   const [entry, setEntry] = useState(() => params.get("entry") ?? "");
   const [stop, setStop] = useState(() => params.get("stop") ?? "");
   const [target, setTarget] = useState(() => params.get("target") ?? "");
@@ -347,13 +348,18 @@ function TradeFormInner({
       return;
     }
     startTransition(async () => {
-      const res = await saveTradeAction({ input, grade, sizing, leverage, forecast: mcResult ?? undefined });
+      const res = await saveTradeAction({ input, grade, sizing, leverage, forecast: mcResult ?? undefined, orderType });
       if (res.error) {
         toast.error(res.error, { duration: 8000 });
         return;
       }
-      toast.success("가상 트레이딩에 진입했습니다.");
-      router.push(`/app/virtual-trade`);
+      if (res.orderType === "limit") {
+        toast.success("지정가 주문이 등록됐습니다. 가격 도달 시 자동 체결됩니다.", { duration: 6000 });
+        router.push(`/app/journal`);
+      } else {
+        toast.success("가상 트레이딩에 진입했습니다.");
+        router.push(`/app/virtual-trade`);
+      }
     });
   }
 
@@ -605,10 +611,48 @@ function TradeFormInner({
           </div>
 
           <CardContent className="space-y-4 pt-0">
+            {/* Order type toggle */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-semibold">주문 유형</Label>
+                <span className="text-[10px] text-muted-foreground">
+                  {orderType === "market"
+                    ? "현재가로 즉시 체결"
+                    : "지정가 도달 시 자동 체결 (24시간 유효)"}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-background/40 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setOrderType("market")}
+                  className={cn(
+                    "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
+                    orderType === "market"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                  )}
+                >
+                  시장가
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderType("limit")}
+                  className={cn(
+                    "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
+                    orderType === "limit"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                  )}
+                >
+                  지정가
+                </button>
+              </div>
+            </div>
+
             {/* Price inputs with auto-% */}
             <div className="space-y-2">
               <PriceRow
-                label="진입가"
+                label={orderType === "limit" ? "지정가" : "진입가"}
                 value={entry}
                 onChange={setEntry}
                 accent={ENTRY_ACCENT}
@@ -992,10 +1036,16 @@ function TradeFormInner({
           }
         >
           {pending
-            ? "진입 처리 중..."
-            : aiMode
-              ? "이 계획으로 가상 진입"
-              : "가상 진입"}
+            ? orderType === "limit"
+              ? "지정가 주문 등록 중..."
+              : "진입 처리 중..."
+            : orderType === "limit"
+              ? aiMode
+                ? "이 계획으로 지정가 주문"
+                : "지정가 주문 등록"
+              : aiMode
+                ? "이 계획으로 가상 진입"
+                : "가상 진입"}
         </Button>
         {aiMode ? (
           <p className="text-center text-[11px] text-muted-foreground">

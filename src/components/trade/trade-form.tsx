@@ -182,6 +182,7 @@ function TradeFormInner({
   });
   const [timeframe, setTimeframe] = useState<Timeframe>("1h");
   const [orderType, setOrderType] = useState<"market" | "limit">("market");
+  const [orderTypeTouched, setOrderTypeTouched] = useState(false);
   const [entry, setEntry] = useState(() => params.get("entry") ?? "");
   const [stop, setStop] = useState(() => params.get("stop") ?? "");
   const [target, setTarget] = useState(() => params.get("target") ?? "");
@@ -216,6 +217,15 @@ function TradeFormInner({
       return changed ? next : prev;
     });
   }, [aiMode]);
+
+  // AI 모드 + 시나리오의 entryType 기반 주문 유형 기본값 자동 설정.
+  // - pending: 가격이 entryZone까지 와야 진입 → 지정가 대기가 자연스러움
+  // - immediate: 지금 바로 진입 가능 → 시장가
+  // 사용자가 토글을 한 번이라도 만지면(orderTypeTouched) 더 이상 자동 변경 안 함.
+  useEffect(() => {
+    if (!aiMode || !activeScenario || orderTypeTouched) return;
+    setOrderType(activeScenario.entryType === "pending" ? "limit" : "market");
+  }, [aiMode, activeScenario, orderTypeTouched]);
 
   // 시장 컨텍스트: 심볼 변경 시 재fetch
   const [marketCtx, setMarketCtx] = useState<MarketContext>({
@@ -624,7 +634,7 @@ function TradeFormInner({
               <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-background/40 p-0.5">
                 <button
                   type="button"
-                  onClick={() => setOrderType("market")}
+                  onClick={() => { setOrderType("market"); setOrderTypeTouched(true); }}
                   className={cn(
                     "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
                     orderType === "market"
@@ -636,7 +646,7 @@ function TradeFormInner({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOrderType("limit")}
+                  onClick={() => { setOrderType("limit"); setOrderTypeTouched(true); }}
                   className={cn(
                     "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
                     orderType === "limit"
@@ -647,6 +657,11 @@ function TradeFormInner({
                   지정가
                 </button>
               </div>
+              {aiMode && activeScenario && !orderTypeTouched ? (
+                <p className="text-[10px] text-muted-foreground">
+                  AI 시나리오의 진입 유형이 <span className="font-semibold">{activeScenario.entryType === "pending" ? "대기 진입(pending)" : "즉시 진입(immediate)"}</span>이라 {orderType === "limit" ? "지정가" : "시장가"}로 자동 설정됐습니다. 필요하면 직접 바꿀 수 있어요.
+                </p>
+              ) : null}
             </div>
 
             {/* Price inputs with auto-% */}

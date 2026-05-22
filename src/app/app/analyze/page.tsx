@@ -4,6 +4,8 @@ import { AnalysisHistory } from "@/components/analyze/analysis-history";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { AnalysisTimingGuide } from "@/components/app/analysis-timing-guide";
 
+export const maxDuration = 60;
+
 export default async function AnalyzePage() {
   const supabase = await getSupabaseServer();
   const {

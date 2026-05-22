@@ -4,6 +4,7 @@ import { fetchKlines } from "@/lib/analysis/binance";
 import { dispatch } from "@/lib/notify-dispatch";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Map trade timeframe to Binance interval + max bars to scan on each run.
 // We fetch from the trade's created_at to now. To keep things bounded we cap

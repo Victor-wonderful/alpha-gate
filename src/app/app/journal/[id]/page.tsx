@@ -16,6 +16,8 @@ import {
 } from "@/types/trade";
 import { formatNumber } from "@/lib/utils";
 
+export const maxDuration = 60;
+
 export default async function JournalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await getSupabaseServer();

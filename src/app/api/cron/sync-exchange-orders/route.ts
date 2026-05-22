@@ -5,6 +5,7 @@ import { cancelOrder, getOrder } from "@/lib/exchanges/binance";
 import { dispatch } from "@/lib/notify-dispatch";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * Sync exchange orders with the actual venue.

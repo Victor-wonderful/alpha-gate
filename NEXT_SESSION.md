@@ -107,10 +107,10 @@ CREATE POLICY "own ranking rewards" ON ranking_rewards
 - 토스 / 카드 / USDT 입금 PG 연동
 - 환율: 1 AG = 1 USDT(실제) = 1,000 vUSDT(플랫폼)
 
-### 4. Pro 업그레이드 후 cron 복구
-- 현재 `fill-limit-orders`가 daily(자정)에만 실행
-- Pro 업그레이드 시 `*/5 * * * *` (5분마다)로 복귀
-- vercel.json만 수정하면 됨
+### ✅ ~~Pro 업그레이드 후 cron 복구~~ (2026-05-22 완료)
+- Vercel Pro 전환 완료. cron 3종(resolve-trades / sync-exchange-orders / fill-limit-orders)을 `*/5 * * * *`로 복구.
+- 함수 타임아웃 `maxDuration = 60` 명시 (AI 분석/복기 + cron 3종).
+- 중복 생성됐던 `web01` Vercel 프로젝트 삭제 + 로컬 `.vercel/` link 정리.
 
 ---
 
@@ -174,17 +174,28 @@ CREATE POLICY "own ranking rewards" ON ranking_rewards
 - **프로덕션**: https://alpha-gate.vercel.app
 - **Vercel 프로젝트**: `victor-alpha/alpha-gate`
 - **GitHub repo**: `Victor-wonderful/alpha-gate`
-- **main 최신 커밋**: `5bc15d4 fix(cron): fill-limit-orders를 Hobby 호환 daily로 되돌림`
-- **자동 배포**: ✅ 정상 (오늘 cron 이슈 해결됨)
+- **Vercel 플랜**: **Pro** (2026-05-22 업그레이드)
+- **main 최신 커밋**: `3b66274 perf: maxDuration=60 — Pro 플랜 활용해 함수 타임아웃 확장`
+- **자동 배포**: ✅ 정상
 
-### Cron 현황 (`vercel.json`)
+### Cron 현황 (`vercel.json`) — Pro 기준
 | Cron | Schedule | 비고 |
 |------|---------|------|
 | daily-digest | `0 0 * * *` | 매일 자정 |
-| resolve-trades | `0 0 * * *` | 매일 자정 |
-| sync-exchange-orders | `0 0 * * *` | 매일 자정 |
-| fill-limit-orders | `0 0 * * *` | 매일 자정 (Hobby용, 원래 5분 주기) |
+| resolve-trades | `*/5 * * * *` | 5분마다 — 페이퍼 트레이드 정산 |
+| sync-exchange-orders | `*/5 * * * *` | 5분마다 — 실거래 주문 동기화 |
+| fill-limit-orders | `*/5 * * * *` | 5분마다 — 지정가 주문 체결 |
 | distribute-rankings | `0 15 * * 0` | 매주 일요일 15:00 UTC = 월요일 00:00 KST |
+
+### 함수 타임아웃 (`maxDuration`)
+| 라우트 | 값 | 이유 |
+|---|---|---|
+| `/app/analyze` (page) | 60s | Claude Sonnet + 차트 이미지, 20-40s 가능 |
+| `/app/journal/[id]` (page) | 60s | AI 복기 코칭 |
+| `/api/cron/sync-exchange-orders` | 60s | 최대 200건 거래소 주문 순차 처리 |
+| `/api/cron/resolve-trades` | 60s | 페이퍼 트레이드 정산 |
+| `/api/cron/fill-limit-orders` | 60s | 지정가 주문 체결 |
+| `/api/cron/distribute-rankings` | 60s | 주간 랭킹 보상 분배 |
 
 ### 환경변수 확인 사항
 - `CRON_SECRET`: 설정돼있어야 cron route 동작 (이미 설정됨)
@@ -196,7 +207,9 @@ CREATE POLICY "own ranking rewards" ON ranking_rewards
 
 1. **off-by-one 버그**: 진입가가 캔들 시가와 1ms 어긋남 → `currentCandle.openTime + tfMs`로 정확히 계산
 2. **placeholder 진입가**: 베팅 직후 임시 가격이 그대로 표시됨 → LiveChart가 실제 캔들 시가를 콜백으로 전달, 캔들 시작 후 갱신
-3. **자동 배포 멈춤**: `*/5 * * * *` cron이 Hobby 플랜 위반 → daily로 변경, 자동 배포 정상화
+3. **자동 배포 멈춤**: `*/5 * * * *` cron이 Hobby 플랜 위반 → daily로 변경, 자동 배포 정상화 (이후 Pro 전환으로 5분 주기 복구)
+4. **Vercel 중복 프로젝트**: 폴더명 `D:\web01\` 때문에 `web01`이라는 별도 Vercel 프로젝트가 잘못 생성되어 같은 레포에서 이중 빌드. `web01` 삭제 + 로컬 `.vercel/` 제거로 정리
+5. **AI 분석 잠재 타임아웃**: Hobby 10초 한도에서 Claude 호출이 잘릴 위험 있던 라우트들에 `maxDuration = 60` 명시
 
 ---
 

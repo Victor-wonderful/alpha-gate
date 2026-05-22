@@ -5,6 +5,7 @@ import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { ExchangeUI } from "./exchange-ui";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
+import { HelpLink } from "@/components/app/help-link";
 
 export const dynamic = "force-dynamic";
 
@@ -83,13 +84,16 @@ export default async function VirtualTradePage({
 
   const cluster = clusters.trading({
     rightSlot: (
-      <Link
-        href="/app/virtual-trade/wallet"
-        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        <Settings className="h-3.5 w-3.5" />
-        지갑 관리
-      </Link>
+      <div className="flex items-center gap-2">
+        <HelpLink href="/app/guide/trading" />
+        <Link
+          href="/app/virtual-trade/wallet"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          <Settings className="h-3.5 w-3.5" />
+          지갑 관리
+        </Link>
+      </div>
     ),
   });
   return (

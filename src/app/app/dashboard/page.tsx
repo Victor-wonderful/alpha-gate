@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
+import { HelpLink } from "@/components/app/help-link";
 
 interface ClosedRow {
   pre_grade: Grade;
@@ -86,7 +87,9 @@ export default async function DashboardPage() {
     manual: rows.filter((r) => r.exit_reason === "manual" || !r.exit_reason).length,
   };
 
-  const cluster = clusters.results();
+  const cluster = clusters.results({
+    rightSlot: <HelpLink href="/app/guide/results" />,
+  });
   return (
     <div className="space-y-5">
       <FlowStepper current="dashboard" />
@@ -94,6 +97,7 @@ export default async function DashboardPage() {
         title={cluster.title}
         description={`종료된 라이브 거래 ${n}건 기준. 백테스트 결과는 제외됩니다.`}
         tabs={cluster.tabs}
+        rightSlot={cluster.rightSlot}
       />
 
       {n === 0 ? (

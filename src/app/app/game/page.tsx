@@ -4,6 +4,7 @@ import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { GameClient } from "./game-client";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
+import { HelpLink } from "@/components/app/help-link";
 
 export default async function GamePage() {
   const supabase = await getSupabaseServer();
@@ -36,10 +37,17 @@ export default async function GamePage() {
     // game_wallets가 없어도 통계는 0으로 시작 (생성은 settle 시 수행)
   }
 
-  const cluster = clusters.trading();
+  const cluster = clusters.trading({
+    rightSlot: <HelpLink href="/app/guide/game" />,
+  });
   return (
     <div className="space-y-4">
-      <ClusterTabs title={cluster.title} description={cluster.description} tabs={cluster.tabs} />
+      <ClusterTabs
+        title={cluster.title}
+        description={cluster.description}
+        tabs={cluster.tabs}
+        rightSlot={cluster.rightSlot}
+      />
       <GameClient
         initialPoints={initialPoints}
         totalGames={totalGames}

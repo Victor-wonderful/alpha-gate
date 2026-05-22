@@ -10,6 +10,7 @@ import { ResolveTradesButton } from "./resolve-button";
 import { CancelPendingButton } from "./cancel-pending-button";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
+import { HelpLink } from "@/components/app/help-link";
 import { fetchTicker24h } from "@/lib/analysis/binance";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
@@ -148,7 +149,12 @@ export default async function JournalListPage() {
 
   const cluster = clusters.results({
     openCount: open.length + pendingLimits.length,
-    rightSlot: <ResolveTradesButton />,
+    rightSlot: (
+      <div className="flex items-center gap-2">
+        <HelpLink href="/app/guide/results" />
+        <ResolveTradesButton />
+      </div>
+    ),
   });
   return (
     <div className="space-y-5">

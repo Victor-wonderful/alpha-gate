@@ -198,9 +198,11 @@ Strategy Agent가 메인 전략 1개를 골랐어도, 같은 시장 상황에서
 
 스타일별 "현재가 대비 entryZone 중간값 거리 한도":
 - scalp: ±0.4% 이내 → entryType="immediate" 가능. 0.4% 초과면 시나리오 폐기 (스캘핑은 멀리서 못 기다림).
-- day: ±1.5% 이내 → "immediate". 1.5~3% → "pending" 허용. 3% 초과 폐기.
-- swing: ±4% 이내 → "immediate". 4~8% → "pending". 8% 초과 폐기.
-- position: ±10% 이내 → "immediate". 10~20% → "pending". 20% 초과 폐기.
+- day: ±1.5% 이내 → "immediate". 1.5~2% → "pending" 허용. 2% 초과 폐기.
+- swing: ±4% 이내 → "immediate". 4~5% → "pending". 5% 초과 폐기.
+- position: ±10% 이내 → "immediate". 10~12% → "pending". 12% 초과 폐기.
+
+위 한도는 entries[] 각 tier 가격에도 똑같이 적용된다. 3차 진입이 한도를 넘으면 그 tier는 제거된다. 모든 tier가 한도를 넘으면 시나리오 자체가 무효.
 
 entryType 의미:
 - "immediate": 지금 바로 또는 분 단위 안에 진입 가능. trigger는 단순 확인 ("현재가 부근에서 종가 확정" 등).
@@ -459,11 +461,15 @@ export async function synthesizeAnalysis(
 
 // Style-dependent maximum distance (entryZone midpoint vs current price) for each entryType.
 // "immediate" must be reachable now; "pending" can be a stretch but must still be plausible.
+//
+// Tightened 2026-05-22: prior pending caps (day 3% / swing 8% / position 20%) let the
+// LLM park entries that needed days-to-weeks to reach. Pulled in so the scenarios
+// the user sees are actually tradeable within the style's expected hold time.
 const PROXIMITY_LIMITS: Record<string, { immediate: number; pending: number }> = {
   scalp: { immediate: 0.4, pending: 0.4 }, // scalp doesn't wait
-  day: { immediate: 1.5, pending: 3 },
-  swing: { immediate: 4, pending: 8 },
-  position: { immediate: 10, pending: 20 },
+  day: { immediate: 1.5, pending: 2 },
+  swing: { immediate: 4, pending: 5 },
+  position: { immediate: 10, pending: 12 },
 };
 
 // Style-based stop/target % bounds (must match prompt) + min R:R
@@ -521,24 +527,42 @@ function enforceEntryProximity(report: AnalysisReport, snapshot: AnalysisSnapsho
       );
     }
 
-    // 4) Annotate entries with distancePct + sanity-check tier ordering
+    // 4) Annotate entries with distancePct + sanity-check tier ordering + per-tier gate
     let processedEntries = s.entries;
+    const droppedTiers: string[] = [];
     if (processedEntries && processedEntries.length > 0) {
       const isLong = s.direction === "long";
       // For long: tiers should be progressively lower (deeper pullback).
       // For short: tiers should be progressively higher.
       const sorted = [...processedEntries].sort((a, b) => (isLong ? b.price - a.price : a.price - b.price));
-      processedEntries = sorted.map((e, idx) => ({
+      // Per-tier proximity gate — drop individual tiers that exceed pending limit
+      // even if the scenario midpoint passed. This kills "3차 진입" prices that are
+      // far enough away to be effectively unreachable.
+      const tierLimit = proxLimits.pending;
+      const withinLimit = sorted.filter((e) => {
+        const d = Math.abs((e.price - current) / current) * 100;
+        if (d <= tierLimit) return true;
+        droppedTiers.push(`tier@${e.price}(${d.toFixed(1)}%↑${tierLimit}%)`);
+        return false;
+      });
+      // If every tier got dropped the scenario itself is unreachable — fall back to
+      // closing the entry to entryZone midpoint so the user still sees the setup,
+      // but flag it heavily via qualityIssues below.
+      const finalSet = withinLimit.length > 0 ? withinLimit : sorted.slice(0, 1);
+      processedEntries = finalSet.map((e, idx) => ({
         ...e,
         tier: idx + 1,
         label: idx === 0 ? "1차 진입" : idx === 1 ? "2차 진입" : "3차 진입",
         distancePct: ((e.price - current) / current) * 100,
       }));
-      // Normalize weights to sum 100 if off
+      // Normalize weights to sum 100 if any tiers were dropped or the sum is off
       const wSum = processedEntries.reduce((acc, e) => acc + (e.weight || 0), 0);
       if (wSum > 0 && Math.abs(wSum - 100) > 1) {
         processedEntries = processedEntries.map((e) => ({ ...e, weight: Math.round((e.weight / wSum) * 100) }));
       }
+    }
+    if (droppedTiers.length > 0) {
+      issues.push(`먼 진입 단계 제거: ${droppedTiers.join(", ")}`);
     }
 
     const requested = s.entryType;

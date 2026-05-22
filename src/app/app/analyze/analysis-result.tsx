@@ -798,16 +798,28 @@ function SimpleScenarioCard({
               >
                 {isLong ? "사기 (롱)" : "팔기 (숏)"}
               </Badge>
-              {scenario.entryType === "pending" ? (
-                <Badge className="border border-amber-500/40 bg-amber-500/10 text-amber-400">
-                  도달 대기 ({entryVsCurrentPct >= 0 ? "+" : ""}
-                  {entryVsCurrentPct.toFixed(2)}%)
-                </Badge>
-              ) : scenario.entryType === "immediate" ? (
-                <Badge className="border border-primary/40 bg-primary/10 text-primary">
-                  지금 진입 가능
-                </Badge>
-              ) : null}
+              {(() => {
+                const absDist = Math.abs(entryVsCurrentPct);
+                // Color tone by distance — closer = green, mid = amber, far = red-ish
+                const tone =
+                  absDist < 0.5
+                    ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
+                    : absDist < 3
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                      : "border-grade-d/40 bg-grade-d/10 text-grade-d";
+                const typeLabel =
+                  scenario.entryType === "pending"
+                    ? "도달 대기"
+                    : scenario.entryType === "immediate"
+                      ? "지금 진입"
+                      : "진입";
+                return (
+                  <Badge className={cn("border px-2 py-0.5 text-[11px] font-bold", tone)}>
+                    {typeLabel} · 진입까지 {entryVsCurrentPct >= 0 ? "+" : ""}
+                    {entryVsCurrentPct.toFixed(2)}%
+                  </Badge>
+                );
+              })()}
               {(() => {
                 const sid = scenario.strategyHint ?? strategy.primary;
                 const isAlt = scenario.strategyHint && scenario.strategyHint !== strategy.primary;

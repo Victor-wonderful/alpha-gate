@@ -172,12 +172,38 @@ function evaluate(style: TradingStyle, parts: { h: number; m: number }): Verdict
 }
 
 export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
-  const [parts, setParts] = useState(() => getKstParts());
+  // null on SSR + first client render — render neutral placeholder to avoid
+  // hydration mismatch. After mount, evaluate with the real time and tick
+  // every 30s.
+  const [parts, setParts] = useState<ReturnType<typeof getKstParts> | null>(null);
 
   useEffect(() => {
+    setParts(getKstParts());
     const id = setInterval(() => setParts(getKstParts()), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  // Pre-mount placeholder: same shape/height as the real card, no time-dependent
+  // text. Avoids server↔client tone/icon/text divergence.
+  if (parts === null) {
+    return (
+      <div
+        suppressHydrationWarning
+        className="flex items-start gap-3 rounded-lg border border-border bg-card/40 px-4 py-3"
+      >
+        <div className="flex flex-none items-center gap-1.5 pt-0.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-muted" />
+          <Clock className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-muted-foreground">최적 시점 판정 중…</div>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            현재 시각 기준으로 분석하기 좋은 시점인지 확인합니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const verdict = evaluate(style, parts);
 

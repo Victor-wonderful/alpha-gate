@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AutoRefreshBar } from "@/components/market/auto-refresh-bar";
+import { CapitalFlowCard } from "@/components/market/capital-flow-card";
 import { SessionsClock } from "@/components/market/sessions-clock";
 import { MacroCalendar } from "@/components/market/macro-calendar";
 import { SnapshotToday } from "@/components/market/snapshot-today";
@@ -64,9 +65,14 @@ export default function MarketPage() {
         </div>
       </section>
 
-      <Suspense fallback={<Skeleton label="On-chain · DeFi TVL" height="md" />}>
-        <DefiTvlCard />
-      </Suspense>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Suspense fallback={<Skeleton label="On-chain · DeFi TVL" height="md" />}>
+          <DefiTvlCard />
+        </Suspense>
+        <Suspense fallback={<Skeleton label="Capital Flow · 7d" height="md" />}>
+          <CapitalFlowCard />
+        </Suspense>
+      </div>
 
       <MacroCalendar />
       <SessionsClock />

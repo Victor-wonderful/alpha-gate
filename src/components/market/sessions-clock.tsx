@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Session = {
   name: string;
-  ranges: [number, number][];
+  ranges: [number, number][]; // [openHour, closeHour) in KST
 };
 
 const SESSIONS: Session[] = [
@@ -15,19 +16,61 @@ const SESSIONS: Session[] = [
   { name: "New York", ranges: [[22, 24], [0, 7]] },
 ];
 
-function kstNow(): { h: number; m: number } {
+function kstNow(): { h: number; m: number; totalMin: number } {
   const now = new Date();
   const kstMs = now.getTime() + 9 * 3600 * 1000;
   const d = new Date(kstMs);
-  return { h: d.getUTCHours(), m: d.getUTCMinutes() };
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  return { h, m, totalMin: h * 60 + m };
 }
 
 function isOpen(s: Session, h: number) {
   return s.ranges.some(([a, b]) => h >= a && h < b);
 }
 
+/** Returns minutes until next state change (opens or closes), considering KST wrap. */
+function minutesUntilNextChange(s: Session, totalMin: number): number {
+  // Normalize each range to minute boundaries
+  const events: { at: number; type: "open" | "close" }[] = [];
+  for (const [a, b] of s.ranges) {
+    const openMin = a * 60;
+    const closeMin = b === 24 ? 24 * 60 : b * 60;
+    events.push({ at: openMin, type: "open" });
+    events.push({ at: closeMin, type: "close" });
+  }
+  events.sort((x, y) => x.at - y.at);
+  // Find next event after current time
+  for (const ev of events) {
+    if (ev.at > totalMin) return ev.at - totalMin;
+  }
+  // Wrap to next day
+  return 24 * 60 - totalMin + events[0].at;
+}
+
+function fmtMin(totalMin: number) {
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}분`;
+  if (m === 0) return `${h}시간`;
+  return `${h}시간 ${m}분`;
+}
+
+function fmtRange(ranges: [number, number][]) {
+  return ranges
+    .map(
+      ([a, b]) =>
+        `${String(a).padStart(2, "0")}:00–${String(b).padStart(2, "0")}:00`,
+    )
+    .join(" / ");
+}
+
 export function SessionsClock() {
-  const [time, setTime] = useState<{ h: number; m: number }>({ h: 0, m: 0 });
+  const [time, setTime] = useState<{ h: number; m: number; totalMin: number }>({
+    h: 0,
+    m: 0,
+    totalMin: 0,
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -37,62 +80,88 @@ export function SessionsClock() {
     return () => clearInterval(t);
   }, []);
 
+  // Detect golden window (22:30–01:00 KST = London·NY overlap)
+  const inGolden = mounted && (time.totalMin >= 22 * 60 + 30 || time.totalMin < 60);
+  // Trap window (05:00–09:00)
+  const inTrap = mounted && time.totalMin >= 5 * 60 && time.totalMin < 9 * 60;
+
   return (
     <section>
-      <div className="mb-4 flex items-baseline justify-between">
-        <h2 className="text-base font-semibold">글로벌 마켓 세션</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          글로벌 마켓 세션
+        </h2>
         {mounted ? (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
-            KST {String(time.h).padStart(2, "0")}:{String(time.m).padStart(2, "0")}
-          </span>
+          <div className="flex items-center gap-2">
+            {inGolden ? (
+              <span className="rounded-md bg-grade-a/15 px-2 py-0.5 text-xs font-semibold text-grade-a">
+                🌟 황금 시간대
+              </span>
+            ) : inTrap ? (
+              <span className="rounded-md bg-amber-400/15 px-2 py-0.5 text-xs font-semibold text-amber-400">
+                ⚠ 함정 시간대
+              </span>
+            ) : null}
+            <span className="font-mono text-sm tabular-nums text-muted-foreground">
+              KST {String(time.h).padStart(2, "0")}:
+              {String(time.m).padStart(2, "0")}
+            </span>
+          </div>
         ) : (
           <span className="text-xs text-muted-foreground">KST</span>
         )}
       </div>
 
-      <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card/40">
-        {SESSIONS.map((s) => {
-          const open = mounted ? isOpen(s, time.h) : false;
-          const ranges = s.ranges
-            .map(([a, b]) => `${String(a).padStart(2, "0")}–${String(b).padStart(2, "0")}`)
-            .join(" / ");
-          return (
-            <li
-              key={s.name}
-              className="flex items-center justify-between gap-4 px-6 py-4"
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    "h-2 w-2 rounded-full",
-                    open ? "bg-grade-a animate-pulse" : "bg-muted-foreground/30",
-                  )}
-                />
-                <span className="text-base font-medium">{s.name}</span>
+      <article className="rounded-2xl border border-border/60 bg-card/40 p-3">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {SESSIONS.map((s) => {
+            const open = mounted ? isOpen(s, time.h) : false;
+            const until = mounted ? minutesUntilNextChange(s, time.totalMin) : 0;
+            return (
+              <div
+                key={s.name}
+                className={cn(
+                  "rounded-lg border px-3 py-2.5 transition-colors",
+                  open
+                    ? "border-grade-a/40 bg-grade-a/[0.06]"
+                    : "border-border/60 bg-card/30",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{s.name}</span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                      open
+                        ? "bg-grade-a/20 text-grade-a"
+                        : "bg-muted/40 text-muted-foreground",
+                    )}
+                  >
+                    {mounted ? (open ? "OPEN" : "CLOSED") : "—"}
+                  </span>
+                </div>
+                <p className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+                  KST {fmtRange(s.ranges)}
+                </p>
+                {mounted ? (
+                  <p
+                    className={cn(
+                      "mt-0.5 text-[11px]",
+                      open ? "text-grade-a/80" : "text-muted-foreground",
+                    )}
+                  >
+                    {open ? "마감까지" : "오픈까지"}{" "}
+                    <span className="font-mono font-medium tabular-nums">
+                      {fmtMin(until)}
+                    </span>
+                  </p>
+                ) : null}
               </div>
-              <div className="flex items-center gap-4">
-                <span className="font-mono text-sm tabular-nums text-muted-foreground">
-                  {ranges}
-                </span>
-                <span
-                  className={cn(
-                    "rounded-md px-2 py-0.5 text-xs font-semibold uppercase tracking-wider",
-                    open
-                      ? "bg-grade-a/15 text-grade-a"
-                      : "bg-muted/40 text-muted-foreground",
-                  )}
-                >
-                  {mounted ? (open ? "OPEN" : "CLOSED") : "—"}
-                </span>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      <p className="mt-3 text-sm text-muted-foreground">
-        황금 시간대 22:30–01:00 KST (런던·뉴욕 겹침) · 함정 05:00–09:00 (한산 → 페이크 잦음)
-      </p>
+            );
+          })}
+        </div>
+      </article>
     </section>
   );
 }

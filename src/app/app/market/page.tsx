@@ -34,6 +34,8 @@ export default function MarketPage() {
 
       <AutoRefreshBar intervalMs={60_000} />
 
+      <SessionsClock />
+
       <Suspense fallback={<Skeleton height="lg" label="Snapshot · Today" />}>
         <SnapshotToday />
       </Suspense>
@@ -75,7 +77,6 @@ export default function MarketPage() {
       </div>
 
       <MacroCalendar />
-      <SessionsClock />
 
       <p className="text-xs text-muted-foreground">
         새로고침 주기: Snapshot 10분 · 펀딩 5분 · 도미넌스·Alt Season·Stablecoin 10–30분 · F&amp;G·DeFi TVL 1시간.

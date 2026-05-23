@@ -1,8 +1,7 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import {
   ArrowRight,
-  ArrowUpRight,
-  ArrowDownRight,
   BookOpen,
   Coins,
   Gamepad2,
@@ -15,25 +14,21 @@ import { GradeBadge } from "@/components/trade/grade-badge";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { cn, formatNumber } from "@/lib/utils";
-import { fetchTicker24h } from "@/lib/analysis/binance";
 import type { Grade } from "@/types/trade";
+import { SessionsClock } from "@/components/market/sessions-clock";
+import { MacroCalendar } from "@/components/market/macro-calendar";
+import { SnapshotToday } from "@/components/market/snapshot-today";
+import {
+  FearGreedCard,
+  DominanceCard,
+  AltSeasonCard,
+  KimchiCard,
+  StablecapCard,
+  LongShortCard,
+} from "@/components/market/live-market-cards";
+import { DefiTvlCard } from "@/components/market/defi-tvl-card";
 
 export const dynamic = "force-dynamic";
-
-const QUICK_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"];
-
-async function getQuickTickers() {
-  return Promise.all(
-    QUICK_SYMBOLS.map(async (s) => {
-      try {
-        const t = await fetchTicker24h(s);
-        return { symbol: s, last: t.lastPrice, change: t.priceChangePercent, ok: true as const };
-      } catch {
-        return { symbol: s, ok: false as const };
-      }
-    }),
-  );
-}
 
 /** Returns the UTC timestamp at the start of the current KST month — used to
  *  count analyses run since the 1st of this calendar month (KST). */
@@ -56,7 +51,7 @@ export default async function HomePage() {
 
   const monthStart = kstMonthStartUtc();
 
-  const [walletResult, recentRes, tickers, openRes, monthlyAnalysesRes] = await Promise.all([
+  const [walletResult, recentRes, openRes, monthlyAnalysesRes] = await Promise.all([
     userId ? getOrCreateWallet(userId).catch(() => null) : Promise.resolve(null),
     supabase
       .from("trades")
@@ -65,7 +60,6 @@ export default async function HomePage() {
       )
       .order("created_at", { ascending: false })
       .limit(5),
-    getQuickTickers(),
     supabase
       .from("trades")
       .select("id, account_size, position_quantity, entry, entry_actual, order_status, order_type")
@@ -249,137 +243,174 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* 5. 최근 거래 + 주요 종목 */}
-      <section className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <BookOpen className="h-4 w-4 text-muted-foreground" />
-              최근 거래
-            </h3>
-            <Link
-              href="/app/journal"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              전체 보기
-              <ArrowRight className="h-3 w-3" />
-            </Link>
+      {/* 5. 시장 대시보드 — Snapshot · Live Market · On-chain · This Week · Sessions */}
+      <section>
+        <div className="mb-4">
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Market Dashboard
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/30">
-            {recent.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-                아직 저장한 거래가 없습니다.{" "}
-                <Link href="/app/analyze" className="text-primary underline-offset-2 hover:underline">
-                  AI 분석
-                </Link>
-                으로 시작하세요.
-              </div>
-            ) : (
-              <ul className="divide-y divide-border/40">
-                {recent.map((t) => {
-                  const status = (t as { order_status?: string }).order_status;
-                  const isPending = status === "pending";
-                  return (
-                    <li key={t.id}>
-                      <Link
-                        href={`/app/journal/${t.id}`}
-                        className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-muted/30"
-                      >
-                        <div className="flex items-center gap-3">
-                          <GradeBadge grade={t.pre_grade as Grade} size="sm" />
-                          <span className="font-mono text-sm font-medium">{t.symbol}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {t.direction === "long" ? "롱" : "숏"} · {t.timeframe}
-                          </span>
-                          {isPending ? (
-                            <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                              대기
-                            </span>
-                          ) : !t.closed_at ? (
-                            <span className="rounded bg-grade-b/15 px-1.5 py-0.5 text-[10px] font-medium text-grade-b">
-                              진행
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-4 text-xs">
-                          {t.result_r != null ? (
-                            <span
-                              className={cn(
-                                "font-mono font-medium",
-                                Number(t.result_r) >= 0 ? "text-grade-a" : "text-grade-d",
-                              )}
-                            >
-                              {Number(t.result_r) >= 0 ? "+" : ""}
-                              {Number(t.result_r).toFixed(2)}R
-                            </span>
-                          ) : null}
-                          <span className="text-muted-foreground">
-                            {new Date(t.created_at).toLocaleDateString("ko-KR", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                        </div>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+          <h2 className="mt-2 text-xl font-bold leading-[1.15]">지금 진입해도 되는 환경인가</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            심리 · 구조 · 자금 흐름 · 다가오는 이벤트를 한눈에. 매일 점검하고 시작하세요.
+          </p>
         </div>
 
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <LineChartIcon className="h-4 w-4 text-muted-foreground" />
-              주요 종목
-            </h3>
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-grade-a" />
-              LIVE
-            </span>
+        <div className="space-y-8">
+          {/* 5-1. Snapshot Today */}
+          <Suspense fallback={<MarketSkeleton label="Snapshot · Today" height="lg" />}>
+            <SnapshotToday />
+          </Suspense>
+
+          {/* 5-2. Live Market 6 카드 */}
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
+              Live Market
+              <span className="text-[11px] font-normal text-muted-foreground">
+                · 심리·구조·유동성·포지셔닝
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Suspense fallback={<MarketSkeleton label="Fear & Greed" />}>
+                <FearGreedCard />
+              </Suspense>
+              <Suspense fallback={<MarketSkeleton label="BTC Dominance" />}>
+                <DominanceCard />
+              </Suspense>
+              <Suspense fallback={<MarketSkeleton label="Alt Season Index" />}>
+                <AltSeasonCard />
+              </Suspense>
+              <Suspense fallback={<MarketSkeleton label="김치 프리미엄" />}>
+                <KimchiCard />
+              </Suspense>
+              <Suspense fallback={<MarketSkeleton label="Stablecoin Mcap" />}>
+                <StablecapCard />
+              </Suspense>
+              <Suspense fallback={<MarketSkeleton label="Long/Short · BTC" />}>
+                <LongShortCard />
+              </Suspense>
+            </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/30">
+
+          {/* 5-3. On-chain DeFi TVL */}
+          <Suspense fallback={<MarketSkeleton label="On-chain · DeFi TVL" height="md" />}>
+            <DefiTvlCard />
+          </Suspense>
+
+          {/* 5-4. This Week Macro */}
+          <MacroCalendar />
+
+          {/* 5-5. Sessions KST */}
+          <SessionsClock />
+        </div>
+      </section>
+
+      {/* 6. 최근 거래 */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+            최근 거래
+          </h3>
+          <Link
+            href="/app/journal"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            전체 보기
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+        <div className="rounded-xl border border-border/60 bg-card/30">
+          {recent.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+              아직 저장한 거래가 없습니다.{" "}
+              <Link href="/app/analyze" className="text-primary underline-offset-2 hover:underline">
+                AI 분석
+              </Link>
+              으로 시작하세요.
+            </div>
+          ) : (
             <ul className="divide-y divide-border/40">
-              {tickers.map((t) => (
-                <li key={t.symbol}>
-                  {t.ok ? (
+              {recent.map((t) => {
+                const status = (t as { order_status?: string }).order_status;
+                const isPending = status === "pending";
+                return (
+                  <li key={t.id}>
                     <Link
-                      href={`/app/analyze?symbol=${t.symbol}`}
+                      href={`/app/journal/${t.id}`}
                       className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-muted/30"
                     >
-                      <span className="font-mono text-sm font-medium">{t.symbol.replace("USDT", "")}</span>
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-sm">${formatNumber(t.last)}</span>
-                        <span
-                          className={cn(
-                            "inline-flex w-14 items-center justify-end gap-0.5 font-mono text-xs font-medium",
-                            t.change >= 0 ? "text-grade-a" : "text-grade-d",
-                          )}
-                        >
-                          {t.change >= 0 ? (
-                            <ArrowUpRight className="h-3 w-3" />
-                          ) : (
-                            <ArrowDownRight className="h-3 w-3" />
-                          )}
-                          {Math.abs(t.change).toFixed(2)}%
+                        <GradeBadge grade={t.pre_grade as Grade} size="sm" />
+                        <span className="font-mono text-sm font-medium">{t.symbol}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {t.direction === "long" ? "롱" : "숏"} · {t.timeframe}
+                        </span>
+                        {isPending ? (
+                          <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                            대기
+                          </span>
+                        ) : !t.closed_at ? (
+                          <span className="rounded bg-grade-b/15 px-1.5 py-0.5 text-[10px] font-medium text-grade-b">
+                            진행
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-4 text-xs">
+                        {t.result_r != null ? (
+                          <span
+                            className={cn(
+                              "font-mono font-medium",
+                              Number(t.result_r) >= 0 ? "text-grade-a" : "text-grade-d",
+                            )}
+                          >
+                            {Number(t.result_r) >= 0 ? "+" : ""}
+                            {Number(t.result_r).toFixed(2)}R
+                          </span>
+                        ) : null}
+                        <span className="text-muted-foreground">
+                          {new Date(t.created_at).toLocaleDateString("ko-KR", {
+                            month: "short",
+                            day: "numeric",
+                          })}
                         </span>
                       </div>
                     </Link>
-                  ) : (
-                    <div className="flex items-center justify-between px-5 py-3 text-muted-foreground">
-                      <span className="font-mono text-sm">{t.symbol}</span>
-                      <span className="text-xs">조회 실패</span>
-                    </div>
-                  )}
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
-          </div>
+          )}
         </div>
       </section>
+
+      <p className="text-[11px] text-muted-foreground">
+        시장 데이터 새로고침: Snapshot 10분 · 펀딩 5분 · 도미넌스·Alt Season·Stablecoin 10–30분 · F&amp;G·DeFi TVL 1시간. 모든 수치는 참고용이며, 매매 결정은 본인 책임입니다.
+      </p>
     </div>
+  );
+}
+
+function MarketSkeleton({
+  label,
+  height = "sm",
+}: {
+  label: string;
+  height?: "sm" | "md" | "lg";
+}) {
+  const h = height === "lg" ? "min-h-[280px]" : height === "md" ? "min-h-[200px]" : "min-h-[140px]";
+  return (
+    <article
+      className={cn(
+        "flex flex-col gap-2 rounded-xl border border-border/60 bg-card/30 px-5 py-4",
+        h,
+      )}
+    >
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-auto text-[11px] text-muted-foreground">데이터 로드 중…</p>
+    </article>
   );
 }
 

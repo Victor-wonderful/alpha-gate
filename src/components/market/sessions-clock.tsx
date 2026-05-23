@@ -1,37 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Session = {
   name: string;
-  region: string;
   ranges: [number, number][];
-  accent: string;
 };
 
 const SESSIONS: Session[] = [
-  { name: "Sydney", region: "Asia/Sydney", ranges: [[6, 15]], accent: "bg-amber-400/70" },
-  { name: "Tokyo", region: "Asia/Tokyo", ranges: [[9, 18]], accent: "bg-rose-400/70" },
-  {
-    name: "London",
-    region: "Europe/London",
-    ranges: [
-      [16, 24],
-      [0, 1],
-    ],
-    accent: "bg-sky-400/70",
-  },
-  {
-    name: "New York",
-    region: "America/New_York",
-    ranges: [
-      [22, 24],
-      [0, 7],
-    ],
-    accent: "bg-emerald-400/70",
-  },
+  { name: "Sydney", ranges: [[6, 15]] },
+  { name: "Tokyo", ranges: [[9, 18]] },
+  { name: "London", ranges: [[16, 24], [0, 1]] },
+  { name: "New York", ranges: [[22, 24], [0, 7]] },
 ];
 
 function kstNow(): { h: number; m: number } {
@@ -58,34 +39,44 @@ export function SessionsClock() {
 
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          글로벌 마켓 세션
-          <span className="text-[11px] font-normal text-muted-foreground">· KST</span>
-        </h3>
+      <div className="mb-4 flex items-baseline justify-between">
+        <h2 className="text-base font-semibold">글로벌 마켓 세션</h2>
         {mounted ? (
-          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-            현재 KST {String(time.h).padStart(2, "0")}:{String(time.m).padStart(2, "0")}
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            KST {String(time.h).padStart(2, "0")}:{String(time.m).padStart(2, "0")}
           </span>
-        ) : null}
+        ) : (
+          <span className="text-xs text-muted-foreground">KST</span>
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+
+      <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card/40">
         {SESSIONS.map((s) => {
           const open = mounted ? isOpen(s, time.h) : false;
+          const ranges = s.ranges
+            .map(([a, b]) => `${String(a).padStart(2, "0")}–${String(b).padStart(2, "0")}`)
+            .join(" / ");
           return (
-            <article
+            <li
               key={s.name}
-              className={cn(
-                "rounded-xl border bg-card/30 px-4 py-3 transition-colors",
-                open ? "border-grade-a/40 bg-grade-a/[0.04]" : "border-border/60",
-              )}
+              className="flex items-center justify-between gap-4 px-6 py-4"
             >
-              <div className="flex items-baseline justify-between">
-                <p className="text-sm font-semibold">{s.name}</p>
+              <div className="flex items-center gap-3">
                 <span
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                    "h-2 w-2 rounded-full",
+                    open ? "bg-grade-a animate-pulse" : "bg-muted-foreground/30",
+                  )}
+                />
+                <span className="text-base font-medium">{s.name}</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="font-mono text-sm tabular-nums text-muted-foreground">
+                  {ranges}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-md px-2 py-0.5 text-xs font-semibold uppercase tracking-wider",
                     open
                       ? "bg-grade-a/15 text-grade-a"
                       : "bg-muted/40 text-muted-foreground",
@@ -94,23 +85,13 @@ export function SessionsClock() {
                   {mounted ? (open ? "OPEN" : "CLOSED") : "—"}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">{s.region}</p>
-              <p className="mt-2 font-mono text-[11px] tabular-nums text-muted-foreground">
-                KST{" "}
-                {s.ranges
-                  .map(
-                    ([a, b]) =>
-                      `${String(a).padStart(2, "0")}:00–${String(b).padStart(2, "0")}:00`,
-                  )
-                  .join(" / ")}
-              </p>
-              <span className={cn("mt-3 block h-0.5 rounded", s.accent)} />
-            </article>
+            </li>
           );
         })}
-      </div>
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        황금 시간대: 런던·뉴욕 겹침 <span className="font-mono">22:30–01:00 KST</span> · 함정: 뉴욕 마감~도쿄 오픈 <span className="font-mono">05:00–09:00 KST</span>
+      </ul>
+
+      <p className="mt-3 text-sm text-muted-foreground">
+        황금 시간대 22:30–01:00 KST (런던·뉴욕 겹침) · 함정 05:00–09:00 (한산 → 페이크 잦음)
       </p>
     </section>
   );

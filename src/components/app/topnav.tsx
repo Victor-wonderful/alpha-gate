@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
+  Activity,
   Bell,
-  BookOpen,
   ChevronDown,
   Coins,
   ExternalLink,
@@ -22,7 +22,7 @@ import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn, formatNumber } from "@/lib/utils";
 import { Logo } from "./logo";
 
-type IconKey = "sparkles" | "wallet" | "chart";
+type IconKey = "activity" | "sparkles" | "wallet" | "chart";
 
 type NavItem = {
   href: string;
@@ -33,12 +33,14 @@ type NavItem = {
 };
 
 const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
+  activity: Activity,
   sparkles: Sparkles,
   wallet: Wallet,
   chart: LineChart,
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { href: "/app/market", label: "시장", icon: "activity" },
   { href: "/app/analyze", label: "분석", icon: "sparkles", matchPaths: ["/app/trade"] },
   {
     href: "/app/virtual-trade",

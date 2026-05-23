@@ -213,10 +213,10 @@ export default async function HomePage() {
       <section>
         <Link
           href="/app/guide"
-          className="group flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-card/30 px-6 py-4 transition-colors hover:bg-card/60"
+          className="group flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-card/30 px-6 py-4 transition-all hover:border-primary/40 hover:bg-card/60"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
               <HelpCircle className="h-5 w-5" />
             </div>
             <div>
@@ -226,9 +226,9 @@ export default async function HomePage() {
               </div>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors group-hover:text-primary">
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card/60 px-3 py-1.5 text-xs font-medium text-foreground transition-all group-hover:border-primary/50 group-hover:bg-primary/10 group-hover:text-primary">
             사용 방법 보기
-            <ArrowRight className="h-3 w-3" />
+            <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
           </span>
         </Link>
       </section>
@@ -314,17 +314,20 @@ export default async function HomePage() {
           </h3>
           <Link
             href="/app/journal"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="group inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 hover:text-primary"
           >
             전체 보기
-            <ArrowRight className="h-3 w-3" />
+            <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
           </Link>
         </div>
         <div className="rounded-xl border border-border/60 bg-card/30">
           {recent.length === 0 ? (
             <div className="px-5 py-8 text-center text-sm text-muted-foreground">
               아직 저장한 거래가 없습니다.{" "}
-              <Link href="/app/analyze" className="text-primary underline-offset-2 hover:underline">
+              <Link
+                href="/app/analyze"
+                className="font-medium text-primary underline decoration-primary/40 decoration-dotted underline-offset-4 transition-colors hover:decoration-primary"
+              >
                 AI 분석
               </Link>
               으로 시작하세요.
@@ -338,9 +341,9 @@ export default async function HomePage() {
                   <li key={t.id}>
                     <Link
                       href={`/app/journal/${t.id}`}
-                      className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-muted/30"
+                      className="group flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/30"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <GradeBadge grade={t.pre_grade as Grade} size="sm" />
                         <span className="font-mono text-sm font-medium">{t.symbol}</span>
                         <span className="text-xs text-muted-foreground">
@@ -374,6 +377,7 @@ export default async function HomePage() {
                             day: "numeric",
                           })}
                         </span>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
                       </div>
                     </Link>
                   </li>
@@ -454,8 +458,10 @@ function ResourceCard({
       <Link
         href={cta.href}
         className={cn(
-          "mt-4 inline-flex items-center gap-1 text-[11px] transition-colors",
-          ctaTone === "warn" ? "text-amber-400 hover:underline" : "text-muted-foreground hover:text-primary",
+          "mt-4 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-all",
+          ctaTone === "warn"
+            ? "border-amber-400/40 bg-amber-400/10 text-amber-400 hover:border-amber-400/70 hover:bg-amber-400/20"
+            : "border-border bg-card/60 text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary",
         )}
       >
         {cta.label}
@@ -486,23 +492,28 @@ function QuickCard({
   accent: "primary" | "grade-a" | "grade-b" | "grade-c";
 }) {
   const accentStyles = {
-    primary: { icon: "text-primary", border: "hover:border-primary/30" },
-    "grade-a": { icon: "text-grade-a", border: "hover:border-grade-a/30" },
-    "grade-b": { icon: "text-grade-b", border: "hover:border-grade-b/30" },
-    "grade-c": { icon: "text-grade-c", border: "hover:border-grade-c/30" },
+    primary: { icon: "text-primary", border: "hover:border-primary/40", arrow: "group-hover:text-primary" },
+    "grade-a": { icon: "text-grade-a", border: "hover:border-grade-a/40", arrow: "group-hover:text-grade-a" },
+    "grade-b": { icon: "text-grade-b", border: "hover:border-grade-b/40", arrow: "group-hover:text-grade-b" },
+    "grade-c": { icon: "text-grade-c", border: "hover:border-grade-c/40", arrow: "group-hover:text-grade-c" },
   } as const;
   const a = accentStyles[accent];
   return (
     <Link
       href={href}
       className={cn(
-        "group rounded-xl border border-border/60 bg-card/30 px-5 py-4 transition-colors hover:bg-card/60",
+        "group rounded-xl border border-border/60 bg-card/30 px-5 py-4 transition-all hover:bg-card/60",
         a.border,
       )}
     >
       <div className="mb-3 flex items-center justify-between">
         <Icon className={cn("h-5 w-5", a.icon)} />
-        <ArrowRight className={cn("h-3.5 w-3.5 text-muted-foreground/40 transition-colors group-hover:", a.icon.replace("text-", "group-hover:text-"))} />
+        <ArrowRight
+          className={cn(
+            "h-3.5 w-3.5 text-muted-foreground/60 transition-all group-hover:translate-x-0.5",
+            a.arrow,
+          )}
+        />
       </div>
       <div className="text-sm font-semibold">{label}</div>
     </Link>

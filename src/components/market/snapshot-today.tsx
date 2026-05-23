@@ -86,10 +86,7 @@ export async function SnapshotToday() {
             </thead>
             <tbody className="divide-y divide-border/40">
               {rows.map((r) => (
-                <tr
-                  key={r.symbol}
-                  className="group transition-colors hover:bg-muted/30"
-                >
+                <tr key={r.symbol} className="group">
                   <td className="px-4 py-3 font-mono text-sm font-semibold">
                     {r.symbol}
                   </td>
@@ -148,10 +145,10 @@ export async function SnapshotToday() {
                   <td className="px-4 py-3">
                     <Link
                       href={`/app/analyze?symbol=${r.pair}`}
-                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors group-hover:text-primary"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card/60 px-2.5 py-1 text-[11px] font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
                     >
                       AI 분석
-                      <ArrowRight className="h-3 w-3" />
+                      <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                     </Link>
                   </td>
                 </tr>

@@ -111,6 +111,8 @@ function buildTakeaway(row: Omit<TechnicalRow, "takeaway">): string {
 }
 
 async function fetchKlines(pair: string): Promise<number[]> {
+  // Closed-daily series — used for indicators (RSI/EMA21/SMA200). These barely
+  // shift intraday, so 10-min cache is fine.
   const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1d&limit=250`;
   const res = await fetch(url, { next: { revalidate: 600 } });
   if (!res.ok) throw new Error(`klines ${pair} ${res.status}`);
@@ -118,10 +120,24 @@ async function fetchKlines(pair: string): Promise<number[]> {
   return raw.map((row) => Number(row[4])); // close
 }
 
+/** Live spot price — short cache so the trend column updates intraday. */
+async function fetchLastPrice(pair: string): Promise<number | null> {
+  try {
+    const url = `https://api.binance.com/api/v3/ticker/price?symbol=${pair}`;
+    const res = await fetch(url, { next: { revalidate: 30 } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { price?: string };
+    const p = Number(json.price);
+    return Number.isFinite(p) ? p : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchFunding(pair: string): Promise<number | null> {
   try {
     const url = `https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${pair}`;
-    const res = await fetch(url, { next: { revalidate: 300 } });
+    const res = await fetch(url, { next: { revalidate: 60 } });
     if (!res.ok) return null;
     const json = (await res.json()) as { lastFundingRate?: string };
     const r = Number(json.lastFundingRate);
@@ -136,11 +152,20 @@ async function buildRow(
   usdKrw: number,
 ): Promise<TechnicalRow> {
   try {
-    const [closes, fundingPct] = await Promise.all([
+    const [closes, fundingPct, livePrice] = await Promise.all([
       fetchKlines(p.pair),
       fetchFunding(p.pair),
+      fetchLastPrice(p.pair),
     ]);
-    const close = closes[closes.length - 1] ?? 0;
+    // Indicators use the daily closes (last entry = today's not-yet-closed bar).
+    // But for "current price" + trend, prefer the live ticker so the table
+    // reflects intraday movement (refresh-friendly).
+    const dailyLatest = closes[closes.length - 1] ?? 0;
+    const close = livePrice ?? dailyLatest;
+    // Also swap the latest entry in the closes array so EMA21 includes the live price.
+    if (livePrice && closes.length > 0) {
+      closes[closes.length - 1] = livePrice;
+    }
     const closeKrw = close * usdKrw;
     const ema21 = ema(closes, 21);
     const rsi14 = rsi(closes, 14);

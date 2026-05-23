@@ -24,10 +24,15 @@ function trendTone(t: TechnicalRow["trend"]) {
   return "text-muted-foreground";
 }
 
-function trendLabel(t: TechnicalRow["trend"]) {
-  if (t === "up") return "▲ 상승";
-  if (t === "down") return "▼ 하락";
-  return "→ 횡보";
+function trendIcon(t: TechnicalRow["trend"]) {
+  if (t === "up") return "▲";
+  if (t === "down") return "▼";
+  return "→";
+}
+
+function fmtChange(v: number) {
+  if (!Number.isFinite(v)) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
 function rsiTone(v: number | null) {
@@ -71,7 +76,7 @@ export async function SnapshotToday() {
       <div className="mb-4 flex items-baseline justify-between">
         <h2 className="text-base font-semibold">Snapshot · Today</h2>
         <span className="text-xs text-muted-foreground">
-          via Binance · 1D close · EMA 21 / RSI 14 / SMA 200 · 펀딩비 USDT-perp
+          via Binance · 24h % · RSI 14 / SMA 200 · 펀딩비 USDT-perp
         </span>
       </div>
 
@@ -82,7 +87,7 @@ export async function SnapshotToday() {
               <tr className="border-b border-border/40 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-5 py-3 font-medium">코인</th>
                 <th className="px-5 py-3 font-medium">현재가</th>
-                <th className="px-5 py-3 font-medium">추세 1D</th>
+                <th className="px-5 py-3 font-medium">24h</th>
                 <th className="px-5 py-3 font-medium">RSI 14</th>
                 <th className="hidden px-5 py-3 font-medium md:table-cell">
                   200DMA
@@ -117,11 +122,11 @@ export async function SnapshotToday() {
                   </td>
                   <td
                     className={cn(
-                      "px-5 py-3 font-mono text-sm font-medium",
+                      "px-5 py-3 font-mono text-sm font-medium tabular-nums",
                       trendTone(r.trend),
                     )}
                   >
-                    {trendLabel(r.trend)}
+                    {trendIcon(r.trend)} {fmtChange(r.change24hPct)}
                   </td>
                   <td
                     className={cn(

@@ -19,11 +19,12 @@ export type TechnicalRow = {
   pair: string;            // "BTCUSDT"
   close: number;           // latest 1D close (USD)
   closeKrw: number;        // close * USD/KRW rate
+  change24hPct: number;    // 24h price change % (Binance ticker)
   ema21: number | null;
   rsi14: number | null;
   ma200: number | null;
   fundingPct: number | null; // funding rate * 100 (per 8h)
-  trend: Trend;
+  trend: Trend;              // direction by 24h change (intuitive)
   rsiLabel: string;          // "과매도" | "중립" | "과매수"
   ma200Position: "above" | "below" | "unknown";
   takeaway: string;          // one-line rule-based summary
@@ -120,15 +121,22 @@ async function fetchKlines(pair: string): Promise<number[]> {
   return raw.map((row) => Number(row[4])); // close
 }
 
-/** Live spot price — short cache so the trend column updates intraday. */
-async function fetchLastPrice(pair: string): Promise<number | null> {
+/** Live 24h ticker — gives both lastPrice and 24h change %. Cached 30s. */
+async function fetchTicker24h(
+  pair: string,
+): Promise<{ last: number; change24hPct: number } | null> {
   try {
-    const url = `https://api.binance.com/api/v3/ticker/price?symbol=${pair}`;
+    const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${pair}`;
     const res = await fetch(url, { next: { revalidate: 30 } });
     if (!res.ok) return null;
-    const json = (await res.json()) as { price?: string };
-    const p = Number(json.price);
-    return Number.isFinite(p) ? p : null;
+    const json = (await res.json()) as {
+      lastPrice?: string;
+      priceChangePercent?: string;
+    };
+    const p = Number(json.lastPrice);
+    const c = Number(json.priceChangePercent);
+    if (!Number.isFinite(p)) return null;
+    return { last: p, change24hPct: Number.isFinite(c) ? c : 0 };
   } catch {
     return null;
   }
@@ -152,31 +160,27 @@ async function buildRow(
   usdKrw: number,
 ): Promise<TechnicalRow> {
   try {
-    const [closes, fundingPct, livePrice] = await Promise.all([
+    const [closes, fundingPct, ticker] = await Promise.all([
       fetchKlines(p.pair),
       fetchFunding(p.pair),
-      fetchLastPrice(p.pair),
+      fetchTicker24h(p.pair),
     ]);
-    // Indicators use the daily closes (last entry = today's not-yet-closed bar).
-    // But for "current price" + trend, prefer the live ticker so the table
-    // reflects intraday movement (refresh-friendly).
     const dailyLatest = closes[closes.length - 1] ?? 0;
-    const close = livePrice ?? dailyLatest;
-    // Also swap the latest entry in the closes array so EMA21 includes the live price.
-    if (livePrice && closes.length > 0) {
-      closes[closes.length - 1] = livePrice;
+    const close = ticker?.last ?? dailyLatest;
+    const change24hPct = ticker?.change24hPct ?? 0;
+    // Swap latest closes entry with live price so indicators reflect intraday move.
+    if (ticker && closes.length > 0) {
+      closes[closes.length - 1] = ticker.last;
     }
     const closeKrw = close * usdKrw;
     const ema21 = ema(closes, 21);
     const rsi14 = rsi(closes, 14);
     const ma200 = sma(closes, 200);
 
+    // Trend = 24h direction (intuitive — matches what users see on Upbit/TradingView).
     let trend: Trend = "flat";
-    if (ema21 != null) {
-      const diff = (close - ema21) / ema21;
-      if (diff > 0.005) trend = "up";
-      else if (diff < -0.005) trend = "down";
-    }
+    if (change24hPct > 0.5) trend = "up";
+    else if (change24hPct < -0.5) trend = "down";
     const ma200Position: TechnicalRow["ma200Position"] =
       ma200 == null ? "unknown" : close > ma200 ? "above" : "below";
 
@@ -185,6 +189,7 @@ async function buildRow(
       pair: p.pair,
       close,
       closeKrw,
+      change24hPct,
       ema21,
       rsi14,
       ma200,
@@ -200,6 +205,7 @@ async function buildRow(
       pair: p.pair,
       close: 0,
       closeKrw: 0,
+      change24hPct: 0,
       ema21: null,
       rsi14: null,
       ma200: null,

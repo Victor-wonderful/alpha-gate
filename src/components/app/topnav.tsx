@@ -428,12 +428,18 @@ export function TopNav({
     <>
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between gap-4 px-4 lg:px-6">
-          {/* Logo (clicking = home) */}
-          <Link href="/app" className="flex items-center gap-2 shrink-0" title="홈으로">
+          {/* Logo + brand (clicking = home) */}
+          <Link
+            href="/app"
+            className="group flex items-center gap-2 shrink-0 rounded-md px-1 py-1 transition-colors hover:bg-muted/40"
+            title="홈으로"
+          >
             <Logo size={26} />
-            <div className="hidden sm:block">
-              <div className="text-sm font-bold leading-[1.15]">Alpha Gate</div>
-              <div className="text-[9px] uppercase tracking-[0.14em] leading-[1.15] text-muted-foreground/70">
+            <div className="leading-[1.15]">
+              <div className="text-sm font-bold transition-colors group-hover:text-primary">
+                Alpha Gate
+              </div>
+              <div className="hidden text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70 sm:block">
                 매매 전 의사결정 체크
               </div>
             </div>

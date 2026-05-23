@@ -95,14 +95,17 @@ export async function SnapshotToday() {
             </thead>
             <tbody className="divide-y divide-border/40">
               {rows.map((r) => (
-                <tr key={r.symbol} className="group hover:bg-muted/30">
-                  <td className="px-5 py-3">
+                <tr key={r.symbol} className="group align-top hover:bg-muted/30">
+                  <td className="px-5 py-3 align-top">
                     <Link
                       href={`/app/analyze?symbol=${r.pair}`}
-                      className="font-mono text-base font-bold transition-colors group-hover:text-primary"
+                      className="block font-mono text-base font-bold transition-colors group-hover:text-primary"
                     >
                       {r.symbol}
                     </Link>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {r.takeaway}
+                    </p>
                   </td>
                   <td className="px-5 py-3">
                     <div className="font-mono text-sm font-medium tabular-nums">
@@ -162,19 +165,6 @@ export async function SnapshotToday() {
           </table>
         </div>
 
-        {/* Per-symbol takeaway list */}
-        <div className="border-t border-border/40 px-5 py-4">
-          <ul className="space-y-1.5">
-            {rows.map((r) => (
-              <li key={`tk-${r.symbol}`} className="flex gap-3 text-sm">
-                <span className="w-12 shrink-0 font-mono font-semibold">
-                  {r.symbol}
-                </span>
-                <span className="text-muted-foreground">{r.takeaway}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </section>
   );

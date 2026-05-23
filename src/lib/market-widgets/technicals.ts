@@ -112,21 +112,21 @@ function buildTakeaway(row: Omit<TechnicalRow, "takeaway">): string {
 }
 
 async function fetchKlines(pair: string): Promise<number[]> {
-  // Closed-daily series — used for indicators (RSI/EMA21/SMA200). These barely
-  // shift intraday, so 10-min cache is fine.
-  const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1d&limit=250`;
+  // Binance USDT-M Perp daily closes — matches what traders see on TradingView
+  // (BTCUSDT.P) and what the funding/L-S indicators reference. 10-min cache.
+  const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=1d&limit=250`;
   const res = await fetch(url, { next: { revalidate: 600 } });
   if (!res.ok) throw new Error(`klines ${pair} ${res.status}`);
   const raw = (await res.json()) as Kline[];
   return raw.map((row) => Number(row[4])); // close
 }
 
-/** Live 24h ticker — gives both lastPrice and 24h change %. Cached 30s. */
+/** Live 24h Perp ticker — lastPrice + 24h change %. Matches TradingView BTCUSDT.P. */
 async function fetchTicker24h(
   pair: string,
 ): Promise<{ last: number; change24hPct: number } | null> {
   try {
-    const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${pair}`;
+    const url = `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${pair}`;
     const res = await fetch(url, { next: { revalidate: 30 } });
     if (!res.ok) return null;
     const json = (await res.json()) as {

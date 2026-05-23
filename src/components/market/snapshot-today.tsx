@@ -76,7 +76,7 @@ export async function SnapshotToday() {
       <div className="mb-4 flex items-baseline justify-between">
         <h2 className="text-base font-semibold">Snapshot · Today</h2>
         <span className="text-xs text-muted-foreground">
-          via Binance · 24h % · RSI 14 / SMA 200 · 펀딩비 USDT-perp
+          via Binance USDT-Perp · 24h % · RSI 14 / SMA 200 · 펀딩비
         </span>
       </div>
 

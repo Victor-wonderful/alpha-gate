@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { TopNav } from "@/components/app/topnav";
+import { ScrollToTop } from "@/components/app/scroll-to-top";
 import { getBalance, getAiCredits } from "@/lib/paper-wallet";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main>
         <div className="mx-auto w-full max-w-[1600px] px-4 py-5 lg:px-6 lg:py-6">{children}</div>
       </main>
+      <ScrollToTop />
     </div>
   );
 }

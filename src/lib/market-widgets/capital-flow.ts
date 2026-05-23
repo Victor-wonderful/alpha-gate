@@ -21,6 +21,14 @@ export type Regime =
   | "stables_deploying"       // stables ↓ + alts ↑ (peak alt season)
   | "neutral";                // ±1% all around
 
+export type ActionDirection = "long" | "short" | "wait";
+export type ActionStrength = "strong" | "normal";
+export type ActionSignal = {
+  direction: ActionDirection;
+  strength: ActionStrength;
+  reason: string;             // short rationale (under 30 chars)
+};
+
 export type CapitalFlowSnapshot = {
   // Market caps (current)
   totalMcap: number;
@@ -46,7 +54,54 @@ export type CapitalFlowSnapshot = {
   altDominance: number;
 
   regime: Regime;
+  btcAction: ActionSignal;
+  altAction: ActionSignal;
 };
+
+/** Map regime → concrete BTC/Alt action signals. */
+function deriveActions(regime: Regime): {
+  btc: ActionSignal;
+  alt: ActionSignal;
+} {
+  switch (regime) {
+    case "alt_season_entry":
+      return {
+        btc: { direction: "long", strength: "normal", reason: "자금 유입, 알트 우선" },
+        alt: { direction: "long", strength: "strong", reason: "도미넌스 ↓ + 알트 강세" },
+      };
+    case "btc_led_rally":
+      return {
+        btc: { direction: "long", strength: "strong", reason: "자금 유입 + BTC 선도" },
+        alt: { direction: "wait", strength: "normal", reason: "알트 후행 가능, BTC 확인" },
+      };
+    case "stables_deploying":
+      return {
+        btc: { direction: "long", strength: "normal", reason: "대기 자금 → 위험자산" },
+        alt: { direction: "long", strength: "strong", reason: "알트 정점 주의, 짧게" },
+      };
+    case "rotation_alts_to_btc":
+      return {
+        btc: { direction: "long", strength: "normal", reason: "알트 자금 BTC로 회귀" },
+        alt: { direction: "short", strength: "normal", reason: "알트 시즌 종료 신호" },
+      };
+    case "liquidity_tightening":
+      return {
+        btc: { direction: "wait", strength: "normal", reason: "탄약 ↓, 변동성 ↑" },
+        alt: { direction: "wait", strength: "normal", reason: "위험 자산 회피" },
+      };
+    case "deleveraging":
+      return {
+        btc: { direction: "short", strength: "normal", reason: "자금 이탈, risk-off" },
+        alt: { direction: "short", strength: "strong", reason: "알트 추가 하락 위험" },
+      };
+    case "neutral":
+    default:
+      return {
+        btc: { direction: "wait", strength: "normal", reason: "방향 신호 없음" },
+        alt: { direction: "wait", strength: "normal", reason: "방향 신호 없음" },
+      };
+  }
+}
 
 type GlobalResp = {
   data: {
@@ -215,6 +270,8 @@ export async function fetchCapitalFlow(): Promise<CapitalFlowSnapshot | null> {
     btcDDelta,
   });
 
+  const actions = deriveActions(regime);
+
   const others = Math.max(
     0,
     100 - globalData.btcD - globalData.ethD - globalData.stableD,
@@ -237,5 +294,7 @@ export async function fetchCapitalFlow(): Promise<CapitalFlowSnapshot | null> {
     stableDominance: globalData.stableD,
     altDominance: others,
     regime,
+    btcAction: actions.btc,
+    altAction: actions.alt,
   };
 }

@@ -1,6 +1,7 @@
-import { ChevronDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Pause } from "lucide-react";
 import {
   fetchCapitalFlow,
+  type ActionSignal,
   type Regime,
 } from "@/lib/market-widgets/capital-flow";
 import { cn } from "@/lib/utils";
@@ -138,6 +139,12 @@ export async function CapitalFlowCard() {
           <span className="text-base font-semibold">{r.title}</span>
         </div>
 
+        {/* Action signals — BTC + Alt */}
+        <div className="grid grid-cols-2 gap-2">
+          <ActionChip asset="BTC" signal={d.btcAction} />
+          <ActionChip asset="ALT" signal={d.altAction} />
+        </div>
+
         {/* Total mcap + 24h */}
         <div>
           <div className="flex items-baseline gap-3">
@@ -222,6 +229,81 @@ export async function CapitalFlowCard() {
         </p>
       </article>
     </section>
+  );
+}
+
+const ACTION_META = {
+  long: {
+    label: "롱",
+    Icon: ArrowUp,
+    border: "border-grade-a/40",
+    bg: "bg-grade-a/10",
+    text: "text-grade-a",
+    iconBg: "bg-grade-a/20",
+  },
+  short: {
+    label: "숏",
+    Icon: ArrowDown,
+    border: "border-grade-d/40",
+    bg: "bg-grade-d/10",
+    text: "text-grade-d",
+    iconBg: "bg-grade-d/20",
+  },
+  wait: {
+    label: "관망",
+    Icon: Pause,
+    border: "border-border/60",
+    bg: "bg-muted/20",
+    text: "text-muted-foreground",
+    iconBg: "bg-muted/40",
+  },
+} as const;
+
+function ActionChip({
+  asset,
+  signal,
+}: {
+  asset: string;
+  signal: ActionSignal;
+}) {
+  const m = ACTION_META[signal.direction];
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-lg border px-3 py-2",
+        m.border,
+        m.bg,
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+          m.iconBg,
+        )}
+      >
+        <m.Icon className={cn("h-3.5 w-3.5", m.text)} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-1.5">
+          <span className="font-mono text-xs font-bold">{asset}</span>
+          <span className={cn("text-sm font-semibold", m.text)}>{m.label}</span>
+          {signal.strength === "strong" ? (
+            <span
+              className={cn(
+                "rounded px-1 text-[9px] font-bold uppercase tracking-wider",
+                m.bg,
+                m.text,
+              )}
+            >
+              강
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+          {signal.reason}
+        </p>
+      </div>
+    </div>
   );
 }
 

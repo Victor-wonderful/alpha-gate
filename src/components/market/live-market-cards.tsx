@@ -602,27 +602,45 @@ export async function KimchiCard() {
         </p>
       </div>
 
-      <ul className="space-y-1.5">
-        {rows.map((r) => (
-          <li
-            key={r.symbol}
-            className="flex items-baseline justify-between border-b border-border/40 pb-1.5 text-xs last:border-b-0 last:pb-0"
-          >
-            <span className="font-mono font-bold tabular-nums">{r.symbol}</span>
-            <div className="flex items-baseline gap-3 tabular-nums">
-              <span className="text-muted-foreground">
-                ₩{Math.round(r.upbitKrw).toLocaleString("ko-KR")}
-              </span>
-              <span
-                className={cn("font-mono font-semibold", kimchiTone(r.premiumPct))}
-              >
-                {r.premiumPct >= 0 ? "+" : ""}
-                {r.premiumPct.toFixed(2)}%
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div>
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr className="text-left text-[9px] uppercase tracking-wider text-muted-foreground">
+              <th className="pb-1 font-medium" />
+              <th className="pb-1 text-right font-medium">Upbit (KRW)</th>
+              <th className="pb-1 text-right font-medium">Binance (USD)</th>
+              <th className="pb-1 text-right font-medium">김프</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.symbol} className="border-t border-border/40">
+                <td className="py-1.5 font-mono font-bold">{r.symbol}</td>
+                <td className="py-1.5 text-right font-mono tabular-nums">
+                  ₩{Math.round(r.upbitKrw).toLocaleString("ko-KR")}
+                </td>
+                <td className="py-1.5 text-right font-mono tabular-nums text-muted-foreground">
+                  ${r.binanceUsd.toLocaleString("en-US", {
+                    maximumFractionDigits: r.binanceUsd < 10 ? 4 : 2,
+                  })}
+                </td>
+                <td
+                  className={cn(
+                    "py-1.5 text-right font-mono font-semibold tabular-nums",
+                    kimchiTone(r.premiumPct),
+                  )}
+                >
+                  {r.premiumPct >= 0 ? "+" : ""}
+                  {r.premiumPct.toFixed(2)}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-1.5 text-[9px] text-muted-foreground">
+          김프 = (Upbit ₩ − Binance $ × ₩{btc.usdKrwRate.toFixed(0)}) ÷ Binance ₩ × 100
+        </p>
+      </div>
 
       <Insight title={ins.title}>{ins.body}</Insight>
     </Card>

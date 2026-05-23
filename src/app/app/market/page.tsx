@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AutoRefreshBar } from "@/components/market/auto-refresh-bar";
 import { SessionsClock } from "@/components/market/sessions-clock";
 import { MacroCalendar } from "@/components/market/macro-calendar";
 import { SnapshotToday } from "@/components/market/snapshot-today";
@@ -29,6 +30,8 @@ export default function MarketPage() {
           매매 전 1분, 지금 진입해도 되는 환경인지 점검하세요.
         </p>
       </header>
+
+      <AutoRefreshBar intervalMs={60_000} />
 
       <Suspense fallback={<Skeleton height="lg" label="Snapshot · Today" />}>
         <SnapshotToday />

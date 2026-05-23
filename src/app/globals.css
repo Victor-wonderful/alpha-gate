@@ -29,25 +29,25 @@
   }
 
   .dark {
-    --background: 222 18% 5%;
-    --foreground: 210 20% 98%;
-    --card: 222 16% 8%;
-    --card-foreground: 210 20% 98%;
-    --card-2: 222 14% 10%;
-    --popover: 222 16% 7%;
-    --popover-foreground: 210 20% 98%;
+    --background: 252 22% 7%;
+    --foreground: 250 20% 98%;
+    --card: 252 18% 12%;
+    --card-foreground: 250 20% 98%;
+    --card-2: 252 16% 14%;
+    --popover: 252 18% 10%;
+    --popover-foreground: 250 20% 98%;
     --primary: 199 89% 56%;
-    --primary-foreground: 222 18% 5%;
-    --secondary: 222 10% 14%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 222 10% 14%;
-    --muted-foreground: 220 9% 55%;
-    --accent: 222 10% 14%;
-    --accent-foreground: 210 20% 98%;
+    --primary-foreground: 252 22% 7%;
+    --secondary: 252 12% 16%;
+    --secondary-foreground: 250 20% 98%;
+    --muted: 252 12% 16%;
+    --muted-foreground: 252 8% 60%;
+    --accent: 252 12% 16%;
+    --accent-foreground: 250 20% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 222 12% 16%;
-    --input: 222 12% 18%;
+    --border: 252 14% 20%;
+    --input: 252 14% 22%;
     --ring: 199 89% 56%;
   }
 }
@@ -96,7 +96,9 @@
   }
   body {
     background:
-      radial-gradient(ellipse 1200px 600px at 50% -200px, hsl(199 89% 56% / 0.08), transparent 60%),
+      radial-gradient(ellipse 1100px 560px at 50% -180px, hsl(199 89% 56% / 0.07), transparent 60%),
+      radial-gradient(ellipse 900px 500px at 100% 10%, hsl(280 60% 55% / 0.05), transparent 55%),
+      radial-gradient(ellipse 700px 500px at 0% 15%, hsl(252 50% 50% / 0.04), transparent 55%),
       hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: var(--font-geist-sans), "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;

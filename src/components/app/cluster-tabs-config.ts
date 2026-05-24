@@ -24,10 +24,11 @@ export const clusters = {
   trading: (opts?: { rightSlot?: ReactNode }): ClusterDef => ({
     title: "트레이딩",
     description:
-      "가상 자금으로 거래소 실습 또는 1·3분 가격 예측 게임. 두 활동 모두 같은 vUSDT 잔액을 사용합니다.",
+      "가상 자금으로 거래소 실습, 가격 예측 게임, 차익거래. 모두 같은 vUSDT 잔액을 사용합니다.",
     tabs: [
       { href: "/app/virtual-trade", label: "가상 거래소", icon: "💼" },
       { href: "/app/game", label: "가격 예측 게임", icon: "🎮" },
+      { href: "/app/arbitrage", label: "차익거래", icon: "🔀" },
     ],
     rightSlot: opts?.rightSlot,
   }),

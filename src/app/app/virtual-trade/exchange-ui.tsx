@@ -58,6 +58,15 @@ type Position = {
   leverage: number;
   feesPct: number;
   createdAt: string;
+  timeframe: string;
+  extendedUntil: string | null;
+};
+
+const POSITION_TIMEOUT_MS: Record<string, number> = {
+  "15m": 2 * 24 * 60 * 60_000,
+  "1h": 7 * 24 * 60 * 60_000,
+  "4h": 14 * 24 * 60 * 60_000,
+  "1D": 30 * 24 * 60 * 60_000,
 };
 
 type PendingOrder = {
@@ -1678,7 +1687,7 @@ function PositionsTable({ positions }: { positions: Position[] }) {
             <th className="px-2 py-2 text-right font-medium">마진</th>
             <th className="px-2 py-2 text-right font-medium">수수료</th>
             <th className="px-2 py-2 text-right font-medium">미실현 PnL / ROE / R</th>
-            <th className="px-2 py-2 text-right font-medium">보유</th>
+            <th className="px-2 py-2 text-right font-medium">보유 / 만료</th>
             <th className="px-2 py-2 text-right font-medium"></th>
           </tr>
         </thead>
@@ -1745,8 +1754,19 @@ function PositionRow({ pos }: { pos: Position }) {
   const notional = pos.entryActual * pos.qty;
   // 수수료 (round-trip × 노출)
   const totalFees = (pos.feesPct / 100) * notional;
-  // 보유 시간
+  // 보유 시간 + 만료까지 남은 시간
   const ageMs = Date.now() - new Date(pos.createdAt).getTime();
+  const createdMs = new Date(pos.createdAt).getTime();
+  const expiryMs = pos.extendedUntil
+    ? new Date(pos.extendedUntil).getTime()
+    : createdMs + (POSITION_TIMEOUT_MS[pos.timeframe] ?? 0);
+  const msToExpiry = Math.max(0, expiryMs - Date.now());
+  const expiryTone =
+    msToExpiry < 60 * 60_000
+      ? "text-grade-d"
+      : msToExpiry < 24 * 60 * 60_000
+        ? "text-amber-400"
+        : "text-muted-foreground/70";
   // TP/SL 진행률
   const stopProgress =
     last != null && stopDist > 0
@@ -1888,9 +1908,15 @@ function PositionRow({ pos }: { pos: Position }) {
           <span className="text-muted-foreground">—</span>
         )}
       </td>
-      {/* 보유 시간 */}
+      {/* 보유 시간 + 만료까지 */}
       <td className="px-2 py-2.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-        {formatDuration(ageMs)}
+        <div>{formatDuration(ageMs)}</div>
+        <div
+          className={expiryTone}
+          title={`만료까지 ${formatDuration(msToExpiry)} 후 자동 청산`}
+        >
+          만료 {formatDuration(msToExpiry)}
+        </div>
       </td>
       {/* 청산 */}
       <td className="px-2 py-2.5 text-right">

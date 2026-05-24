@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  Activity,
   Bell,
   ChevronDown,
   Coins,
@@ -13,7 +12,6 @@ import {
   LineChart,
   LogOut,
   Menu,
-  Settings,
   Sparkles,
   Wallet,
   X,
@@ -22,7 +20,7 @@ import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn, formatNumber } from "@/lib/utils";
 import { Logo } from "./logo";
 
-type IconKey = "activity" | "sparkles" | "wallet" | "chart";
+type IconKey = "sparkles" | "wallet" | "chart";
 
 type NavItem = {
   href: string;
@@ -33,14 +31,12 @@ type NavItem = {
 };
 
 const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
-  activity: Activity,
   sparkles: Sparkles,
   wallet: Wallet,
   chart: LineChart,
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/app/market", label: "시장", icon: "activity" },
   { href: "/app/analyze", label: "분석", icon: "sparkles", matchPaths: ["/app/trade"] },
   {
     href: "/app/virtual-trade",
@@ -89,117 +85,19 @@ function NavLinkInline({ item, active, onClick }: { item: NavItem; active: boole
   );
 }
 
-/** Live status chip in the header — clicks through to /app/wallet. Always shows
- *  current vUSDT balance + AI credit count, so users see their resources from
- *  every screen (game, trading, analyze) without needing a separate menu trip. */
-function WalletChip({
+/** Unified user dropdown — wallet status, billing, settings, blog, logout
+ *  all in one menu. Reachable from any page via the avatar in the top right. */
+function UserDropdown({
+  email,
   balance,
   credits,
+  pathname,
 }: {
+  email: string;
   balance: number;
   credits: number;
+  pathname: string;
 }) {
-  return (
-    <Link
-      href="/app/wallet"
-      className="hidden lg:inline-flex items-center gap-2.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs transition-colors hover:border-primary/40 hover:bg-primary/5"
-      title="내 지갑으로 이동"
-    >
-      <span className="inline-flex items-center gap-1">
-        <Coins className="h-3.5 w-3.5 text-primary" />
-        <span className="font-mono font-semibold tabular-nums text-foreground">
-          {formatNumber(balance, { maximumFractionDigits: 0 })}
-        </span>
-        <span className="text-[10px] text-muted-foreground">vUSDT</span>
-      </span>
-      <span className="h-3 w-px bg-border" />
-      <span className="inline-flex items-center gap-1">
-        <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-        <span className="font-mono font-semibold tabular-nums text-foreground">{credits}</span>
-        <span className="text-[10px] text-muted-foreground">AI</span>
-      </span>
-    </Link>
-  );
-}
-
-function SettingsDropdown({ pathname }: { pathname: string }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
-  const anyActive = SETTINGS_ITEMS.some((i) => pathMatches(pathname, i.href));
-  const billing = SETTINGS_ITEMS.filter((i) => i.group === "billing");
-  const settings = SETTINGS_ITEMS.filter((i) => i.group === "settings");
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={cn(
-          "inline-flex items-center gap-1 rounded-md p-2 text-sm transition-colors",
-          anyActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-        )}
-        title="설정"
-      >
-        <Settings className="h-4 w-4" />
-        <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
-      </button>
-      {open ? (
-        <div className="absolute right-0 top-full mt-1 min-w-[220px] overflow-hidden rounded-md border border-border bg-popover shadow-xl">
-          <div className="border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            구매
-          </div>
-          {billing.map((s) => {
-            const Icon = s.icon;
-            const active = pathMatches(pathname, s.href);
-            return (
-              <Link
-                key={s.href}
-                href={s.href}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-2 text-sm",
-                  active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted",
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {s.label}
-              </Link>
-            );
-          })}
-          <div className="border-y border-border bg-muted/30 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            환경 설정
-          </div>
-          {settings.map((s) => {
-            const Icon = s.icon;
-            const active = pathMatches(pathname, s.href);
-            return (
-              <Link
-                key={s.href}
-                href={s.href}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-2 text-sm",
-                  active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted",
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {s.label}
-              </Link>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function UserDropdown({ email }: { email: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -219,6 +117,9 @@ function UserDropdown({ email }: { email: string }) {
     router.refresh();
   }
 
+  const billing = SETTINGS_ITEMS.filter((i) => i.group === "billing");
+  const settings = SETTINGS_ITEMS.filter((i) => i.group === "settings");
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -233,16 +134,100 @@ function UserDropdown({ email }: { email: string }) {
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-primary/10 text-xs font-semibold ring-1 ring-primary/30">
           {(email[0] ?? "U").toUpperCase()}
         </span>
-        <ChevronDown className={cn("h-3 w-3 text-muted-foreground transition-transform", open && "rotate-180")} />
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
       </button>
       {open ? (
-        <div className="absolute right-0 top-full mt-1 min-w-[220px] overflow-hidden rounded-md border border-border bg-popover shadow-xl">
-          <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground truncate">{email}</div>
+        <div className="absolute right-0 top-full mt-1 min-w-[260px] overflow-hidden rounded-md border border-border bg-popover shadow-xl">
+          <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground truncate">
+            {email}
+          </div>
+
+          {/* Balance + Credits — prominent top section */}
+          <Link
+            href="/app/wallet"
+            onClick={() => setOpen(false)}
+            className="block border-b border-border bg-muted/20 px-3 py-3 hover:bg-muted/40"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <Coins className="h-3 w-3 text-primary" />
+                  vUSDT 잔액
+                </div>
+                <div className="mt-0.5 font-mono text-base font-bold tabular-nums">
+                  {formatNumber(balance, { maximumFractionDigits: 0 })}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="flex items-center justify-end gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <Sparkles className="h-3 w-3 text-amber-400" />
+                  AI 크레딧
+                </div>
+                <div className="mt-0.5 font-mono text-base font-bold tabular-nums">
+                  {credits}
+                </div>
+              </div>
+            </div>
+          </Link>
+
+          <div className="border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            구매
+          </div>
+          {billing.map((s) => {
+            const Icon = s.icon;
+            const active = pathMatches(pathname, s.href);
+            return (
+              <Link
+                key={s.href}
+                href={s.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-sm",
+                  active
+                    ? "bg-primary/10 text-foreground"
+                    : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {s.label}
+              </Link>
+            );
+          })}
+
+          <div className="border-y border-border bg-muted/30 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            환경 설정
+          </div>
+          {settings.map((s) => {
+            const Icon = s.icon;
+            const active = pathMatches(pathname, s.href);
+            return (
+              <Link
+                key={s.href}
+                href={s.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-sm",
+                  active
+                    ? "bg-primary/10 text-foreground"
+                    : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {s.label}
+              </Link>
+            );
+          })}
+
           <a
             href={BLOG_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+            className="flex items-center justify-between gap-2 border-t border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
             onClick={() => setOpen(false)}
           >
             <span className="inline-flex items-center gap-2">
@@ -452,14 +437,15 @@ export function TopNav({
             ))}
           </nav>
 
-          {/* Right side */}
+          {/* Right side — single avatar with everything inside */}
           <div className="flex items-center gap-2">
-            <WalletChip balance={balance} credits={credits} />
             <div className="hidden lg:block">
-              <SettingsDropdown pathname={pathname} />
-            </div>
-            <div className="hidden lg:block">
-              <UserDropdown email={email} />
+              <UserDropdown
+                email={email}
+                balance={balance}
+                credits={credits}
+                pathname={pathname}
+              />
             </div>
             <button
               type="button"

@@ -94,7 +94,7 @@ export async function TodayMarketStrip() {
 
   return (
     <Link
-      href="/app/market"
+      href="#market"
       className="group flex items-center justify-between gap-6 rounded-2xl border border-border/60 bg-card/40 px-6 py-4 transition-all hover:border-primary/40 hover:bg-card/60"
     >
       <div className="flex min-w-0 items-center gap-6">
@@ -178,7 +178,7 @@ export async function TodayMarketStrip() {
       </div>
 
       <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
-        시장 보기
+        자세히
         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
       </span>
     </Link>

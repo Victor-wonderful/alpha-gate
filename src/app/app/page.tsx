@@ -301,7 +301,7 @@ function ResourceCard({
       <div className="flex items-baseline gap-2">
         <span
           className={cn(
-            "font-mono text-[40px] font-bold leading-none tracking-tight tabular-nums",
+            "font-mono text-3xl font-bold leading-[1.15] tabular-nums",
             alert && "text-grade-d",
           )}
         >

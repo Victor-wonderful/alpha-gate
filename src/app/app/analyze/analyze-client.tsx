@@ -310,9 +310,15 @@ function SymbolCombobox({
   }, [open]);
 
   const q = value.toUpperCase().trim();
-  const filtered = q
-    ? PRESETS.filter((s) => s.includes(q) || s.replace("USDT", "").includes(q))
-    : PRESETS;
+  // If input is empty OR already matches a preset exactly, show full list
+  // (user wants to browse). Only filter when user is mid-typing a partial.
+  const exactMatch = PRESETS.includes(q);
+  const filtered =
+    !q || exactMatch
+      ? PRESETS
+      : PRESETS.filter(
+          (s) => s.includes(q) || s.replace("USDT", "").includes(q),
+        );
 
   return (
     <div ref={wrapRef} className="relative">

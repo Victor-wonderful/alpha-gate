@@ -14,6 +14,7 @@ import { HelpLink } from "@/components/app/help-link";
 import { ViewTabs, parseView, type View } from "@/components/app/view-tabs";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
 import { Suspense } from "react";
+import { ClosedTradesTable, type ClosedTradeRow } from "./closed-trades-table";
 
 interface GameRow {
   id: string;
@@ -108,6 +109,47 @@ export default async function JournalListPage({
     (t) => !t.closed_at && t.order_status !== "pending" && t.order_status !== "canceled" && t.order_status !== "expired",
   );
   const closed = trades.filter((t) => t.closed_at);
+
+  // Pre-compute pnl + roi for closed trades (used by ClosedTradesTable)
+  const closedRows: ClosedTradeRow[] = closed.map((t) => {
+    let pnl: number | null =
+      t.paper_realized_pnl != null ? Number(t.paper_realized_pnl) : null;
+    if (pnl == null && t.position_quantity != null) {
+      const e = Number(t.entry_actual ?? t.entry ?? 0);
+      const ex = Number(t.exit_actual ?? t.exit_price ?? 0);
+      const q = Number(t.position_quantity);
+      const fp = Number(t.fees_pct ?? 0.12);
+      if (e > 0 && ex > 0 && q > 0) {
+        const move = t.direction === "long" ? ex - e : e - ex;
+        pnl = move * q - e * (fp / 100) * q;
+      }
+    }
+    const acct = t.account_size != null ? Number(t.account_size) : null;
+    const roiPct = pnl != null && acct && acct > 0 ? (pnl / acct) * 100 : null;
+    return {
+      id: t.id,
+      symbol: t.symbol,
+      direction: t.direction,
+      timeframe: t.timeframe,
+      pre_grade: t.pre_grade,
+      pre_rr: t.pre_rr,
+      result_r: t.result_r,
+      closed_at: t.closed_at,
+      created_at: t.created_at,
+      entry: t.entry,
+      entry_actual: t.entry_actual,
+      stop: t.stop,
+      exit_actual: t.exit_actual,
+      exit_price: t.exit_price,
+      position_quantity: t.position_quantity,
+      fees_pct: t.fees_pct,
+      leverage: t.context_flags?.leverage ?? null,
+      order_type: t.order_type,
+      exit_reason: t.exit_reason,
+      pnl,
+      roiPct,
+    };
+  });
 
   // Batch fetch current prices for all unique open-position + pending-limit symbols.
   const symbols = Array.from(new Set([...open, ...pendingLimits].map((t) => t.symbol)));
@@ -476,179 +518,7 @@ export default async function JournalListPage({
             </CardContent>
           </Card>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1560px] text-sm">
-              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left">시간</th>
-                  <th className="px-3 py-2 text-left">코인</th>
-                  <th className="px-3 py-2 text-left">방향</th>
-                  <th className="px-3 py-2 text-left">주문</th>
-                  <th className="px-3 py-2 text-left">TF</th>
-                  <th className="px-3 py-2 text-right">레버리지</th>
-                  <th className="px-3 py-2 text-left">등급</th>
-                  <th className="px-3 py-2 text-right">진입가 / 체결</th>
-                  <th className="px-3 py-2 text-right">손절 / 청산</th>
-                  <th className="px-3 py-2 text-right">수량</th>
-                  <th className="px-3 py-2 text-right">수수료</th>
-                  <th className="px-3 py-2 text-right">진입 R:R</th>
-                  <th className="px-3 py-2 text-right">실현 R</th>
-                  <th className="px-3 py-2 text-right">실현 PnL</th>
-                  <th className="px-3 py-2 text-right">ROI</th>
-                  <th className="px-3 py-2 text-left">사유</th>
-                </tr>
-              </thead>
-              <tbody>
-                {closed.map((t) => {
-                  // Prefer the value stored by resolve-trades cron / closeVirtualPositionAction.
-                  // For older trades (pre-paper-wallet) compute from price fields as a fallback
-                  // so PnL/ROI never show "—" if we have the underlying data.
-                  let pnl: number | null = t.paper_realized_pnl != null ? Number(t.paper_realized_pnl) : null;
-                  if (pnl == null && t.position_quantity != null) {
-                    const entry = Number(t.entry_actual ?? t.entry ?? 0);
-                    const exit = Number(t.exit_actual ?? t.exit_price ?? 0);
-                    const qty = Number(t.position_quantity);
-                    const feesPct = Number(t.fees_pct ?? 0.12);
-                    if (entry > 0 && exit > 0 && qty > 0) {
-                      const move = t.direction === "long" ? exit - entry : entry - exit;
-                      const fees = entry * (feesPct / 100) * qty;
-                      pnl = move * qty - fees;
-                    }
-                  }
-                  const acct = t.account_size != null ? Number(t.account_size) : null;
-                  const roiPct = pnl != null && acct && acct > 0 ? (pnl / acct) * 100 : null;
-                  const entryNum = t.entry != null ? Number(t.entry) : null;
-                  const entryActualNum = t.entry_actual != null ? Number(t.entry_actual) : null;
-                  const stopNum = t.stop != null ? Number(t.stop) : null;
-                  const exitActualNum =
-                    t.exit_actual != null
-                      ? Number(t.exit_actual)
-                      : t.exit_price != null
-                        ? Number(t.exit_price)
-                        : null;
-                  const qtyNum = t.position_quantity != null ? Number(t.position_quantity) : null;
-                  const feesPctNum = t.fees_pct != null ? Number(t.fees_pct) : null;
-                  const leverage = t.context_flags?.leverage ?? null;
-                  const entryTime = new Date(t.created_at);
-                  const exitTime = t.closed_at ? new Date(t.closed_at) : null;
-                  const fmtPx = (n: number | null) =>
-                    n == null ? "—" : n >= 1000 ? n.toLocaleString("en-US", { maximumFractionDigits: 0 }) : n.toFixed(4);
-                  return (
-                    <tr key={t.id} className="border-t border-border hover:bg-accent/40">
-                      <td className="px-3 py-2">
-                        <Link href={`/app/journal/${t.id}`} className="block text-foreground hover:underline">
-                          <div className="text-xs">
-                            진입 {entryTime.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}{" "}
-                            {entryTime.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {exitTime
-                              ? `청산 ${exitTime.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })} ${exitTime.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}`
-                              : "—"}
-                          </div>
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2 font-mono">{t.symbol}</td>
-                      <td className="px-3 py-2">{t.direction === "long" ? "롱" : "숏"}</td>
-                      <td className="px-3 py-2 text-xs">
-                        {t.order_type === "limit" ? (
-                          <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-sky-400">
-                            지정가
-                          </span>
-                        ) : (
-                          <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-muted-foreground">
-                            시장가
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">{t.timeframe}</td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums">
-                        {leverage != null ? (
-                          <span
-                            className={
-                              leverage >= 20
-                                ? "text-grade-d"
-                                : leverage >= 10
-                                  ? "text-amber-400"
-                                  : "text-foreground"
-                            }
-                          >
-                            {leverage}x
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <GradeBadge grade={t.pre_grade as Grade} size="sm" />
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums">
-                        <div>{fmtPx(entryNum)}</div>
-                        <div className="text-[10px] text-muted-foreground" title="실제 체결가 (슬리피지 포함)">
-                          체결 {fmtPx(entryActualNum)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums">
-                        <div>{fmtPx(stopNum)}</div>
-                        <div className="text-[10px] text-muted-foreground" title="실제 청산가">
-                          청산 {fmtPx(exitActualNum)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">
-                        {qtyNum != null ? qtyNum.toFixed(4) : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-xs text-muted-foreground">
-                        {feesPctNum != null ? `${feesPctNum.toFixed(2)}%` : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono">{Number(t.pre_rr ?? 0).toFixed(2)}</td>
-                      <td className="px-3 py-2 text-right font-mono">
-                        {t.result_r != null ? (
-                          <span className={Number(t.result_r) >= 0 ? "text-grade-a" : "text-grade-d"}>
-                            {Number(t.result_r) >= 0 ? "+" : ""}
-                            {Number(t.result_r).toFixed(2)}R
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono">
-                        {pnl != null ? (
-                          <span className={pnl >= 0 ? "text-grade-a" : "text-grade-d"}>
-                            {pnl >= 0 ? "+" : ""}
-                            {formatNumber(pnl, { maximumFractionDigits: 2 })}{" "}
-                            <span className="text-[10px] text-muted-foreground">vUSDT</span>
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono">
-                        {roiPct != null ? (
-                          <span className={roiPct >= 0 ? "text-grade-a" : "text-grade-d"}>
-                            {roiPct >= 0 ? "+" : ""}
-                            {roiPct.toFixed(2)}%
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-xs">
-                        {t.exit_reason === "target" ? (
-                          <span className="text-grade-a">목표 도달</span>
-                        ) : t.exit_reason === "stop" ? (
-                          <span className="text-grade-d">손절 적중</span>
-                        ) : t.exit_reason === "manual" ? (
-                          <span className="text-muted-foreground">수동</span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ClosedTradesTable rows={closedRows} />
         )}
       </section>
       ) : null}

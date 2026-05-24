@@ -14,7 +14,39 @@ import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { AnalysisTimingHint } from "@/components/analyze/analysis-timing-hint";
 import { AnalysisInfo } from "@/components/analyze/analysis-info";
 
-const PRESETS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"];
+// Top Binance USDT-Perp by recent volume — wide enough for most use cases.
+const PRESETS = [
+  "BTCUSDT",
+  "ETHUSDT",
+  "SOLUSDT",
+  "XRPUSDT",
+  "BNBUSDT",
+  "DOGEUSDT",
+  "ADAUSDT",
+  "AVAXUSDT",
+  "LINKUSDT",
+  "TRXUSDT",
+  "TONUSDT",
+  "DOTUSDT",
+  "MATICUSDT",
+  "ARBUSDT",
+  "OPUSDT",
+  "SUIUSDT",
+  "APTUSDT",
+  "INJUSDT",
+  "NEARUSDT",
+  "ATOMUSDT",
+  "LTCUSDT",
+  "BCHUSDT",
+  "FILUSDT",
+  "ICPUSDT",
+  "ETCUSDT",
+  "UNIUSDT",
+  "AAVEUSDT",
+  "RNDRUSDT",
+  "TIAUSDT",
+  "SEIUSDT",
+];
 
 export function AnalyzeClient(props: {
   accountSize: number;
@@ -136,26 +168,33 @@ function AnalyzeClientInner({
               placeholder="예: BTCUSDT"
               className="font-mono"
             />
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-[11px] text-muted-foreground">자주 쓰는 코인:</span>
-              {PRESETS.map((s) => {
-                const active = symbol.toUpperCase() === s;
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSymbol(s)}
-                    className={
-                      "rounded-md border px-2.5 py-1 font-mono text-[11px] transition-colors " +
-                      (active
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40")
-                    }
-                  >
-                    {s.replace("USDT", "")}
-                  </button>
-                );
-              })}
+            <div className="pt-1">
+              <div className="mb-1.5 text-[11px] text-muted-foreground">
+                자주 쓰는 코인:
+              </div>
+              <div
+                className="flex items-center gap-1.5 overflow-x-auto pb-1.5"
+                style={{ scrollbarWidth: "thin" }}
+              >
+                {PRESETS.map((s) => {
+                  const active = symbol.toUpperCase() === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSymbol(s)}
+                      className={
+                        "shrink-0 rounded-md border px-2.5 py-1 font-mono text-[11px] transition-colors " +
+                        (active
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40")
+                      }
+                    >
+                      {s.replace("USDT", "")}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

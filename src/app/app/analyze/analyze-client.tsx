@@ -42,6 +42,7 @@ function AnalyzeClientInner({
   const router = useRouter();
   const searchParams = useSearchParams();
   const loadId = searchParams.get("load");
+  const urlSymbol = searchParams.get("symbol");
 
   // Persisted state (sessionStorage)
   const result = useAnalysisStore((s) => s.result);
@@ -56,6 +57,15 @@ function AnalyzeClientInner({
   useEffect(() => {
     setHydrated(true);
   }, []);
+
+  // Prefill symbol from ?symbol=<pair> (e.g. coming from Snapshot · Today)
+  useEffect(() => {
+    if (!hydrated || !urlSymbol) return;
+    setForm({ symbol: urlSymbol.toUpperCase() });
+    // Clean URL so reload doesn't re-apply
+    router.replace("/app/analyze");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, urlSymbol]);
 
   // Load past analysis when ?load=<id> is in URL
   useEffect(() => {

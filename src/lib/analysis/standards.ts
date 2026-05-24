@@ -1,9 +1,10 @@
 import type { TradingStyle } from "./style";
 import type { StrategyId } from "./strategy";
 
-/** Round-trip cost on Binance USDT-M Futures (taker + slippage, BTC/ETH).
- *  Used in fee-adjusted R:R thinking. */
-export const ROUND_TRIP_COST_PCT = 0.12;
+/** Round-trip taker fee on Binance USDT-M Futures (Taker 0.04% × 2).
+ *  슬리피지는 entry_actual/exit_actual에서 별도 처리하므로 여기에 포함시키지 않는다.
+ *  (예전 0.12% 값은 슬리피지를 함께 포함했지만 이중 차감 문제로 0.08%로 분리.) */
+export const ROUND_TRIP_COST_PCT = 0.08;
 
 export interface StyleStandard {
   /** % of entry price */

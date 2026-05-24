@@ -53,6 +53,7 @@ interface TradeRow {
   account_size: number | null;
   fees_pct: number | null;
   context_flags: { leverage?: number } | null;
+  order_type: string | null;
   exit_reason: "target" | "stop" | "manual" | null;
   paper_realized_pnl: number | null;
   exit_price: number | null;
@@ -476,12 +477,13 @@ export default async function JournalListPage({
           </Card>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1480px] text-sm">
+            <table className="w-full min-w-[1560px] text-sm">
               <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left">시간</th>
                   <th className="px-3 py-2 text-left">코인</th>
                   <th className="px-3 py-2 text-left">방향</th>
+                  <th className="px-3 py-2 text-left">주문</th>
                   <th className="px-3 py-2 text-left">TF</th>
                   <th className="px-3 py-2 text-right">레버리지</th>
                   <th className="px-3 py-2 text-left">등급</th>
@@ -548,6 +550,17 @@ export default async function JournalListPage({
                       </td>
                       <td className="px-3 py-2 font-mono">{t.symbol}</td>
                       <td className="px-3 py-2">{t.direction === "long" ? "롱" : "숏"}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {t.order_type === "limit" ? (
+                          <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-sky-400">
+                            지정가
+                          </span>
+                        ) : (
+                          <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-muted-foreground">
+                            시장가
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2">{t.timeframe}</td>
                       <td className="px-3 py-2 text-right font-mono tabular-nums">
                         {leverage != null ? (

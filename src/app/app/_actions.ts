@@ -10,9 +10,9 @@ import type { GradeResult, SizingResult, TradeInput } from "@/types/trade";
 /** Simulated market-order slippage in % for paper trading.
  *  Direction-aware: long fills slightly higher, short slightly lower (unfavorable side). */
 const PAPER_SLIPPAGE_PCT = 0.05;
-/** Round-trip taker fee assumption (entry + exit, %). Matches ROUND_TRIP_COST_PCT
- *  used in fee-adjusted R:R thinking elsewhere. */
-const PAPER_FEES_PCT = 0.12;
+/** Round-trip taker fee (entry + exit) — Binance USDT-M Futures 기준 0.04% × 2.
+ *  슬리피지는 entry_actual/exit_actual에서 PAPER_SLIPPAGE_PCT로 별도 적용. */
+const PAPER_FEES_PCT = 0.08;
 
 /** Simulate a market-order fill for paper trading.
  *  - Fetches Binance current price

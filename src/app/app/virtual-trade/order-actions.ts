@@ -37,7 +37,8 @@ export interface PlaceOrderResult {
 }
 
 const PAPER_SLIPPAGE_PCT = 0.05;
-const PAPER_FEES_PCT = 0.12;
+// Binance USDT-M Futures Taker 0.04% × 2 (round-trip). 슬리피지는 별도 처리.
+const PAPER_FEES_PCT = 0.08;
 
 /** Place a virtual market order directly (no AI flow). Used by the exchange-style
  *  trading panel on /app/virtual-trade. */

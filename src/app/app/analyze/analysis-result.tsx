@@ -735,8 +735,8 @@ function SimpleScenarioCard({
   const isLong = scenario.direction === "long";
   const stopPct = (Math.abs(entry - scenario.invalidation) / entry) * 100;
   const targetPct = (Math.abs(scenario.target - entry) / entry) * 100;
-  // Round-trip cost (수수료 + 슬리피지). 손절 시엔 손실이 커지고, 익절 시엔 수익이 작아짐
-  const ROUND_TRIP = 0.12;
+  // Round-trip taker fee (Binance USDT-M 0.04% × 2). 슬리피지는 체결가에 별도 반영.
+  const ROUND_TRIP = 0.08;
   const netStopPct = stopPct + ROUND_TRIP;
   const netTargetPct = Math.max(0, targetPct - ROUND_TRIP);
   const netRR = netStopPct === 0 ? 0 : netTargetPct / netStopPct;
@@ -945,7 +945,7 @@ function SimpleScenarioCard({
           />
         </div>
         <div className="-mt-1 text-[10px] text-muted-foreground">
-          ※ "실현"은 왕복 수수료/슬리피지 0.12%를 차감한 실제 손익 (BTC/ETH 기준)
+          ※ "실현"은 왕복 수수료 0.08% (Binance Taker × 2) 차감 + 슬리피지는 체결가에 별도 반영
         </div>
 
         {/* Position sizing — risk-based */}

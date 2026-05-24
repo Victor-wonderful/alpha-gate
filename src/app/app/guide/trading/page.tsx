@@ -84,7 +84,7 @@ export default function GuideTradingPage() {
             손익비와 등급에는 영향을 주지 않습니다. 필요 마진(노출 금액 ÷ 레버리지)만 달라집니다. 5x면 노출액의 1/5만 마진으로 사용.
           </GuideFaq>
           <GuideFaq question="수수료는 어떻게 계산되나요?">
-            왕복 0.12% 가정 (BTC/ETH 기준 시장가 + 슬리피지). 실현 R에서 자동 차감됩니다.
+            왕복 수수료 0.08% (Binance Taker × 2). 슬리피지는 체결가에 별도 반영(시장가 0.05%/side). 실현 R에서 자동 차감됩니다.
           </GuideFaq>
           <GuideFaq question="포지션을 수동으로 청산할 수 있나요?">
             가능합니다. 거래소 UI의 포지션 테이블에서 "청산" 버튼. 현재가 ± 슬리피지로 체결.

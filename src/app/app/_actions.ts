@@ -71,6 +71,16 @@ export async function saveTradeAction(args: {
     return { error: "진입가와 손절가가 같습니다. 손절 위치를 확인하세요." };
   }
 
+  // 3차 가드: 손절폭이 수수료 대비 너무 좁으면 진입 거부.
+  // 손절 적중 시 수수료가 1R 이상을 차지해 -2R 이상 손실이 확정됨.
+  const { MIN_STOP_PCT_VS_FEES } = await import("@/lib/analysis/standards");
+  const stopPctCheck = (stopDist / input.entry) * 100;
+  if (stopPctCheck < MIN_STOP_PCT_VS_FEES) {
+    return {
+      error: `손절폭(${stopPctCheck.toFixed(3)}%)이 수수료의 3배(${MIN_STOP_PCT_VS_FEES.toFixed(2)}%) 미만입니다. 손절 적중 시 -2R 이상 손실이 확정됩니다. 손절을 더 멀리 잡으세요.`,
+    };
+  }
+
   // ── 지정가 주문 분기 ───────────────────────────────────────────────────
   if (orderType === "limit") {
     if (!input.entry || input.entry <= 0) {

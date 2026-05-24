@@ -184,6 +184,65 @@ export function checkRiskPct(riskPct: number): RangeCheck {
   };
 }
 
+/** 손절폭이 수수료 대비 너무 좁아 손절 적중 시 -1R보다 훨씬 큰 손실이 나는 케이스 차단.
+ *  손절가 = stop, 진입가 = entry. 손절폭이 수수료 × 3 (= 0.36%) 미만이면 무조건 reject. */
+export const MIN_STOP_PCT_VS_FEES = ROUND_TRIP_COST_PCT * 3;
+
+/** 스타일 표준 하한의 80% 미만이면 "지나치게 좁음"으로 판단 (전략 예외 적용 후 기준). */
+export const STYLE_FLOOR_RATIO = 0.8;
+
+export type StopRejectReason =
+  | "below_fee_floor"
+  | "below_style_floor"
+  | "invalid";
+
+export interface StopValidation {
+  ok: boolean;
+  reason?: StopRejectReason;
+  message?: string;
+  stopPct: number;
+}
+
+/**
+ * 손절폭이 거래 가능한 최소 기준을 통과하는지 검사.
+ * - 절대 하한: 수수료 × 3 (0.36%) — 어떤 스타일/전략에서도 미달 시 거부
+ * - 상대 하한: 스타일 표준 하한 × 0.8 — 미달 시 거부
+ * 두 조건 모두 통과해야 ok.
+ */
+export function validateStop(
+  entry: number,
+  stop: number,
+  style: TradingStyle,
+  strategy?: StrategyId,
+): StopValidation {
+  if (!entry || !stop || entry <= 0 || stop <= 0) {
+    return { ok: false, reason: "invalid", message: "진입가/손절가가 유효하지 않습니다.", stopPct: 0 };
+  }
+  const stopPct = (Math.abs(entry - stop) / entry) * 100;
+
+  if (stopPct < MIN_STOP_PCT_VS_FEES) {
+    return {
+      ok: false,
+      reason: "below_fee_floor",
+      message: `손절폭 ${stopPct.toFixed(3)}%이 수수료 × 3 (${MIN_STOP_PCT_VS_FEES.toFixed(2)}%) 미만 — 손절 적중 시 -2R 이상 손실. 손절을 더 멀리 잡거나 다른 시나리오를 선택하세요.`,
+      stopPct,
+    };
+  }
+
+  const r = resolveStandard(style, strategy);
+  const styleFloor = r.stopPct.min * STYLE_FLOOR_RATIO;
+  if (stopPct < styleFloor) {
+    return {
+      ok: false,
+      reason: "below_style_floor",
+      message: `손절폭 ${stopPct.toFixed(2)}%이 ${style} 스타일 표준 하한(${r.stopPct.min.toFixed(2)}%)의 80% 미만 — 노이즈에 잡힐 위험이 너무 큼.`,
+      stopPct,
+    };
+  }
+
+  return { ok: true, stopPct };
+}
+
 /** Effective R:R after subtracting round-trip cost from the target.
  *  This is a rough but useful heuristic. */
 export function effectiveRR(

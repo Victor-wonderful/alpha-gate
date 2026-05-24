@@ -4,6 +4,7 @@ import type { AnalysisSnapshot } from "./analyze";
 import { STYLE_PRESETS } from "./style";
 import { STRATEGY_LABELS, type StrategyId, type StrategyResult } from "./strategy";
 import { parseJsonLoose } from "./json-extract";
+import { MIN_STOP_PCT_VS_FEES } from "./standards";
 
 const SYSTEM_PROMPT = `당신은 암호화폐 무기한 선물 시장을 분석하는 트레이딩 코치입니다.
 
@@ -502,11 +503,27 @@ function enforceEntryProximity(report: AnalysisReport, snapshot: AnalysisSnapsho
       continue;
     }
 
-    // 2) Stop/target/RR — collect issues but don't drop (let trader decide with warnings)
+    // 2) Stop/target/RR — collect issues. 절대 하한(수수료×3) 위반은 즉시 폐기.
     const stopPct = (Math.abs(mid - s.invalidation) / mid) * 100;
     const targetPct = (Math.abs(s.target - mid) / mid) * 100;
     const rr = stopPct === 0 ? 0 : targetPct / stopPct;
     const issues: string[] = [];
+
+    // 하드 가드 1: 손절폭이 수수료×3 미만 → 폐기 (어떤 스타일/전략에서도 불허용)
+    if (stopPct < MIN_STOP_PCT_VS_FEES) {
+      dropped.push(
+        `${s.name} (손절폭 ${stopPct.toFixed(3)}% < 수수료×3 ${MIN_STOP_PCT_VS_FEES.toFixed(2)}% — 손절 적중 시 -2R 이상 손실)`,
+      );
+      continue;
+    }
+
+    // 하드 가드 2: 손절폭이 스타일 표준 하한의 80% 미만 → 폐기
+    if (stopPct < stopLimits.stopMin * 0.8) {
+      dropped.push(
+        `${s.name} (손절폭 ${stopPct.toFixed(2)}% < 스타일 하한 ${stopLimits.stopMin}% × 0.8 = ${(stopLimits.stopMin * 0.8).toFixed(2)}% — 노이즈에 잡힐 위험 큼)`,
+      );
+      continue;
+    }
 
     if (stopPct < stopLimits.stopMin) {
       issues.push(`손절폭 ${stopPct.toFixed(2)}% — 스타일 하한 ${stopLimits.stopMin}% 미달 (노이즈 위험)`);

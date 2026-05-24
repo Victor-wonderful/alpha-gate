@@ -438,6 +438,25 @@ function ActivePositionCard({
           />
         </div>
 
+        {pos.kind === "funding" ? (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">펀딩 누적 (8h마다 자동 정산)</span>
+            <span
+              className={cn(
+                "font-mono tabular-nums",
+                accruedFunding > 0
+                  ? "text-grade-a"
+                  : accruedFunding < 0
+                    ? "text-grade-d"
+                    : "text-muted-foreground",
+              )}
+            >
+              {accruedFunding >= 0 ? "+" : ""}
+              {accruedFunding.toFixed(2)} vUSDT
+            </span>
+          </div>
+        ) : null}
+
         <div className="flex items-center justify-between border-t border-border/60 pt-2 text-sm">
           <span className="text-muted-foreground">Net PnL (수수료 차감 전)</span>
           {netPnl != null ? (

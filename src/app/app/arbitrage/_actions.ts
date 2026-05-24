@@ -50,6 +50,7 @@ export async function enterArbitrageAction(
   const longQty = p.notionalUsd / p.longEntryPrice;
   const shortQty = p.notionalUsd / p.shortEntryPrice;
 
+  const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from("arbitrage_positions")
     .insert({
@@ -65,6 +66,8 @@ export async function enterArbitrageAction(
       short_qty: shortQty,
       entry_premium_pct: p.entryPremiumPct ?? null,
       entry_funding_pct: p.entryFundingPct ?? null,
+      // 펀딩 차익에서만 의미 있음. 이 시점 이후 발생한 펀딩만 누적.
+      last_funding_at: p.kind === "funding" ? nowIso : null,
     })
     .select("id")
     .single();

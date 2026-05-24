@@ -54,6 +54,8 @@ export async function saveTradeAction(args: {
   /** 'market' (default): execute immediately at current price.
    *  'limit': park in pending_limit_orders and wait for price to reach input.entry. */
   orderType?: "market" | "limit";
+  /** D 등급 거래를 사용자가 확인 모달로 override 한 경우 true. */
+  gradeOverride?: boolean;
 }): Promise<{ id?: string; error?: string; orderType?: "market" | "limit"; status?: "filled" | "pending" }> {
   const supabase = await getSupabaseServer();
   const {
@@ -64,6 +66,13 @@ export async function saveTradeAction(args: {
   const { input, grade, sizing, leverage, forecast } = args;
   const orderType = args.orderType ?? "market";
   const lev = leverage ?? 1;
+
+  // D 등급은 confirm 모달 통과(gradeOverride=true) 없이는 진입 거부.
+  if (grade.grade === "D" && !args.gradeOverride) {
+    return {
+      error: "D등급(거래 금지) — 진입하려면 확인 모달에서 'D 진입'을 입력하고 진행하세요.",
+    };
+  }
 
   // Sanity: stop distance must be positive (otherwise resolve math blows up).
   const stopDist = Math.abs(input.entry - input.stop);
@@ -151,6 +160,7 @@ export async function saveTradeAction(args: {
         order_type: "limit",
         limit_price: input.entry,
         order_status: "pending",
+        grade_override: !!args.gradeOverride,
       })
       .select("id")
       .single();
@@ -267,6 +277,7 @@ export async function saveTradeAction(args: {
       paper_margin: margin,
       order_type: "market",
       order_status: "filled",
+      grade_override: !!args.gradeOverride,
     })
     .select("id, pre_grade")
     .single();

@@ -302,6 +302,8 @@ function TradeFormInner({
   const [mode, setMode] = useState<"paper" | "live">("paper");
   const [selectedKeyId, setSelectedKeyId] = useState<string>(() => tradableKeys[0]?.id ?? "");
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+  const [showDOverride, setShowDOverride] = useState(false);
+  const [dConfirmText, setDConfirmText] = useState("");
   useEffect(() => {
     // Default to first key if nothing selected after keys load.
     if (!selectedKeyId && tradableKeys.length > 0) {
@@ -357,9 +359,14 @@ function TradeFormInner({
     });
   }, [aiMode, analysisResult, entry, stop, target, direction]);
 
-  function save() {
+  function save(gradeOverride = false) {
     if (!sizing.valid) {
       toast.error("입력을 확인하세요. 포지션 사이징이 유효하지 않습니다.");
+      return;
+    }
+    // D 등급은 모달 통과 없이는 진행 불가
+    if (grade.grade === "D" && !gradeOverride) {
+      setShowDOverride(true);
       return;
     }
     if (mode === "live") {
@@ -368,7 +375,7 @@ function TradeFormInner({
       return;
     }
     startTransition(async () => {
-      const res = await saveTradeAction({ input, grade, sizing, leverage, forecast: mcResult ?? undefined, orderType });
+      const res = await saveTradeAction({ input, grade, sizing, leverage, forecast: mcResult ?? undefined, orderType, gradeOverride });
       if (res.error) {
         toast.error(res.error, { duration: 8000 });
         return;
@@ -1126,7 +1133,7 @@ function TradeFormInner({
         <Button
           className="w-full"
           size="lg"
-          onClick={save}
+          onClick={() => save()}
           disabled={
             pending ||
             (mode === "paper" && paperWallet != null && sizing.valid && (sizing.positionSize / Math.max(leverage, 1)) > paperWallet.available)
@@ -1148,6 +1155,75 @@ function TradeFormInner({
           <p className="text-center text-[11px] text-muted-foreground">
             진입가·손절·목표는 AI 분석에서 가져왔습니다. 위 단계 버튼으로 진입 시점을 바꿀 수 있습니다.
           </p>
+        ) : null}
+
+        {/* D 등급 override 모달 */}
+        {showDOverride ? (
+          <Card className="border-grade-d/60 bg-grade-d/10">
+            <CardContent className="space-y-3 p-4">
+              <div className="flex items-center gap-2 text-grade-d">
+                <AlertTriangle className="h-4 w-4" />
+                <div className="text-sm font-semibold">
+                  D등급 — 거래 금지 권장
+                </div>
+              </div>
+              <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs leading-relaxed">
+                <div className="mb-2 font-semibold text-foreground">
+                  이 거래가 D등급인 이유:
+                </div>
+                <ul className="space-y-1 font-mono text-muted-foreground">
+                  {grade.reasons
+                    .filter((r) => r.points < 0)
+                    .map((r, i) => (
+                      <li key={i} className="text-grade-d">
+                        {r.points}점 · {r.label}
+                      </li>
+                    ))}
+                </ul>
+                <div className="mt-2 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
+                  D등급은 통계상 손실 확률이 높은 패턴입니다. 사이즈가 평소의
+                  10%로 작게 잡혀있어도 추천하지 않습니다.
+                </div>
+              </div>
+              <div>
+                <Label className="text-[11px]">
+                  계속 진행하시려면 아래에 <strong>D 진입</strong> 을 정확히
+                  입력하세요:
+                </Label>
+                <Input
+                  value={dConfirmText}
+                  onChange={(e) => setDConfirmText(e.target.value)}
+                  placeholder="D 진입"
+                  className="mt-1 font-mono"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowDOverride(false);
+                    setDConfirmText("");
+                  }}
+                  disabled={pending}
+                >
+                  취소 (권장)
+                </Button>
+                <Button
+                  className="flex-1 bg-grade-d hover:bg-grade-d/90"
+                  onClick={() => {
+                    setShowDOverride(false);
+                    setDConfirmText("");
+                    save(true);
+                  }}
+                  disabled={pending || dConfirmText.trim() !== "D 진입"}
+                >
+                  진행 (override)
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ) : null}
 
         {/* Live trade confirmation dialog */}

@@ -9,10 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn, formatNumber } from "@/lib/utils";
-import type { KimchiOpportunity, FundingOpportunity } from "@/lib/arbitrage/scan";
+import type { KimchiOpportunity } from "@/lib/arbitrage/scan";
 import { enterArbitrageAction, closeArbitrageAction } from "./_actions";
-
-type Tab = "kimchi" | "funding";
 
 interface WalletInfo {
   usdtBalance: number;
@@ -22,7 +20,7 @@ interface WalletInfo {
 
 interface OpenPosition {
   id: string;
-  kind: "kimchi" | "funding";
+  kind: "kimchi";
   symbol: string;
   notional_usd: number;
   long_exchange: string;
@@ -32,21 +30,18 @@ interface OpenPosition {
   short_entry_price: number;
   short_qty: number;
   entry_premium_pct: number | null;
-  entry_funding_pct: number | null;
-  accrued_funding: number | null;
   expires_at: string;
   created_at: string;
 }
 
 interface ClosedPosition {
   id: string;
-  kind: "kimchi" | "funding";
+  kind: "kimchi";
   symbol: string;
   notional_usd: number;
   long_exchange: string;
   short_exchange: string;
   entry_premium_pct: number | null;
-  entry_funding_pct: number | null;
   long_entry_price: number;
   short_entry_price: number;
   long_exit_price: number | null;
@@ -60,7 +55,6 @@ interface ClosedPosition {
 interface Props {
   wallet: WalletInfo | null;
   kimchi: KimchiOpportunity[];
-  funding: FundingOpportunity[];
   openPositions: OpenPosition[];
   closedPositions: ClosedPosition[];
 }
@@ -68,28 +62,19 @@ interface Props {
 export function ArbitrageUI({
   wallet,
   kimchi,
-  funding,
   openPositions,
   closedPositions,
 }: Props) {
-  const [tab, setTab] = useState<Tab>("kimchi");
-  const [entryTarget, setEntryTarget] = useState<
-    | { kind: "kimchi"; data: KimchiOpportunity }
-    | { kind: "funding"; data: FundingOpportunity }
-    | null
-  >(null);
+  const [entryTarget, setEntryTarget] = useState<KimchiOpportunity | null>(null);
 
   // 활성 포지션 PnL 계산용 — symbol → current prices 매핑
   const currentPrices = useMemo(() => {
     const m = new Map<string, { long: number; short: number }>();
     for (const k of kimchi) {
-      m.set(`kimchi:${k.symbol}`, { long: k.longPrice, short: k.shortPrice });
-    }
-    for (const f of funding) {
-      m.set(`funding:${f.symbol}`, { long: f.longPrice, short: f.shortPrice });
+      m.set(k.symbol, { long: k.longPrice, short: k.shortPrice });
     }
     return m;
-  }, [kimchi, funding]);
+  }, [kimchi]);
 
   return (
     <div className="space-y-6">
@@ -98,7 +83,7 @@ export function ArbitrageUI({
         <div>
           <h1 className="text-3xl font-bold leading-[1.15]">차익거래</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            시장 간 가격 차이 / 시간 가치를 이용한 무방향 차익거래
+            🇰🇷 김치 프리미엄 — Upbit (KRW) vs Binance (USD) 가격 차이 차익
           </p>
         </div>
         {wallet ? (
@@ -114,58 +99,23 @@ export function ArbitrageUI({
         ) : null}
       </header>
 
-      {/* 탭 */}
-      <div className="inline-flex gap-1 rounded-md border border-border bg-background/40 p-0.5">
-        {(["kimchi", "funding"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              "rounded px-4 py-1.5 text-sm font-semibold transition-colors",
-              tab === t
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-            )}
-          >
-            {t === "kimchi" ? "🇰🇷 김치 프리미엄" : "💸 펀딩비"}
-          </button>
-        ))}
-      </div>
-
       {/* 스캐너 */}
       <section className="space-y-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-base font-semibold">차익 기회 ({tab === "kimchi" ? kimchi.length : funding.length})</h2>
+          <h2 className="text-base font-semibold">차익 기회 ({kimchi.length})</h2>
           <p className="text-xs text-muted-foreground">
-            {tab === "kimchi"
-              ? "Upbit (KRW) vs Binance (USD) — |김프| ≥ 0.3%"
-              : "Binance Futures 펀딩 |값| ≥ 0.01% (8h당)"}
+            Upbit (KRW) vs Binance (USD) — |김프| ≥ 0.3%
           </p>
         </div>
-        {tab === "kimchi" ? (
-          kimchi.length === 0 ? (
-            <EmptyMessage text="현재 김치 프리미엄 0.3% 이상 기회가 없습니다." />
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {kimchi.map((k) => (
-                <KimchiCard
-                  key={k.symbol}
-                  data={k}
-                  onEnter={() => setEntryTarget({ kind: "kimchi", data: k })}
-                />
-              ))}
-            </div>
-          )
-        ) : funding.length === 0 ? (
-          <EmptyMessage text="펀딩비 기회 데이터를 불러오지 못했습니다." />
+        {kimchi.length === 0 ? (
+          <EmptyMessage text="현재 김치 프리미엄 0.3% 이상 기회가 없습니다." />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {funding.map((f) => (
-              <FundingCard
-                key={f.symbol}
-                data={f}
-                onEnter={() => setEntryTarget({ kind: "funding", data: f })}
+            {kimchi.map((k) => (
+              <KimchiCard
+                key={k.symbol}
+                data={k}
+                onEnter={() => setEntryTarget(k)}
               />
             ))}
           </div>
@@ -183,8 +133,8 @@ export function ArbitrageUI({
               <ActivePositionCard
                 key={p.id}
                 pos={p}
-                currentLong={currentPrices.get(`${p.kind}:${p.symbol}`)?.long ?? null}
-                currentShort={currentPrices.get(`${p.kind}:${p.symbol}`)?.short ?? null}
+                currentLong={currentPrices.get(p.symbol)?.long ?? null}
+                currentShort={currentPrices.get(p.symbol)?.short ?? null}
               />
             ))}
           </div>
@@ -274,70 +224,6 @@ function KimchiCard({
   );
 }
 
-function FundingCard({
-  data,
-  onEnter,
-}: {
-  data: FundingOpportunity;
-  onEnter: () => void;
-}) {
-  const positive = data.fundingPct > 0;
-  return (
-    <Card>
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-baseline justify-between">
-          <span className="font-mono text-base font-bold">{data.symbol}</span>
-          <span
-            className={cn(
-              "font-mono text-lg font-bold tabular-nums",
-              positive ? "text-amber-400" : "text-sky-400",
-            )}
-            title={`연 ${data.annualPct.toFixed(0)}%`}
-          >
-            {positive ? "+" : ""}
-            {data.fundingPct.toFixed(3)}%
-          </span>
-        </div>
-        <div className="space-y-1 text-xs">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Perp Mark</span>
-            <span className="font-mono tabular-nums">
-              ${data.markPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Index (Spot)</span>
-            <span className="font-mono tabular-nums">
-              ${data.indexPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">연 환산</span>
-            <span className="font-mono tabular-nums">
-              {data.annualPct.toFixed(0)}%
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">다음 정산</span>
-            <span className="font-mono tabular-nums">
-              {Math.floor(data.nextFundingMinutes / 60)}h {data.nextFundingMinutes % 60}m
-            </span>
-          </div>
-          <div className="flex justify-between border-t border-border/60 pt-1 text-[11px]">
-            <span className="text-muted-foreground">전략</span>
-            <span className="font-mono">
-              {positive ? "Long Spot · Short Perp" : "Long Perp · Short Spot"}
-            </span>
-          </div>
-        </div>
-        <Button size="sm" className="w-full" onClick={onEnter}>
-          진입 시뮬레이션
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
 function ActivePositionCard({
   pos,
   currentLong,
@@ -358,11 +244,8 @@ function ActivePositionCard({
     currentLong != null ? (currentLong - longEntry) * longQty : null;
   const shortPnl =
     currentShort != null ? (shortEntry - currentShort) * shortQty : null;
-  const accruedFunding = Number(pos.accrued_funding ?? 0);
   const netPnl =
-    longPnl != null && shortPnl != null
-      ? longPnl + shortPnl + accruedFunding
-      : null;
+    longPnl != null && shortPnl != null ? longPnl + shortPnl : null;
 
   const expiry = new Date(pos.expires_at);
   const msToExpiry = expiry.getTime() - Date.now();
@@ -395,7 +278,7 @@ function ActivePositionCard({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-              {pos.kind === "kimchi" ? "김프" : "펀딩"}
+              김프
             </span>
             <span className="font-mono text-base font-bold">{pos.symbol}</span>
             <span className="text-xs text-muted-foreground">
@@ -437,25 +320,6 @@ function ActivePositionCard({
             pnl={shortPnl}
           />
         </div>
-
-        {pos.kind === "funding" ? (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">펀딩 누적 (8h마다 자동 정산)</span>
-            <span
-              className={cn(
-                "font-mono tabular-nums",
-                accruedFunding > 0
-                  ? "text-grade-a"
-                  : accruedFunding < 0
-                    ? "text-grade-d"
-                    : "text-muted-foreground",
-              )}
-            >
-              {accruedFunding >= 0 ? "+" : ""}
-              {accruedFunding.toFixed(2)} vUSDT
-            </span>
-          </div>
-        ) : null}
 
         <div className="flex items-center justify-between border-t border-border/60 pt-2 text-sm">
           <span className="text-muted-foreground">Net PnL (수수료 차감 전)</span>
@@ -542,7 +406,6 @@ function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
         <thead className="bg-muted/40 text-[10px] uppercase text-muted-foreground">
           <tr>
             <th className="px-2 py-1.5 text-left">종료</th>
-            <th className="px-2 py-1.5 text-left">종류</th>
             <th className="px-2 py-1.5 text-left">코인</th>
             <th className="px-2 py-1.5 text-right">노출</th>
             <th className="px-2 py-1.5 text-left">Long 진입→청산</th>
@@ -561,7 +424,6 @@ function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
                     ? `${closeAt.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })} ${closeAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}`
                     : "—"}
                 </td>
-                <td className="px-2 py-1.5">{r.kind === "kimchi" ? "김프" : "펀딩"}</td>
                 <td className="px-2 py-1.5 font-mono">{r.symbol}</td>
                 <td className="px-2 py-1.5 text-right font-mono">
                   ${formatNumber(r.notional_usd, { maximumFractionDigits: 0 })}
@@ -621,9 +483,7 @@ function EntryModal({
   wallet,
   onClose,
 }: {
-  target:
-    | { kind: "kimchi"; data: KimchiOpportunity }
-    | { kind: "funding"; data: FundingOpportunity };
+  target: KimchiOpportunity;
   wallet: WalletInfo | null;
   onClose: () => void;
 }) {
@@ -634,37 +494,16 @@ function EntryModal({
   const totalMargin = notional * 2;
   const canAfford = wallet != null && wallet.available >= totalMargin;
 
-  const symbol =
-    target.kind === "kimchi" ? target.data.symbol : target.data.symbol;
-  const longExchange =
-    target.kind === "kimchi"
-      ? target.data.longExchange
-      : target.data.longExchange;
-  const longPrice =
-    target.kind === "kimchi" ? target.data.longPrice : target.data.longPrice;
-  const shortExchange =
-    target.kind === "kimchi"
-      ? target.data.shortExchange
-      : target.data.shortExchange;
-  const shortPrice =
-    target.kind === "kimchi"
-      ? target.data.shortPrice
-      : target.data.shortPrice;
-
   function submit() {
     startTransition(async () => {
       const r = await enterArbitrageAction({
-        kind: target.kind,
-        symbol,
+        symbol: target.symbol,
         notionalUsd: notional,
-        longExchange,
-        longEntryPrice: longPrice,
-        shortExchange,
-        shortEntryPrice: shortPrice,
-        entryPremiumPct:
-          target.kind === "kimchi" ? target.data.premiumPct : undefined,
-        entryFundingPct:
-          target.kind === "funding" ? target.data.fundingPct : undefined,
+        longExchange: target.longExchange,
+        longEntryPrice: target.longPrice,
+        shortExchange: target.shortExchange,
+        shortEntryPrice: target.shortPrice,
+        entryPremiumPct: target.premiumPct,
       });
       if (!r.ok) {
         toast.error(r.error ?? "진입 실패");
@@ -683,46 +522,27 @@ function EntryModal({
           <div className="flex items-center gap-2">
             <ArrowLeftRight className="h-4 w-4 text-primary" />
             <h3 className="text-base font-bold">
-              {target.kind === "kimchi" ? "김치 프리미엄" : "펀딩비"} 차익 진입 — {symbol}
+              김치 프리미엄 차익 진입 — {target.symbol}
             </h3>
           </div>
 
-          {target.kind === "kimchi" ? (
-            <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">진입 김프</span>
-                <span
-                  className={cn(
-                    "font-mono",
-                    target.data.premiumPct > 0 ? "text-grade-a" : "text-grade-d",
-                  )}
-                >
-                  {target.data.premiumPct > 0 ? "+" : ""}
-                  {target.data.premiumPct.toFixed(2)}%
-                </span>
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                김프가 0%로 수렴하면 수익. 만료 7일.
-              </div>
+          <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs space-y-1">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">진입 김프</span>
+              <span
+                className={cn(
+                  "font-mono",
+                  target.premiumPct > 0 ? "text-grade-a" : "text-grade-d",
+                )}
+              >
+                {target.premiumPct > 0 ? "+" : ""}
+                {target.premiumPct.toFixed(2)}%
+              </span>
             </div>
-          ) : (
-            <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">진입 펀딩 (8h)</span>
-                <span className="font-mono">
-                  {target.data.fundingPct > 0 ? "+" : ""}
-                  {target.data.fundingPct.toFixed(3)}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">연환산</span>
-                <span className="font-mono">{target.data.annualPct.toFixed(0)}%</span>
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                매 8시간마다 펀딩 누적. 가격은 양쪽 헤지로 거의 상쇄.
-              </div>
+            <div className="text-[11px] text-muted-foreground">
+              김프가 0%로 수렴하면 수익. 만료 7일.
             </div>
-          )}
+          </div>
 
           <div>
             <Label htmlFor="notional" className="text-xs">
@@ -756,13 +576,13 @@ function EntryModal({
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md border border-grade-a/30 bg-grade-a/5 p-2">
               <div className="font-semibold text-grade-a">Long</div>
-              <div className="font-mono text-[11px]">{longExchange}</div>
-              <div className="font-mono text-[11px]">@ ${longPrice.toFixed(2)}</div>
+              <div className="font-mono text-[11px]">{target.longExchange}</div>
+              <div className="font-mono text-[11px]">@ ${target.longPrice.toFixed(2)}</div>
             </div>
             <div className="rounded-md border border-grade-d/30 bg-grade-d/5 p-2">
               <div className="font-semibold text-grade-d">Short</div>
-              <div className="font-mono text-[11px]">{shortExchange}</div>
-              <div className="font-mono text-[11px]">@ ${shortPrice.toFixed(2)}</div>
+              <div className="font-mono text-[11px]">{target.shortExchange}</div>
+              <div className="font-mono text-[11px]">@ ${target.shortPrice.toFixed(2)}</div>
             </div>
           </div>
 

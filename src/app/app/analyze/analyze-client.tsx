@@ -161,13 +161,28 @@ function AnalyzeClientInner({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">분석할 심볼</label>
+            <label
+              htmlFor="symbol-input"
+              className="text-xs text-muted-foreground"
+            >
+              분석할 심볼
+            </label>
             <Input
+              id="symbol-input"
+              list="symbol-presets"
               value={symbol}
               onChange={(e) => setSymbol(e.target.value)}
-              placeholder="예: BTCUSDT"
+              placeholder="예: BTCUSDT (클릭하면 목록 표시)"
               className="font-mono"
+              autoComplete="off"
             />
+            <datalist id="symbol-presets">
+              {PRESETS.map((s) => (
+                <option key={s} value={s}>
+                  {s.replace("USDT", "")}
+                </option>
+              ))}
+            </datalist>
             <div className="pt-1">
               <div className="mb-1.5 text-[11px] text-muted-foreground">
                 자주 쓰는 코인:

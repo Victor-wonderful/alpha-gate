@@ -56,7 +56,7 @@ export default async function HomePage() {
     supabase
       .from("trades")
       .select(
-        "id, symbol, direction, timeframe, pre_grade, result_r, closed_at, created_at, order_status",
+        "id, symbol, direction, timeframe, pre_grade, result_r, closed_at, created_at, order_status, order_type, context_flags",
       )
       .order("created_at", { ascending: false })
       .limit(5),
@@ -218,7 +218,17 @@ export default async function HomePage() {
           <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card/40">
             {recent.map((t) => {
               const status = (t as { order_status?: string }).order_status;
-              const isPending = status === "pending";
+              const orderType = (t as { order_type?: string }).order_type;
+              const ctxLeverage = (t as { context_flags?: { leverage?: number } })
+                .context_flags?.leverage;
+              // 진짜 대기: 닫히지 않았고 order_status가 pending (지정가 미체결).
+              // result_r이 이미 있으면 이미 체결된 거래 → "대기" 표시 X.
+              const isPending =
+                !t.closed_at && status === "pending" && t.result_r == null;
+              const isOpen = !t.closed_at && !isPending;
+              const dateStr = new Date(
+                t.closed_at ?? t.created_at,
+              ).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
               return (
                 <li key={t.id}>
                   <Link
@@ -231,11 +241,31 @@ export default async function HomePage() {
                       <span className="text-sm text-muted-foreground">
                         {t.direction === "long" ? "롱" : "숏"} · {t.timeframe}
                       </span>
+                      {ctxLeverage ? (
+                        <span
+                          className={cn(
+                            "rounded-md border px-1.5 py-0.5 text-[10px] font-mono font-semibold tabular-nums",
+                            ctxLeverage >= 20
+                              ? "border-grade-d/40 text-grade-d"
+                              : ctxLeverage >= 10
+                                ? "border-amber-500/40 text-amber-400"
+                                : "border-border text-muted-foreground",
+                          )}
+                          title={`레버리지 ${ctxLeverage}x`}
+                        >
+                          {ctxLeverage}x
+                        </span>
+                      ) : null}
+                      {orderType === "limit" ? (
+                        <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-400">
+                          지정가
+                        </span>
+                      ) : null}
                       {isPending ? (
                         <span className="rounded-md bg-amber-400/10 px-2 py-0.5 text-xs font-medium text-amber-400">
                           대기
                         </span>
-                      ) : !t.closed_at ? (
+                      ) : isOpen ? (
                         <span className="rounded-md bg-grade-b/15 px-2 py-0.5 text-xs font-medium text-grade-b">
                           진행
                         </span>
@@ -253,12 +283,7 @@ export default async function HomePage() {
                           {Number(t.result_r).toFixed(2)}R
                         </span>
                       ) : null}
-                      <span className="text-muted-foreground">
-                        {new Date(t.created_at).toLocaleDateString("ko-KR", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
+                      <span className="text-muted-foreground">{dateStr}</span>
                       <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
                     </div>
                   </Link>

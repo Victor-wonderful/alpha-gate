@@ -189,10 +189,12 @@ function TradeFormInner({
   const [orderType, setOrderType] = useState<"market" | "limit">("market");
   const [orderTypeTouched, setOrderTypeTouched] = useState(false);
   const [entry, setEntry] = useState(() => params.get("entry") ?? "");
-  /** AI 또는 사용자가 처음 입력한 "지정가" 진입가 — 시장가↔지정가 토글 시 복원용. */
-  const [limitEntry, setLimitEntry] = useState(() => params.get("entry") ?? "");
   const [stop, setStop] = useState(() => params.get("stop") ?? "");
   const [target, setTarget] = useState(() => params.get("target") ?? "");
+  /** AI 또는 사용자가 마지막에 입력한 "지정가" 값들 — 시장가↔지정가 토글 시 복원용. */
+  const [limitEntry, setLimitEntry] = useState(() => params.get("entry") ?? "");
+  const [limitStop, setLimitStop] = useState(() => params.get("stop") ?? "");
+  const [limitTarget, setLimitTarget] = useState(() => params.get("target") ?? "");
   const [accountSize, setAccountSize] = useState(String(initialAccountSize || 10000));
   const [riskPct, setRiskPct] = useState(String(initialRiskPct || 1));
   const [leverage, setLeverage] = useState(5);
@@ -426,19 +428,36 @@ function TradeFormInner({
   // 모든 심볼의 현재가 (Spot ticker). 시장가 진입 시 자동 입력에도 사용.
   const currentPrice = marketCtx.symbolPrice ?? marketCtx.btcPrice;
 
-  /** 시장가/지정가 토글 시 진입가도 함께 갱신.
-   *  - 시장가: 진입가를 현재 시장가로 스냅 (지금 입력값은 limitEntry에 백업)
-   *  - 지정가: 진입가를 백업해둔 limitEntry로 복원 */
+  /** 시장가/지정가 토글 시 진입가/손절/목표를 함께 갱신.
+   *  - 시장가: AI 시나리오의 entry/stop/target를 현재가 기준 동일 delta로
+   *    평행이동(R:R 그대로 보존). 즉시 체결되면서도 손익비는 유지.
+   *  - 지정가: 백업해둔 AI 원래 값(entry/stop/target)으로 복원. */
   function changeOrderType(next: "market" | "limit") {
     setOrderTypeTouched(true);
     if (next === orderType) return;
     if (next === "market") {
+      // 백업: 지금 입력값들이 곧 limit 기준값이 됨
       if (entry) setLimitEntry(entry);
-      if (currentPrice && currentPrice > 0) {
+      if (stop) setLimitStop(stop);
+      if (target) setLimitTarget(target);
+      if (currentPrice && currentPrice > 0 && entry) {
+        const oldEntry = Number(entry);
+        const oldStop = Number(stop);
+        const oldTarget = Number(target);
+        if (oldEntry > 0) {
+          const delta = currentPrice - oldEntry;
+          setEntry(formatPriceForInput(currentPrice));
+          if (oldStop > 0) setStop(formatPriceForInput(oldStop + delta));
+          if (oldTarget > 0) setTarget(formatPriceForInput(oldTarget + delta));
+        }
+      } else if (currentPrice && currentPrice > 0) {
         setEntry(formatPriceForInput(currentPrice));
       }
     } else {
+      // 지정가 복원: AI 원래 값으로 (entry/stop/target 모두)
       if (limitEntry) setEntry(limitEntry);
+      if (limitStop) setStop(limitStop);
+      if (limitTarget) setTarget(limitTarget);
     }
     setOrderType(next);
   }
@@ -453,11 +472,14 @@ function TradeFormInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPrice, orderType]);
 
-  // 지정가 모드에서 사용자가 진입가를 직접 수정하면 limitEntry도 동기화.
+  // 지정가 모드에서 사용자가 직접 수정하면 limit 백업값도 동기화.
   useEffect(() => {
-    if (orderType === "limit" && entry) setLimitEntry(entry);
+    if (orderType !== "limit") return;
+    if (entry) setLimitEntry(entry);
+    if (stop) setLimitStop(stop);
+    if (target) setLimitTarget(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry, orderType]);
+  }, [entry, stop, target, orderType]);
   const stopPct =
     entryNumV > 0 && stopNumV > 0
       ? ((stopNumV - entryNumV) / entryNumV) * 100

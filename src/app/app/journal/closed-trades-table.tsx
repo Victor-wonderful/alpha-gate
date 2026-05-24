@@ -193,25 +193,24 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
         <>
           {/* Table */}
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1560px] text-sm">
-              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+            <table className="w-full min-w-[1280px] text-xs">
+              <thead className="bg-muted/40 text-[10px] uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2 text-left">시간</th>
-                  <th className="px-3 py-2 text-left">코인</th>
-                  <th className="px-3 py-2 text-left">방향</th>
-                  <th className="px-3 py-2 text-left">주문</th>
-                  <th className="px-3 py-2 text-left">TF</th>
-                  <th className="px-3 py-2 text-right">레버리지</th>
-                  <th className="px-3 py-2 text-left">등급</th>
-                  <th className="px-3 py-2 text-right">진입가 / 체결</th>
-                  <th className="px-3 py-2 text-right">손절 / 청산</th>
-                  <th className="px-3 py-2 text-right">수량</th>
-                  <th className="px-3 py-2 text-right">수수료</th>
-                  <th className="px-3 py-2 text-right">진입 R:R</th>
-                  <th className="px-3 py-2 text-right">실현 R</th>
-                  <th className="px-3 py-2 text-right">실현 PnL</th>
-                  <th className="px-3 py-2 text-right">ROI</th>
-                  <th className="px-3 py-2 text-left">사유</th>
+                  <th className="px-2 py-1.5 text-left">시간</th>
+                  <th className="px-2 py-1.5 text-left">코인</th>
+                  <th className="px-2 py-1.5 text-left">방향</th>
+                  <th className="px-2 py-1.5 text-left">주문</th>
+                  <th className="px-2 py-1.5 text-left">TF</th>
+                  <th className="px-2 py-1.5 text-right">레버</th>
+                  <th className="px-2 py-1.5 text-left">등급</th>
+                  <th className="px-2 py-1.5 text-right">진입 / 체결</th>
+                  <th className="px-2 py-1.5 text-right">손절 / 청산</th>
+                  <th className="px-2 py-1.5 text-right">수량</th>
+                  <th className="px-2 py-1.5 text-right">R:R</th>
+                  <th className="px-2 py-1.5 text-right">실현 R</th>
+                  <th className="px-2 py-1.5 text-right">PnL</th>
+                  <th className="px-2 py-1.5 text-right">ROI</th>
+                  <th className="px-2 py-1.5 text-left">사유</th>
                 </tr>
               </thead>
               <tbody>
@@ -225,15 +224,17 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                         ? n.toLocaleString("en-US", { maximumFractionDigits: 0 })
                         : n.toFixed(4);
                   const exitActualNum = t.exit_actual ?? t.exit_price;
+                  const feesPctNum =
+                    t.fees_pct != null ? Number(t.fees_pct) : null;
                   return (
                     <tr key={t.id} className="border-t border-border hover:bg-accent/40">
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-1.5">
                         <Link
                           href={`/app/journal/${t.id}`}
+                          title={feesPctNum != null ? `수수료 ${feesPctNum.toFixed(2)}%` : undefined}
                           className="block text-foreground hover:underline"
                         >
-                          <div className="text-xs">
-                            진입{" "}
+                          <div>
                             {entryTime.toLocaleDateString("ko-KR", {
                               month: "numeric",
                               day: "numeric",
@@ -246,26 +247,26 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                           </div>
                           <div className="text-[10px] text-muted-foreground">
                             {exitTime
-                              ? `청산 ${exitTime.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })} ${exitTime.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}`
+                              ? `→ ${exitTime.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}`
                               : "—"}
                           </div>
                         </Link>
                       </td>
-                      <td className="px-3 py-2 font-mono">{t.symbol}</td>
-                      <td className="px-3 py-2">{t.direction === "long" ? "롱" : "숏"}</td>
-                      <td className="px-3 py-2 text-xs">
+                      <td className="px-2 py-1.5 font-mono">{t.symbol}</td>
+                      <td className="px-2 py-1.5">{t.direction === "long" ? "롱" : "숏"}</td>
+                      <td className="px-2 py-1.5">
                         {t.order_type === "limit" ? (
-                          <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-sky-400">
-                            지정가
+                          <span className="rounded bg-sky-500/10 px-1 py-0.5 text-[10px] text-sky-400">
+                            지정
                           </span>
                         ) : (
-                          <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-muted-foreground">
-                            시장가
+                          <span className="rounded bg-muted/40 px-1 py-0.5 text-[10px] text-muted-foreground">
+                            시장
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2">{t.timeframe}</td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      <td className="px-2 py-1.5">{t.timeframe}</td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
                         {t.leverage != null ? (
                           <span
                             className={
@@ -282,39 +283,36 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-1.5">
                         <GradeBadge grade={t.pre_grade as Grade} size="sm" />
                       </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
                         <div>{fmtPx(t.entry)}</div>
                         <div
                           className="text-[10px] text-muted-foreground"
                           title="실제 체결가 (슬리피지 포함)"
                         >
-                          체결 {fmtPx(t.entry_actual)}
+                          ↳ {fmtPx(t.entry_actual)}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
                         <div>{fmtPx(t.stop)}</div>
                         <div
                           className="text-[10px] text-muted-foreground"
                           title="실제 청산가"
                         >
-                          청산 {fmtPx(exitActualNum)}
+                          ↳ {fmtPx(exitActualNum)}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
                         {t.position_quantity != null
                           ? Number(t.position_quantity).toFixed(4)
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-xs text-muted-foreground">
-                        {t.fees_pct != null ? `${Number(t.fees_pct).toFixed(2)}%` : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono">
+                      <td className="px-2 py-1.5 text-right font-mono">
                         {Number(t.pre_rr ?? 0).toFixed(2)}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono">
+                      <td className="px-2 py-1.5 text-right font-mono">
                         {t.result_r != null ? (
                           <span
                             className={
@@ -330,22 +328,19 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono">
+                      <td className="px-2 py-1.5 text-right font-mono">
                         {t.pnl != null ? (
                           <span
                             className={t.pnl >= 0 ? "text-grade-a" : "text-grade-d"}
                           >
                             {t.pnl >= 0 ? "+" : ""}
-                            {formatNumber(t.pnl, { maximumFractionDigits: 2 })}{" "}
-                            <span className="text-[10px] text-muted-foreground">
-                              vUSDT
-                            </span>
+                            {formatNumber(t.pnl, { maximumFractionDigits: 2 })}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono">
+                      <td className="px-2 py-1.5 text-right font-mono">
                         {t.roiPct != null ? (
                           <span
                             className={
@@ -359,11 +354,11 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-xs">
+                      <td className="px-2 py-1.5">
                         {t.exit_reason === "target" ? (
-                          <span className="text-grade-a">목표 도달</span>
+                          <span className="text-grade-a">목표</span>
                         ) : t.exit_reason === "stop" ? (
-                          <span className="text-grade-d">손절 적중</span>
+                          <span className="text-grade-d">손절</span>
                         ) : t.exit_reason === "manual" ? (
                           <span className="text-muted-foreground">수동</span>
                         ) : (

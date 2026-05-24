@@ -76,7 +76,7 @@ export async function SnapshotToday() {
       <div className="mb-4 flex items-baseline justify-between">
         <h2 className="text-base font-semibold">Snapshot · Today</h2>
         <span className="text-xs text-muted-foreground">
-          via Binance · 24h % · RSI 14 / SMA 200 · 펀딩비 USDT-perp
+          via Binance · 오늘 변동(UTC 0시 기준) · RSI 14 / SMA 200 · 펀딩비 USDT-perp
         </span>
       </div>
 
@@ -87,7 +87,7 @@ export async function SnapshotToday() {
               <tr className="border-b border-border/40 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-5 py-3 font-medium">코인</th>
                 <th className="px-5 py-3 font-medium">현재가</th>
-                <th className="px-5 py-3 font-medium">24h</th>
+                <th className="px-5 py-3 font-medium">오늘</th>
                 <th className="px-5 py-3 font-medium">RSI 14</th>
                 <th className="hidden px-5 py-3 font-medium md:table-cell">
                   200DMA
@@ -126,7 +126,7 @@ export async function SnapshotToday() {
                       trendTone(r.trend),
                     )}
                   >
-                    {trendIcon(r.trend)} {fmtChange(r.change24hPct)}
+                    {trendIcon(r.trend)} {fmtChange(r.changeTodayPct)}
                   </td>
                   <td
                     className={cn(

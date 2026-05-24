@@ -19,7 +19,7 @@ export type TechnicalRow = {
   pair: string;            // "BTCUSDT"
   close: number;           // latest 1D close (USD)
   closeKrw: number;        // close * USD/KRW rate
-  change24hPct: number;    // 24h price change % (Binance ticker)
+  changeTodayPct: number;  // change % from today's UTC daily open (matches TradingView "today")
   ema21: number | null;
   rsi14: number | null;
   ma200: number | null;
@@ -111,14 +111,17 @@ function buildTakeaway(row: Omit<TechnicalRow, "takeaway">): string {
   return bits.join(" · ");
 }
 
-async function fetchKlines(pair: string): Promise<number[]> {
-  // Closed-daily series — used for indicators (RSI/EMA21/SMA200). These barely
-  // shift intraday, so 10-min cache is fine.
+async function fetchKlines(pair: string): Promise<{ opens: number[]; closes: number[] }> {
+  // Daily series — used for indicators (RSI/EMA21/SMA200) and today's UTC open.
+  // Most recent row is today's still-forming candle: its open is today's UTC daily open.
   const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1d&limit=250`;
   const res = await fetch(url, { next: { revalidate: 600 } });
   if (!res.ok) throw new Error(`klines ${pair} ${res.status}`);
   const raw = (await res.json()) as Kline[];
-  return raw.map((row) => Number(row[4])); // close
+  return {
+    opens: raw.map((row) => Number(row[1])),
+    closes: raw.map((row) => Number(row[4])),
+  };
 }
 
 /** Live 24h ticker — gives both lastPrice and 24h change %. Cached 30s. */
@@ -160,14 +163,16 @@ async function buildRow(
   usdKrw: number,
 ): Promise<TechnicalRow> {
   try {
-    const [closes, fundingPct, ticker] = await Promise.all([
+    const [{ opens, closes }, fundingPct, ticker] = await Promise.all([
       fetchKlines(p.pair),
       fetchFunding(p.pair),
       fetchTicker24h(p.pair),
     ]);
     const dailyLatest = closes[closes.length - 1] ?? 0;
     const close = ticker?.last ?? dailyLatest;
-    const change24hPct = ticker?.change24hPct ?? 0;
+    // Today's UTC daily open = open of the most recent (still-forming) 1d candle.
+    const todayOpen = opens[opens.length - 1] ?? close;
+    const changeTodayPct = todayOpen > 0 ? ((close - todayOpen) / todayOpen) * 100 : 0;
     // Swap latest closes entry with live price so indicators reflect intraday move.
     if (ticker && closes.length > 0) {
       closes[closes.length - 1] = ticker.last;
@@ -177,10 +182,10 @@ async function buildRow(
     const rsi14 = rsi(closes, 14);
     const ma200 = sma(closes, 200);
 
-    // Trend = 24h direction (intuitive — matches what users see on Upbit/TradingView).
+    // Trend = today's direction (matches the "오늘" column).
     let trend: Trend = "flat";
-    if (change24hPct > 0.5) trend = "up";
-    else if (change24hPct < -0.5) trend = "down";
+    if (changeTodayPct > 0.5) trend = "up";
+    else if (changeTodayPct < -0.5) trend = "down";
     const ma200Position: TechnicalRow["ma200Position"] =
       ma200 == null ? "unknown" : close > ma200 ? "above" : "below";
 
@@ -189,7 +194,7 @@ async function buildRow(
       pair: p.pair,
       close,
       closeKrw,
-      change24hPct,
+      changeTodayPct,
       ema21,
       rsi14,
       ma200,
@@ -205,7 +210,7 @@ async function buildRow(
       pair: p.pair,
       close: 0,
       closeKrw: 0,
-      change24hPct: 0,
+      changeTodayPct: 0,
       ema21: null,
       rsi14: null,
       ma200: null,

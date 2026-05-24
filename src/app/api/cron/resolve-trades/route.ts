@@ -67,6 +67,7 @@ interface OpenTrade {
   extended_until: string | null;
   expiry_warned_first_at: string | null;
   expiry_warned_final_at: string | null;
+  market_type: "futures" | "spot" | null;
 }
 
 interface Resolution {
@@ -141,7 +142,7 @@ export async function GET(req: NextRequest) {
   const { data: openTrades, error } = await svc
     .from("trades")
     .select(
-      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, mode, extended_until, expiry_warned_first_at, expiry_warned_final_at",
+      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, mode, extended_until, expiry_warned_first_at, expiry_warned_final_at, market_type",
     )
     .is("closed_at", null)
     .neq("mode", "backtest")
@@ -167,13 +168,15 @@ export async function GET(req: NextRequest) {
     const ageMs = now - createdMs;
 
     // 절대 만료 시각: extended_until 이 있으면 그것을, 없으면 created_at + TIMEOUT
+    // 현물은 만료/경고 적용 안 함 (영구 보유 가능)
+    const isSpot = t.market_type === "spot";
     const expiryMs = t.extended_until
       ? new Date(t.extended_until).getTime()
       : createdMs + TIMEOUT_MS[tf];
     const msToExpiry = expiryMs - now;
 
-    // ── 1) 만료 도달 → 자동 시장가 청산 ─────────────────────────────────
-    if (msToExpiry <= 0) {
+    // ── 1) 만료 도달 → 자동 시장가 청산 (현물 제외) ─────────────────────
+    if (!isSpot && msToExpiry <= 0) {
       try {
         const ticker = await fetchTicker24h(t.symbol);
         const market = ticker.lastPrice;
@@ -242,8 +245,8 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    // ── 2) 2차(D-1h) 경고 ────────────────────────────────────────────
-    if (msToExpiry <= WARN_FINAL_MS && !t.expiry_warned_final_at) {
+    // ── 2) 2차(D-1h) 경고 (현물 제외) ────────────────────────────────
+    if (!isSpot && msToExpiry <= WARN_FINAL_MS && !t.expiry_warned_final_at) {
       const minsLeft = Math.max(0, Math.round(msToExpiry / 60_000));
       await svc
         .from("trades")
@@ -263,8 +266,9 @@ export async function GET(req: NextRequest) {
       // 경고만 보내고 stop/target 체크는 계속 진행 (체결이 더 우선)
     }
 
-    // ── 3) 1차(D-N) 경고 ────────────────────────────────────────────
+    // ── 3) 1차(D-N) 경고 (현물 제외) ─────────────────────────────────
     else if (
+      !isSpot &&
       msToExpiry <= WARN_FIRST_MS[tf] &&
       !t.expiry_warned_first_at
     ) {

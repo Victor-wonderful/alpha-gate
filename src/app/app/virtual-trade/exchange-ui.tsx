@@ -60,6 +60,7 @@ type Position = {
   createdAt: string;
   timeframe: string;
   extendedUntil: string | null;
+  marketType: "futures" | "spot";
 };
 
 // resolve-trades/route.ts 의 TIMEOUT_MS 와 반드시 일치.
@@ -97,10 +98,41 @@ export function ExchangeUI({
   const [symbol, setSymbol] = useState<string>(initialSymbol);
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAMES)[number]>("1h");
   const [tab, setTab] = useState<"positions" | "orders" | "history">("positions");
+  const [marketType, setMarketType] = useState<"futures" | "spot">("futures");
 
   return (
     <div className="space-y-3">
       <ExchangeHeader symbol={symbol} onSymbolChange={setSymbol} wallet={wallet} positions={positions} />
+
+      {/* 시장 종류 토글 — Futures / Spot */}
+      <div className="inline-flex gap-1 rounded-md border border-border bg-background/40 p-0.5">
+        <button
+          type="button"
+          onClick={() => setMarketType("futures")}
+          className={cn(
+            "rounded px-4 py-1.5 text-xs font-semibold transition-colors",
+            marketType === "futures"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+          )}
+          title="USDT-M 무기한 선물 (롱·숏·레버리지)"
+        >
+          🌐 선물
+        </button>
+        <button
+          type="button"
+          onClick={() => setMarketType("spot")}
+          className={cn(
+            "rounded px-4 py-1.5 text-xs font-semibold transition-colors",
+            marketType === "spot"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+          )}
+          title="현물 (매수만 · 1x · 청산 없음 · 펀딩 없음 · 수수료 0.2%)"
+        >
+          💎 현물
+        </button>
+      </div>
 
       <div className="grid gap-3 lg:grid-cols-[1fr_300px_320px] lg:grid-rows-[auto_auto]">
         {/* Chart */}
@@ -112,7 +144,7 @@ export function ExchangeUI({
         {/* Order entry — spans both rows on the right */}
         <div className="lg:row-span-2 lg:col-start-3 lg:row-start-1">
           <div className="h-full">
-            <OrderPanel symbol={symbol} wallet={wallet} />
+            <OrderPanel symbol={symbol} wallet={wallet} marketType={marketType} />
           </div>
         </div>
 
@@ -1045,10 +1077,28 @@ function MarketTradesContent({ symbol }: { symbol: string }) {
 }
 
 // ─── Order Panel ─────────────────────────────────────────────────────────
-function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
+function OrderPanel({
+  symbol,
+  wallet,
+  marketType,
+}: {
+  symbol: string;
+  wallet: Wallet;
+  marketType: "futures" | "spot";
+}) {
+  const isSpot = marketType === "spot";
   const [direction, setDirection] = useState<"long" | "short">("long");
   const [orderType, setOrderType] = useState<"limit" | "market" | "tpsl">("market");
   const [leverage, setLeverage] = useState(5);
+
+  // Spot 모드 진입 시 강제 정렬: 매수만 + 1x.
+  useEffect(() => {
+    if (isSpot) {
+      setDirection("long");
+      setLeverage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpot]);
   const [price, setPrice] = useState(""); // Limit 가격
   const [qty, setQty] = useState("");
   const [stop, setStop] = useState("");
@@ -1119,6 +1169,7 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
         target: target ? Number(target) : undefined,
         orderType: orderType === "limit" ? "limit" : "market",
         limitPrice: orderType === "limit" ? Number(price) : undefined,
+        marketType,
       });
       if (!r.ok) {
         toast.error(r.error ?? "주문 실패");
@@ -1174,32 +1225,43 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
     <Card className="h-full overflow-hidden">
       <CardContent className="flex h-full flex-col gap-3 overflow-y-auto p-3">
         {/* 매수/매도 큰 토글 */}
-        <div className="grid grid-cols-2 overflow-hidden rounded-md">
+        {isSpot ? (
+          /* 현물은 매수만 */
           <button
             type="button"
-            onClick={() => setDirection("long")}
-            className={cn(
-              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-all",
-              direction === "long"
-                ? "bg-grade-a text-white"
-                : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
-            )}
+            className="w-full rounded-md bg-grade-a py-2.5 text-sm font-bold text-white"
+            disabled
           >
-            매수
+            매수 (현물)
           </button>
-          <button
-            type="button"
-            onClick={() => setDirection("short")}
-            className={cn(
-              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-all",
-              direction === "short"
-                ? "bg-grade-d text-white"
-                : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
-            )}
-          >
-            매도
-          </button>
-        </div>
+        ) : (
+          <div className="grid grid-cols-2 overflow-hidden rounded-md">
+            <button
+              type="button"
+              onClick={() => setDirection("long")}
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-all",
+                direction === "long"
+                  ? "bg-grade-a text-white"
+                  : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
+              )}
+            >
+              매수
+            </button>
+            <button
+              type="button"
+              onClick={() => setDirection("short")}
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-all",
+                direction === "short"
+                  ? "bg-grade-d text-white"
+                  : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
+              )}
+            >
+              매도
+            </button>
+          </div>
+        )}
 
         {/* 주문 유형 sub-tab */}
         <div className="flex items-center gap-4 border-b border-border/40 pb-1.5">
@@ -1320,49 +1382,55 @@ function OrderPanel({ symbol, wallet }: { symbol: string; wallet: Wallet }) {
           </div>
         </div>
 
-        {/* 레버리지 */}
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">레버리지</span>
-            <span
-              className={cn(
-                "rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums",
-                leverage >= 20
-                  ? "bg-grade-d/15 text-grade-d"
-                  : leverage >= 10
-                    ? "bg-amber-500/15 text-amber-400"
-                    : "bg-primary/15 text-primary",
-              )}
-            >
-              {leverage}×
-            </span>
-          </div>
-          <input
-            type="range"
-            min={1}
-            max={50}
-            value={leverage}
-            onChange={(e) => setLeverage(Number(e.target.value))}
-            className="w-full accent-primary"
-          />
-          <div className="mt-1.5 grid grid-cols-6 gap-1">
-            {LEVERAGE_PRESETS.map((lv) => (
-              <button
-                key={lv}
-                type="button"
-                onClick={() => setLeverage(lv)}
+        {/* 레버리지 — 현물은 숨김 (항상 1x) */}
+        {!isSpot ? (
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">레버리지</span>
+              <span
                 className={cn(
-                  "rounded border py-0.5 text-[10px] font-medium transition-colors",
-                  leverage === lv
-                    ? "border-primary/60 bg-primary/15 text-primary"
-                    : "border-border bg-background/30 text-muted-foreground hover:border-border/80 hover:text-foreground",
+                  "rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums",
+                  leverage >= 20
+                    ? "bg-grade-d/15 text-grade-d"
+                    : leverage >= 10
+                      ? "bg-amber-500/15 text-amber-400"
+                      : "bg-primary/15 text-primary",
                 )}
               >
-                {lv}×
-              </button>
-            ))}
+                {leverage}×
+              </span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={50}
+              value={leverage}
+              onChange={(e) => setLeverage(Number(e.target.value))}
+              className="w-full accent-primary"
+            />
+            <div className="mt-1.5 grid grid-cols-6 gap-1">
+              {LEVERAGE_PRESETS.map((lv) => (
+                <button
+                  key={lv}
+                  type="button"
+                  onClick={() => setLeverage(lv)}
+                  className={cn(
+                    "rounded border py-0.5 text-[10px] font-medium transition-colors",
+                    leverage === lv
+                      ? "border-primary/60 bg-primary/15 text-primary"
+                      : "border-border bg-background/30 text-muted-foreground hover:border-border/80 hover:text-foreground",
+                  )}
+                >
+                  {lv}×
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="rounded-md border border-border/40 bg-background/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+            💎 현물 거래 — 레버리지 1× · 청산 없음 · 펀딩 없음 · 수수료 0.2%
+          </div>
+        )}
 
         {/* TP/SL 확장 영역 */}
         {tpslEnabled ? (
@@ -1800,7 +1868,14 @@ function PositionRow({ pos }: { pos: Position }) {
       <td className="px-2 py-2.5">
         <div className="flex items-center gap-2">
           <span aria-hidden className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")} />
-          <span className="font-mono text-xs font-semibold">{pos.symbol}</span>
+          <div>
+            <span className="font-mono text-xs font-semibold">{pos.symbol}</span>
+            {pos.marketType === "spot" ? (
+              <span className="ml-1.5 rounded bg-sky-500/15 px-1 py-0.5 text-[9px] font-semibold text-sky-400">
+                현물
+              </span>
+            ) : null}
+          </div>
         </div>
       </td>
       {/* 방향 + 레버리지 */}
@@ -1814,18 +1889,24 @@ function PositionRow({ pos }: { pos: Position }) {
           >
             {isLong ? "롱" : "숏"}
           </Badge>
-          <span
-            className={cn(
-              "rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums",
-              pos.leverage >= 20
-                ? "bg-grade-d/15 text-grade-d"
-                : pos.leverage >= 10
-                  ? "bg-amber-500/15 text-amber-400"
-                  : "bg-primary/15 text-primary",
-            )}
-          >
-            {pos.leverage}×
-          </span>
+          {pos.marketType === "spot" ? (
+            <span className="rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums bg-muted/40 text-muted-foreground">
+              1×
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums",
+                pos.leverage >= 20
+                  ? "bg-grade-d/15 text-grade-d"
+                  : pos.leverage >= 10
+                    ? "bg-amber-500/15 text-amber-400"
+                    : "bg-primary/15 text-primary",
+              )}
+            >
+              {pos.leverage}×
+            </span>
+          )}
         </div>
       </td>
       {/* 수량 + 노출 */}
@@ -1909,15 +1990,19 @@ function PositionRow({ pos }: { pos: Position }) {
           <span className="text-muted-foreground">—</span>
         )}
       </td>
-      {/* 보유 시간 + 만료까지 */}
+      {/* 보유 시간 + 만료까지 (현물은 만료 없음) */}
       <td className="px-2 py-2.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
         <div>{formatDuration(ageMs)}</div>
-        <div
-          className={expiryTone}
-          title={`만료까지 ${formatDuration(msToExpiry)} 후 자동 청산`}
-        >
-          만료 {formatDuration(msToExpiry)}
-        </div>
+        {pos.marketType === "spot" ? (
+          <div className="text-[10px] text-muted-foreground/60">현물 (영구)</div>
+        ) : (
+          <div
+            className={expiryTone}
+            title={`만료까지 ${formatDuration(msToExpiry)} 후 자동 청산`}
+          >
+            만료 {formatDuration(msToExpiry)}
+          </div>
+        )}
       </td>
       {/* 청산 */}
       <td className="px-2 py-2.5 text-right">

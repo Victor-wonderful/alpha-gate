@@ -31,7 +31,7 @@ export default async function VirtualTradePage({
   const { data: openTrades } = await supabase
     .from("trades")
     .select(
-      "id, symbol, direction, entry, entry_actual, stop, target, position_quantity, paper_margin, fees_pct, context_flags, created_at, timeframe, extended_until",
+      "id, symbol, direction, entry, entry_actual, stop, target, position_quantity, paper_margin, fees_pct, context_flags, created_at, timeframe, extended_until, market_type",
     )
     .eq("user_id", user.id)
     .eq("is_paper", true)
@@ -61,6 +61,9 @@ export default async function VirtualTradePage({
         createdAt: t.created_at as string,
         timeframe: t.timeframe as string,
         extendedUntil: (t.extended_until as string | null) ?? null,
+        marketType: ((t.market_type as string | null) ?? "futures") as
+          | "futures"
+          | "spot",
       };
     });
 

@@ -20,6 +20,9 @@ export interface PlaceOrderInput {
   orderType?: "market" | "limit";
   /** Required when orderType === 'limit'. Target fill price. */
   limitPrice?: number;
+  /** 'futures' (default, USDT-M Futures) or 'spot' (현물). Spot은 자동으로
+   *  leverage=1, direction=long, 수수료 0.2% 적용. */
+  marketType?: "futures" | "spot";
 }
 
 export interface PlaceOrderResult {
@@ -38,7 +41,10 @@ export interface PlaceOrderResult {
 
 const PAPER_SLIPPAGE_PCT = 0.05;
 // Binance USDT-M Futures Taker 0.04% × 2 (round-trip). 슬리피지는 별도 처리.
-const PAPER_FEES_PCT = 0.08;
+const PAPER_FEES_PCT_FUTURES = 0.08;
+// Binance Spot Taker 0.1% × 2 — 현물은 더 비쌈.
+const PAPER_FEES_PCT_SPOT = 0.2;
+const PAPER_FEES_PCT = PAPER_FEES_PCT_FUTURES; // 기본 — 호환성용
 
 /** Place a virtual market order directly (no AI flow). Used by the exchange-style
  *  trading panel on /app/virtual-trade. */
@@ -61,6 +67,18 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
 
   const symbol = input.symbol.toUpperCase();
   const isLimit = input.orderType === "limit";
+  const isSpot = input.marketType === "spot";
+
+  // Spot 강제 규칙
+  if (isSpot) {
+    if (input.direction !== "long") {
+      return { ok: false, error: "현물 거래는 매수(long)만 가능합니다." };
+    }
+    if (input.leverage !== 1) {
+      return { ok: false, error: "현물 거래는 레버리지 1배만 가능합니다." };
+    }
+  }
+  const feesPct = isSpot ? PAPER_FEES_PCT_SPOT : PAPER_FEES_PCT_FUTURES;
 
   // ── 지정가 주문 분기 ─────────────────────────────────────────────────────
   if (isLimit) {
@@ -107,12 +125,13 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
         simulation_meta: null,
         entry_actual: null,
         entry_slippage_pct: 0,
-        fees_pct: PAPER_FEES_PCT,
+        fees_pct: feesPct,
         paper_margin: null, // 체결 시점에 결정
         is_paper: true,
         order_type: "limit",
         limit_price: limitPrice,
         order_status: "pending",
+        market_type: isSpot ? "spot" : "futures",
       })
       .select("id")
       .single();
@@ -223,11 +242,12 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
       simulation_meta: null,
       entry_actual: fillPrice,
       entry_slippage_pct: slippage,
-      fees_pct: PAPER_FEES_PCT,
+      fees_pct: feesPct,
       paper_margin: margin,
       is_paper: true,
       order_type: "market",
       order_status: "filled",
+      market_type: isSpot ? "spot" : "futures",
     })
     .select("id")
     .single();

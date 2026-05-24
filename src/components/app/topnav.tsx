@@ -143,9 +143,16 @@ function UserDropdown({
       </button>
       {open ? (
         <div className="absolute right-0 top-full mt-1 min-w-[260px] overflow-hidden rounded-md border border-border bg-popover shadow-xl">
-          <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground truncate">
-            {email}
-          </div>
+          <Link
+            href="/app/account"
+            onClick={() => setOpen(false)}
+            className="block border-b border-border px-3 py-2 hover:bg-muted"
+          >
+            <div className="text-xs font-medium text-foreground">내 계정</div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {email}
+            </div>
+          </Link>
 
           {/* Balance + Credits — prominent top section */}
           <Link
@@ -285,14 +292,14 @@ function MobileDrawer({
             <X className="h-5 w-5" />
           </button>
         </div>
-        {/* Wallet status (mobile) */}
+        {/* 내 계정 + 잔액 (mobile) */}
         <Link
-          href="/app/wallet"
+          href="/app/account"
           onClick={onClose}
           className="flex items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-3 hover:bg-muted/30"
         >
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">내 지갑</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">내 계정</div>
             <div className="mt-0.5 flex items-center gap-3 text-sm">
               <span className="inline-flex items-center gap-1">
                 <Coins className="h-3.5 w-3.5 text-primary" />

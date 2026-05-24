@@ -16,6 +16,7 @@ import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { cn, formatNumber } from "@/lib/utils";
 import type { Grade } from "@/types/trade";
 import { TodayMarketStrip } from "@/components/market/today-strip";
+import { ExpiryBanner } from "@/components/trade/expiry-banner";
 import { AutoRefreshBar } from "@/components/market/auto-refresh-bar";
 import { CapitalFlowCard } from "@/components/market/capital-flow-card";
 import { SessionsClock } from "@/components/market/sessions-clock";
@@ -122,6 +123,11 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+
+      {/* 1.5. 만료 임박 경고 (있을 때만) */}
+      <Suspense fallback={null}>
+        <ExpiryBanner />
+      </Suspense>
 
       {/* 2. 오늘의 시장 한 줄 */}
       <Suspense fallback={<TodaySkeleton />}>

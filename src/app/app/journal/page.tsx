@@ -12,6 +12,8 @@ import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
 import { ViewTabs, parseView, type View } from "@/components/app/view-tabs";
+import { ExpiryBanner } from "@/components/trade/expiry-banner";
+import { Suspense } from "react";
 
 interface GameRow {
   id: string;
@@ -233,6 +235,9 @@ export default async function JournalListPage({
   return (
     <div className="space-y-5">
       <FlowStepper current="journal" />
+      <Suspense fallback={null}>
+        <ExpiryBanner />
+      </Suspense>
       <ClusterTabs
         title={cluster.title}
         description="5분마다 자동 정산되며, 즉시 확인하려면 우측 버튼을 누르세요. 가격은 페이지 새로고침으로 갱신됩니다."

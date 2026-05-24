@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseService } from "@/lib/supabase/service";
-import { fetchKlines } from "@/lib/analysis/binance";
+import { fetchKlines, fetchTicker24h } from "@/lib/analysis/binance";
 import { dispatch } from "@/lib/notify-dispatch";
+import { settleMargin } from "@/lib/paper-wallet";
+
+/** 시장가 슬리피지 % — 자동 청산 시 적용 (수동 청산과 동일) */
+const PAPER_SLIPPAGE_PCT = 0.05;
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -26,6 +30,17 @@ const TIMEOUT_MS: Record<TF, number> = {
   "1D": 30 * 24 * 60 * 60_000, // 30d
 };
 
+/** 1차 경고 시점 (만료 D-N) — 사용자가 차분히 결정할 수 있는 텀 */
+const WARN_FIRST_MS: Record<TF, number> = {
+  "15m": 6 * 60 * 60_000, // D-6h
+  "1h": 12 * 60 * 60_000, // D-12h
+  "4h": 24 * 60 * 60_000, // D-24h
+  "1D": 48 * 60 * 60_000, // D-48h
+};
+
+/** 2차(마지막) 경고 시점 — 모든 스타일 공통 D-1h */
+const WARN_FINAL_MS = 60 * 60_000;
+
 interface OpenTrade {
   id: string;
   user_id: string;
@@ -43,6 +58,10 @@ interface OpenTrade {
   paper_margin: number | null;
   is_paper: boolean | null;
   created_at: string;
+  /** 사용자가 +24h 연장 시 갱신되는 절대 만료시각. null이면 created_at + TIMEOUT_MS 적용. */
+  extended_until: string | null;
+  expiry_warned_first_at: string | null;
+  expiry_warned_final_at: string | null;
 }
 
 interface Resolution {
@@ -117,7 +136,7 @@ export async function GET(req: NextRequest) {
   const { data: openTrades, error } = await svc
     .from("trades")
     .select(
-      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, mode",
+      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, mode, extended_until, expiry_warned_first_at, expiry_warned_final_at",
     )
     .is("closed_at", null)
     .neq("mode", "backtest")
@@ -128,7 +147,8 @@ export async function GET(req: NextRequest) {
   if (!openTrades || openTrades.length === 0) return NextResponse.json({ checked: 0, resolved: 0 });
 
   let resolved = 0;
-  let stale = 0;
+  let autoClosed = 0;
+  let warned = 0;
   let errors = 0;
   const results: Array<{ id: string; exitReason?: string; resultR?: number; note?: string }> = [];
 
@@ -138,11 +158,127 @@ export async function GET(req: NextRequest) {
     if (!INTERVAL_MAP[tf]) continue;
 
     const createdMs = new Date(t.created_at).getTime();
-    const ageMs = Date.now() - createdMs;
-    if (ageMs > TIMEOUT_MS[tf]) {
-      stale++;
-      results.push({ id: t.id, note: "stale (timeout)" });
+    const now = Date.now();
+    const ageMs = now - createdMs;
+
+    // 절대 만료 시각: extended_until 이 있으면 그것을, 없으면 created_at + TIMEOUT
+    const expiryMs = t.extended_until
+      ? new Date(t.extended_until).getTime()
+      : createdMs + TIMEOUT_MS[tf];
+    const msToExpiry = expiryMs - now;
+
+    // ── 1) 만료 도달 → 자동 시장가 청산 ─────────────────────────────────
+    if (msToExpiry <= 0) {
+      try {
+        const ticker = await fetchTicker24h(t.symbol);
+        const market = ticker.lastPrice;
+        // 청산도 슬리피지 불리하게
+        const exitSlip =
+          t.direction === "long" ? -PAPER_SLIPPAGE_PCT : PAPER_SLIPPAGE_PCT;
+        const exitActual = market * (1 + exitSlip / 100);
+        const entryActual = Number(t.entry_actual ?? t.entry);
+        const stopDist = Math.abs(entryActual - t.stop);
+        const feesPct = Number(t.fees_pct ?? 0.12);
+        const feesR = stopDist > 0 ? (entryActual * (feesPct / 100)) / stopDist : 0;
+        const movement =
+          t.direction === "long"
+            ? exitActual - entryActual
+            : entryActual - exitActual;
+        const grossR = stopDist > 0 ? movement / stopDist : 0;
+        const resultR = grossR - feesR;
+        const qty = Number(t.position_quantity ?? 0);
+        const realizedPnl = movement * qty - entryActual * (feesPct / 100) * qty;
+
+        const { error: upErr } = await svc
+          .from("trades")
+          .update({
+            exit_price: market,
+            exit_actual: exitActual,
+            result_r: resultR,
+            exit_reason: "timeout",
+            closed_at: new Date().toISOString(),
+            paper_realized_pnl: t.is_paper ? realizedPnl : null,
+            note: `자동 청산 (만료) — 응답 없음 (${resultR.toFixed(2)}R)`,
+          })
+          .eq("id", t.id)
+          .is("closed_at", null);
+
+        if (upErr) {
+          errors++;
+          results.push({ id: t.id, note: `timeout close db error: ${upErr.message}` });
+          continue;
+        }
+
+        if (t.is_paper && t.paper_margin != null) {
+          await settleMargin({
+            userId: t.user_id,
+            margin: Number(t.paper_margin),
+            realizedPnl,
+            tradeId: t.id,
+          });
+        }
+        autoClosed++;
+        results.push({ id: t.id, exitReason: "timeout", resultR: Number(resultR.toFixed(2)) });
+
+        // 사후 알림
+        try {
+          await dispatch(t.user_id, "ai_coach_done", {
+            title: "⏰ 거래 자동 청산 (응답 없음)",
+            body: `${t.symbol} ${t.direction === "long" ? "롱" : "숏"} · 만료 도달, 시장가로 자동 청산됨\n결과 ${resultR >= 0 ? "+" : ""}${resultR.toFixed(2)}R`,
+            tradeId: t.id,
+          });
+        } catch {
+          // ignore
+        }
+      } catch (e) {
+        errors++;
+        results.push({ id: t.id, note: `timeout close error: ${e instanceof Error ? e.message : String(e)}` });
+      }
       continue;
+    }
+
+    // ── 2) 2차(D-1h) 경고 ────────────────────────────────────────────
+    if (msToExpiry <= WARN_FINAL_MS && !t.expiry_warned_final_at) {
+      const minsLeft = Math.max(0, Math.round(msToExpiry / 60_000));
+      await svc
+        .from("trades")
+        .update({ expiry_warned_final_at: new Date().toISOString() })
+        .eq("id", t.id);
+      try {
+        await dispatch(t.user_id, "ai_coach_done", {
+          title: "⏰ 마지막 알림 — 1시간 후 자동 청산",
+          body: `${t.symbol} ${t.direction === "long" ? "롱" : "숏"} · 약 ${minsLeft}분 후 자동 청산됩니다. 결정 안 하면 그대로 시장가 청산됩니다.`,
+          tradeId: t.id,
+        });
+      } catch {
+        // ignore
+      }
+      warned++;
+      results.push({ id: t.id, note: "final warning" });
+      // 경고만 보내고 stop/target 체크는 계속 진행 (체결이 더 우선)
+    }
+
+    // ── 3) 1차(D-N) 경고 ────────────────────────────────────────────
+    else if (
+      msToExpiry <= WARN_FIRST_MS[tf] &&
+      !t.expiry_warned_first_at
+    ) {
+      const hoursLeft = Math.max(1, Math.round(msToExpiry / 3_600_000));
+      await svc
+        .from("trades")
+        .update({ expiry_warned_first_at: new Date().toISOString() })
+        .eq("id", t.id);
+      try {
+        await dispatch(t.user_id, "ai_coach_done", {
+          title: "⏰ 거래 만료 임박",
+          body: `${t.symbol} ${t.direction === "long" ? "롱" : "숏"} · 약 ${hoursLeft}시간 후 자동 청산됩니다.\n사이트에서 [지금 청산 / 24h 연장 / 그냥 두기] 중 선택하세요.`,
+          tradeId: t.id,
+        });
+      } catch {
+        // ignore
+      }
+      warned++;
+      results.push({ id: t.id, note: "first warning" });
     }
 
     try {
@@ -232,7 +368,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     checked: openTrades.length,
     resolved,
-    stale,
+    autoClosed,
+    warned,
     errors,
     results,
   });

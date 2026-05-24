@@ -6,6 +6,8 @@ import { ExchangeUI } from "./exchange-ui";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
+import { ExpiryBanner } from "@/components/trade/expiry-banner";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +100,9 @@ export default async function VirtualTradePage({
   });
   return (
     <div className="space-y-4">
+      <Suspense fallback={null}>
+        <ExpiryBanner />
+      </Suspense>
       <ClusterTabs title={cluster.title} description={cluster.description} tabs={cluster.tabs} rightSlot={cluster.rightSlot} />
 
       <ExchangeUI

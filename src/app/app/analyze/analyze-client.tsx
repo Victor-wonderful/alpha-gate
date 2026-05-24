@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState, useTransition } from "react";
+import { Suspense, useEffect, useRef, useState, useTransition } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { History } from "lucide-react";
+import { ChevronDown, History } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -167,22 +167,7 @@ function AnalyzeClientInner({
             >
               분석할 심볼
             </label>
-            <Input
-              id="symbol-input"
-              list="symbol-presets"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              placeholder="예: BTCUSDT (클릭하면 목록 표시)"
-              className="font-mono"
-              autoComplete="off"
-            />
-            <datalist id="symbol-presets">
-              {PRESETS.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace("USDT", "")}
-                </option>
-              ))}
-            </datalist>
+            <SymbolCombobox value={symbol} onChange={setSymbol} />
             <div className="pt-1">
               <div className="mb-1.5 text-[11px] text-muted-foreground">
                 자주 쓰는 코인:
@@ -299,6 +284,96 @@ function AnalyzeClientInner({
             currency={currency}
           />
         </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Input with a chevron button that opens a scrollable preset picker.
+ *  Also supports free typing — useful for symbols not in the preset list. */
+function SymbolCombobox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const q = value.toUpperCase().trim();
+  const filtered = q
+    ? PRESETS.filter((s) => s.includes(q) || s.replace("USDT", "").includes(q))
+    : PRESETS;
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="flex items-stretch gap-0">
+        <Input
+          id="symbol-input"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setOpen(true)}
+          placeholder="예: BTCUSDT"
+          className="rounded-r-none font-mono"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex h-10 items-center justify-center rounded-r-md border border-l-0 border-input bg-background px-3 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="코인 목록"
+        >
+          <ChevronDown
+            className={
+              "h-4 w-4 transition-transform " + (open ? "rotate-180" : "")
+            }
+          />
+        </button>
+      </div>
+      {open ? (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-xl">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-3 text-xs text-muted-foreground">
+              일치하는 코인이 없습니다. 입력값 그대로 분석합니다.
+            </div>
+          ) : (
+            filtered.map((s) => {
+              const active = value.toUpperCase() === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => {
+                    onChange(s);
+                    setOpen(false);
+                  }}
+                  className={
+                    "flex w-full items-center justify-between gap-3 px-3 py-2 text-sm transition-colors " +
+                    (active
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground")
+                  }
+                >
+                  <span className="font-mono text-foreground">
+                    {s.replace("USDT", "")}
+                  </span>
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {s}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
       ) : null}
     </div>
   );

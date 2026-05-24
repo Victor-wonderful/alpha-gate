@@ -4,34 +4,37 @@ import { fetchFng } from "@/lib/market-widgets/fng";
 import { getUpcomingMacroEvents } from "@/lib/market-widgets/calendar";
 import { cn } from "@/lib/utils";
 
-type BtcQuote = { last: number; change24h: number; funding: number | null };
+type BtcQuote = { last: number; changeToday: number; funding: number | null };
 
 async function fetchBtcQuote(): Promise<BtcQuote | null> {
   try {
-    const [tickerRes, fundingRes] = await Promise.all([
-      fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT", {
-        next: { revalidate: 60 },
-      }),
+    // 1d kline (limit=1) = today's still-forming UTC daily candle.
+    // [open_time, open, high, low, close, ...] — close is the latest tick price.
+    const [klineRes, fundingRes] = await Promise.all([
+      fetch(
+        "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=1",
+        { next: { revalidate: 60 } },
+      ),
       fetch("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", {
         next: { revalidate: 300 },
       }),
     ]);
-    if (!tickerRes.ok) return null;
-    const t = (await tickerRes.json()) as {
-      lastPrice: string;
-      priceChangePercent: string;
-    };
+    if (!klineRes.ok) return null;
+    const klines = (await klineRes.json()) as (string | number)[][];
+    const row = klines[0];
+    if (!row) return null;
+    const open = Number(row[1]);
+    const last = Number(row[4]);
+    if (!Number.isFinite(open) || !Number.isFinite(last) || open <= 0)
+      return null;
+    const changeToday = ((last - open) / open) * 100;
     let funding: number | null = null;
     if (fundingRes.ok) {
       const f = (await fundingRes.json()) as { lastFundingRate?: string };
       const r = Number(f.lastFundingRate);
       if (Number.isFinite(r)) funding = r * 100;
     }
-    return {
-      last: Number(t.lastPrice),
-      change24h: Number(t.priceChangePercent),
-      funding,
-    };
+    return { last, changeToday, funding };
   } catch {
     return null;
   }
@@ -55,7 +58,7 @@ function verdict({
   if (hoursToNextHighMacro !== null && hoursToNextHighMacro <= 24) {
     return { label: "매크로 발표 직전", tone: "danger" };
   }
-  if (btc && Math.abs(btc.change24h) >= 5) {
+  if (btc && Math.abs(btc.changeToday) >= 5) {
     return { label: "변동성 큼", tone: "warn" };
   }
   if (fngValue >= 75 || fngValue <= 25) {
@@ -120,11 +123,11 @@ export async function TodayMarketStrip() {
               <span
                 className={cn(
                   "font-mono tabular-nums",
-                  btc.change24h >= 0 ? "text-grade-a" : "text-grade-d",
+                  btc.changeToday >= 0 ? "text-grade-a" : "text-grade-d",
                 )}
               >
-                {btc.change24h >= 0 ? "+" : ""}
-                {btc.change24h.toFixed(2)}%
+                {btc.changeToday >= 0 ? "+" : ""}
+                {btc.changeToday.toFixed(2)}%
               </span>
             </span>
           ) : null}

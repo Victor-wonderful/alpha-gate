@@ -116,7 +116,7 @@ function evaluateScenario(
     market: scenario.marketAssessment,
     trigger,
     money: { todayCumulativeR: 0, todayClosedCount: 0, openPositions: [], openExposurePct: 0 },
-    marketCtx: { btcPrice: null, btc24hChangePct: null, fundingRate: null, minutesToFunding: null },
+    marketCtx: { btcPrice: null, btc24hChangePct: null, symbolPrice: null, fundingRate: null, minutesToFunding: null },
   };
   const grade = gradeTrade(input);
   const sizing = sizePosition({

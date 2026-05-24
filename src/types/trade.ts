@@ -83,6 +83,8 @@ export interface MoneyContext {
 export interface MarketContext {
   btcPrice: number | null;
   btc24hChangePct: number | null;
+  /** 거래 심볼의 현재가 (Spot 기준) — 시장가 진입 시 사용 */
+  symbolPrice: number | null;
   /** 현재 심볼의 펀딩비 (예: 0.0001 = 0.01%) */
   fundingRate: number | null;
   /** 다음 펀딩 정산까지 남은 분 */

@@ -32,6 +32,7 @@ const base: TradeInput = {
   marketCtx: {
     btcPrice: null,
     btc24hChangePct: null,
+    symbolPrice: null,
     fundingRate: null,
     minutesToFunding: null,
   },

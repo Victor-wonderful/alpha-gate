@@ -40,6 +40,14 @@ const ENTRY_ACCENT = "border-primary/40 focus-within:border-primary";
 const STOP_ACCENT = "border-grade-d/40 focus-within:border-grade-d";
 const TARGET_ACCENT = "border-grade-a/40 focus-within:border-grade-a";
 
+/** 입력창에 자연스러운 가격 문자열 — 큰 수는 정수, 작은 수는 4자리 이하. */
+function formatPriceForInput(p: number): string {
+  if (!Number.isFinite(p) || p <= 0) return "";
+  if (p >= 1000) return String(Math.round(p));
+  if (p >= 1) return p.toFixed(2);
+  return p.toFixed(4);
+}
+
 function formatRPreview(entry: number, stop: number, target: number, kind: "stop" | "target") {
   const risk = Math.abs(entry - stop);
   if (risk === 0) return "—";
@@ -181,6 +189,8 @@ function TradeFormInner({
   const [orderType, setOrderType] = useState<"market" | "limit">("market");
   const [orderTypeTouched, setOrderTypeTouched] = useState(false);
   const [entry, setEntry] = useState(() => params.get("entry") ?? "");
+  /** AI 또는 사용자가 처음 입력한 "지정가" 진입가 — 시장가↔지정가 토글 시 복원용. */
+  const [limitEntry, setLimitEntry] = useState(() => params.get("entry") ?? "");
   const [stop, setStop] = useState(() => params.get("stop") ?? "");
   const [target, setTarget] = useState(() => params.get("target") ?? "");
   const [accountSize, setAccountSize] = useState(String(initialAccountSize || 10000));
@@ -228,6 +238,7 @@ function TradeFormInner({
   const [marketCtx, setMarketCtx] = useState<MarketContext>({
     btcPrice: null,
     btc24hChangePct: null,
+    symbolPrice: null,
     fundingRate: null,
     minutesToFunding: null,
   });
@@ -412,7 +423,41 @@ function TradeFormInner({
   const stopNumV = Number(stop) || 0;
   const targetNumV = Number(target) || 0;
   const accountNumV = Number(accountSize) || 0;
-  const currentPrice = marketCtx.btcPrice; // BTC만. 다른 심볼 현재가는 향후 marketCtx 확장
+  // 모든 심볼의 현재가 (Spot ticker). 시장가 진입 시 자동 입력에도 사용.
+  const currentPrice = marketCtx.symbolPrice ?? marketCtx.btcPrice;
+
+  /** 시장가/지정가 토글 시 진입가도 함께 갱신.
+   *  - 시장가: 진입가를 현재 시장가로 스냅 (지금 입력값은 limitEntry에 백업)
+   *  - 지정가: 진입가를 백업해둔 limitEntry로 복원 */
+  function changeOrderType(next: "market" | "limit") {
+    setOrderTypeTouched(true);
+    if (next === orderType) return;
+    if (next === "market") {
+      if (entry) setLimitEntry(entry);
+      if (currentPrice && currentPrice > 0) {
+        setEntry(formatPriceForInput(currentPrice));
+      }
+    } else {
+      if (limitEntry) setEntry(limitEntry);
+    }
+    setOrderType(next);
+  }
+
+  // 시장가 모드일 때 현재가가 새로 도착하면 진입가 비어있는 경우 자동 채움.
+  // (AI immediate 시나리오로 첫 진입했을 때의 케이스)
+  useEffect(() => {
+    if (orderType !== "market") return;
+    if (!currentPrice || currentPrice <= 0) return;
+    if (entry) return;
+    setEntry(formatPriceForInput(currentPrice));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPrice, orderType]);
+
+  // 지정가 모드에서 사용자가 진입가를 직접 수정하면 limitEntry도 동기화.
+  useEffect(() => {
+    if (orderType === "limit" && entry) setLimitEntry(entry);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry, orderType]);
   const stopPct =
     entryNumV > 0 && stopNumV > 0
       ? ((stopNumV - entryNumV) / entryNumV) * 100
@@ -579,7 +624,7 @@ function TradeFormInner({
                   </div>
                 </div>
               ) : null}
-              {currentPrice && symbol === "BTCUSDT" ? (
+              {currentPrice ? (
                 <div className="font-mono text-xs">
                   <span className="text-muted-foreground">현재가</span>{" "}
                   <span className="font-semibold text-foreground">${currentPrice.toLocaleString()}</span>
@@ -630,7 +675,7 @@ function TradeFormInner({
               <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-background/40 p-0.5">
                 <button
                   type="button"
-                  onClick={() => { setOrderType("market"); setOrderTypeTouched(true); }}
+                  onClick={() => changeOrderType("market")}
                   className={cn(
                     "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
                     orderType === "market"
@@ -642,7 +687,7 @@ function TradeFormInner({
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setOrderType("limit"); setOrderTypeTouched(true); }}
+                  onClick={() => changeOrderType("limit")}
                   className={cn(
                     "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
                     orderType === "limit"
@@ -668,7 +713,7 @@ function TradeFormInner({
                 onChange={setEntry}
                 accent={ENTRY_ACCENT}
                 hint={
-                  currentPrice && symbol === "BTCUSDT" && entryNumV > 0
+                  currentPrice && entryNumV > 0
                     ? `현재가 대비 ${(((entryNumV - currentPrice) / currentPrice) * 100).toFixed(2)}%`
                     : null
                 }

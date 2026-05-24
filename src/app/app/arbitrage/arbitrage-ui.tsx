@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeftRight, Wallet, X, Clock, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeftRight, Wallet, X, Clock, TrendingUp, TrendingDown, Target } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn, formatNumber } from "@/lib/utils";
+import {
+  KIMCHI_TARGET_OFFSET_PCT,
+  KIMCHI_MAX_TARGET_PCT,
+} from "@/lib/arbitrage/constants";
 import type { KimchiOpportunity } from "@/lib/arbitrage/scan";
 import { enterArbitrageAction, closeArbitrageAction } from "./_actions";
 
@@ -30,6 +34,7 @@ interface OpenPosition {
   short_entry_price: number;
   short_qty: number;
   entry_premium_pct: number | null;
+  target_premium_pct: number | null;
   expires_at: string;
   created_at: string;
 }
@@ -42,6 +47,7 @@ interface ClosedPosition {
   long_exchange: string;
   short_exchange: string;
   entry_premium_pct: number | null;
+  target_premium_pct: number | null;
   long_entry_price: number;
   short_entry_price: number;
   long_exit_price: number | null;
@@ -55,6 +61,7 @@ interface ClosedPosition {
 interface Props {
   wallet: WalletInfo | null;
   kimchi: KimchiOpportunity[];
+  currentPremiums: Record<string, number>;
   openPositions: OpenPosition[];
   closedPositions: ClosedPosition[];
 }
@@ -62,19 +69,11 @@ interface Props {
 export function ArbitrageUI({
   wallet,
   kimchi,
+  currentPremiums,
   openPositions,
   closedPositions,
 }: Props) {
   const [entryTarget, setEntryTarget] = useState<KimchiOpportunity | null>(null);
-
-  // 활성 포지션 PnL 계산용 — symbol → current prices 매핑
-  const currentPrices = useMemo(() => {
-    const m = new Map<string, { long: number; short: number }>();
-    for (const k of kimchi) {
-      m.set(k.symbol, { long: k.longPrice, short: k.shortPrice });
-    }
-    return m;
-  }, [kimchi]);
 
   return (
     <div className="space-y-6">
@@ -83,7 +82,8 @@ export function ArbitrageUI({
         <div>
           <h1 className="text-3xl font-bold leading-[1.15]">차익거래</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            🇰🇷 김치 프리미엄 — Upbit (KRW) vs Binance (USD) 가격 차이 차익
+            🇰🇷 김치 프리미엄 — Upbit 매수 + Binance 숏 동시 진입.
+            진입 시 청산 목표 김프 지정 → 도달 시 양쪽 청산.
           </p>
         </div>
         {wallet ? (
@@ -99,26 +99,19 @@ export function ArbitrageUI({
         ) : null}
       </header>
 
-      {/* 스캐너 */}
+      {/* 코인별 김프 현황 */}
       <section className="space-y-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-base font-semibold">차익 기회 ({kimchi.length})</h2>
-          <p className="text-xs text-muted-foreground">
-            Upbit (KRW) vs Binance (USD) — |김프| ≥ 0.3%
-          </p>
+          <h2 className="text-base font-semibold">
+            코인별 김프 현황 ({kimchi.length})
+          </h2>
+          <p className="text-xs text-muted-foreground">0에 가까운 순</p>
         </div>
+
         {kimchi.length === 0 ? (
-          <EmptyMessage text="현재 김치 프리미엄 0.3% 이상 기회가 없습니다." />
+          <EmptyMessage text="김프 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요." />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {kimchi.map((k) => (
-              <KimchiCard
-                key={k.symbol}
-                data={k}
-                onEnter={() => setEntryTarget(k)}
-              />
-            ))}
-          </div>
+          <KimchiPremiumTable rows={kimchi} onEnter={setEntryTarget} />
         )}
       </section>
 
@@ -133,8 +126,7 @@ export function ArbitrageUI({
               <ActivePositionCard
                 key={p.id}
                 pos={p}
-                currentLong={currentPrices.get(p.symbol)?.long ?? null}
-                currentShort={currentPrices.get(p.symbol)?.short ?? null}
+                currentPremium={currentPremiums[p.symbol] ?? null}
               />
             ))}
           </div>
@@ -173,79 +165,41 @@ function EmptyMessage({ text }: { text: string }) {
   );
 }
 
-function KimchiCard({
-  data,
-  onEnter,
-}: {
-  data: KimchiOpportunity;
-  onEnter: () => void;
-}) {
-  const positive = data.premiumPct > 0;
-  return (
-    <Card>
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-baseline justify-between">
-          <span className="font-mono text-base font-bold">{data.symbol}</span>
-          <span
-            className={cn(
-              "font-mono text-lg font-bold tabular-nums",
-              positive ? "text-grade-a" : "text-grade-d",
-            )}
-          >
-            {positive ? "+" : ""}
-            {data.premiumPct.toFixed(2)}%
-          </span>
-        </div>
-        <div className="space-y-1 text-xs">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Upbit</span>
-            <span className="font-mono tabular-nums">
-              ₩{data.upbitKrw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Binance</span>
-            <span className="font-mono tabular-nums">
-              ${data.binanceUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-            </span>
-          </div>
-          <div className="flex justify-between border-t border-border/60 pt-1 text-[11px]">
-            <span className="text-muted-foreground">전략</span>
-            <span className="font-mono">
-              Long {data.longExchange} · Short {data.shortExchange}
-            </span>
-          </div>
-        </div>
-        <Button size="sm" className="w-full" onClick={onEnter}>
-          진입 시뮬레이션
-        </Button>
-      </CardContent>
-    </Card>
-  );
+/**
+ * 활성 포지션 PnL 계산.
+ *
+ * 진입 김프 e, 현재 김프 p, notional N → 예상 PnL = (p - e)/100 × N
+ * (수수료 차감 전. 실제 청산 시 0.08% 추가 차감.)
+ */
+function estimatePnl(notional: number, entryPct: number, currentPct: number): number {
+  return ((currentPct - entryPct) / 100) * notional;
 }
 
 function ActivePositionCard({
   pos,
-  currentLong,
-  currentShort,
+  currentPremium,
 }: {
   pos: OpenPosition;
-  currentLong: number | null;
-  currentShort: number | null;
+  currentPremium: number | null;
 }) {
   const router = useRouter();
   const [closing, startClose] = useTransition();
 
-  const longQty = Number(pos.long_qty);
-  const shortQty = Number(pos.short_qty);
-  const longEntry = Number(pos.long_entry_price);
-  const shortEntry = Number(pos.short_entry_price);
-  const longPnl =
-    currentLong != null ? (currentLong - longEntry) * longQty : null;
-  const shortPnl =
-    currentShort != null ? (shortEntry - currentShort) * shortQty : null;
+  const notional = Number(pos.notional_usd);
+  const entryPct = pos.entry_premium_pct != null ? Number(pos.entry_premium_pct) : null;
+  const targetPct = pos.target_premium_pct != null ? Number(pos.target_premium_pct) : 1.0;
+
   const netPnl =
-    longPnl != null && shortPnl != null ? longPnl + shortPnl : null;
+    entryPct != null && currentPremium != null
+      ? estimatePnl(notional, entryPct, currentPremium)
+      : null;
+
+  // 진행률: 진입 김프 → 목표 김프 사이에서 현재 위치 (%)
+  const progressPct =
+    entryPct != null && currentPremium != null
+      ? Math.max(0, Math.min(100, ((currentPremium - entryPct) / (targetPct - entryPct)) * 100))
+      : 0;
+  const reachedTarget = currentPremium != null && currentPremium >= targetPct;
 
   const expiry = new Date(pos.expires_at);
   const msToExpiry = expiry.getTime() - Date.now();
@@ -255,14 +209,21 @@ function ActivePositionCard({
       : "만료";
 
   function onClose() {
-    if (currentLong == null || currentShort == null) {
-      toast.error("현재 가격을 가져올 수 없습니다.");
-      return;
-    }
-    if (!confirm(`${pos.symbol} 차익거래 청산하시겠습니까? (예상 PnL ${netPnl?.toFixed(2) ?? "—"})`))
+    if (!confirm(
+      `${pos.symbol} 차익거래 청산하시겠습니까? (예상 PnL ${netPnl != null ? netPnl.toFixed(2) : "—"} vUSDT, 수수료 차감 전)`,
+    ))
       return;
     startClose(async () => {
-      const r = await closeArbitrageAction(pos.id, currentLong, currentShort);
+      // 청산가는 진입가 + 김프 변화량 반영. 단순화를 위해 entry 가격 그대로 + 김프 차이로 PnL 산출.
+      // 실제 가격을 안 써도 PnL 은 김프 변화량으로 계산됨.
+      const longEntry = Number(pos.long_entry_price);
+      const shortEntry = Number(pos.short_entry_price);
+      const deltaPct =
+        entryPct != null && currentPremium != null ? (currentPremium - entryPct) / 100 : 0;
+      // Upbit 가격이 김프 변화만큼 변했다고 가정 (Binance 가격은 고정).
+      const longExit = longEntry * (1 + deltaPct);
+      const shortExit = shortEntry;
+      const r = await closeArbitrageAction(pos.id, longExit, shortExit);
       if (!r.ok) {
         toast.error(r.error ?? "청산 실패");
         return;
@@ -282,7 +243,7 @@ function ActivePositionCard({
             </span>
             <span className="font-mono text-base font-bold">{pos.symbol}</span>
             <span className="text-xs text-muted-foreground">
-              노출 ${formatNumber(pos.notional_usd, { maximumFractionDigits: 0 })} × 2
+              노출 ${formatNumber(notional, { maximumFractionDigits: 0 })} × 2
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -292,37 +253,71 @@ function ActivePositionCard({
             </span>
             <Button
               size="sm"
-              variant="outline"
+              variant={reachedTarget ? "default" : "outline"}
               onClick={onClose}
               disabled={closing}
             >
               <X className="mr-1 h-3 w-3" />
-              {closing ? "청산 중…" : "청산"}
+              {closing ? "청산 중…" : reachedTarget ? "지금 청산 (목표 도달)" : "청산"}
             </Button>
           </div>
         </div>
 
+        {/* 김프 진행률 바 */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>
+              진입 {entryPct != null ? `${entryPct >= 0 ? "+" : ""}${entryPct.toFixed(2)}%` : "—"}
+            </span>
+            <span className="inline-flex items-center gap-1 text-foreground">
+              현재{" "}
+              {currentPremium != null ? (
+                <span
+                  className={cn(
+                    "font-mono font-semibold",
+                    reachedTarget ? "text-grade-a" : "",
+                  )}
+                >
+                  {currentPremium >= 0 ? "+" : ""}
+                  {currentPremium.toFixed(2)}%
+                </span>
+              ) : (
+                "—"
+              )}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Target className="h-3 w-3" />
+              목표 +{targetPct.toFixed(2)}%
+            </span>
+          </div>
+          <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                "absolute left-0 top-0 h-full transition-all",
+                reachedTarget ? "bg-grade-a" : "bg-primary",
+              )}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
-          <LegCard
+          <LegSummary
             tone="long"
-            exchange={pos.long_exchange}
-            entry={longEntry}
-            current={currentLong}
-            qty={longQty}
-            pnl={longPnl}
+            label="Long · Upbit"
+            entry={Number(pos.long_entry_price)}
+            qty={Number(pos.long_qty)}
           />
-          <LegCard
+          <LegSummary
             tone="short"
-            exchange={pos.short_exchange}
-            entry={shortEntry}
-            current={currentShort}
-            qty={shortQty}
-            pnl={shortPnl}
+            label="Short · Binance"
+            entry={Number(pos.short_entry_price)}
+            qty={Number(pos.short_qty)}
           />
         </div>
 
         <div className="flex items-center justify-between border-t border-border/60 pt-2 text-sm">
-          <span className="text-muted-foreground">Net PnL (수수료 차감 전)</span>
+          <span className="text-muted-foreground">예상 PnL (수수료 차감 전)</span>
           {netPnl != null ? (
             <span
               className={cn(
@@ -342,20 +337,16 @@ function ActivePositionCard({
   );
 }
 
-function LegCard({
+function LegSummary({
   tone,
-  exchange,
+  label,
   entry,
-  current,
   qty,
-  pnl,
 }: {
   tone: "long" | "short";
-  exchange: string;
+  label: string;
   entry: number;
-  current: number | null;
   qty: number;
-  pnl: number | null;
 }) {
   const isLong = tone === "long";
   return (
@@ -366,35 +357,86 @@ function LegCard({
         ) : (
           <TrendingDown className="h-3.5 w-3.5 text-grade-d" />
         )}
-        <span className="font-semibold">
-          {isLong ? "Long" : "Short"} · {exchange}
-        </span>
+        <span className="font-semibold">{label}</span>
       </div>
       <div className="space-y-0.5 font-mono tabular-nums">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">진입</span>
+          <span className="text-muted-foreground">진입가</span>
           <span>${entry.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">현재</span>
-          <span>{current != null ? `$${current.toFixed(2)}` : "—"}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">수량</span>
           <span>{qty.toFixed(6)}</span>
         </div>
-        <div className="flex justify-between border-t border-border/40 pt-1">
-          <span className="text-muted-foreground">PnL</span>
-          {pnl != null ? (
-            <span className={pnl >= 0 ? "text-grade-a" : "text-grade-d"}>
-              {pnl >= 0 ? "+" : ""}
-              {pnl.toFixed(2)}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </div>
       </div>
+    </div>
+  );
+}
+
+function KimchiPremiumTable({
+  rows,
+  onEnter,
+}: {
+  rows: KimchiOpportunity[];
+  onEnter: (k: KimchiOpportunity) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full min-w-[720px] text-xs">
+        <thead className="bg-muted/40 text-[10px] uppercase text-muted-foreground">
+          <tr>
+            <th className="px-2 py-1.5 text-left">코인</th>
+            <th className="px-2 py-1.5 text-right">김프</th>
+            <th className="px-2 py-1.5 text-right">Upbit (KRW)</th>
+            <th className="px-2 py-1.5 text-right">Binance (USD)</th>
+            <th className="px-2 py-1.5 text-right">Binance (KRW 환산)</th>
+            <th className="px-2 py-1.5 text-center">액션</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const positive = r.premiumPct > 0;
+            return (
+              <tr key={r.symbol} className="border-t border-border hover:bg-accent/40">
+                <td className="px-2 py-1.5 font-mono font-semibold">{r.symbol}</td>
+                <td
+                  className={cn(
+                    "px-2 py-1.5 text-right font-mono tabular-nums font-semibold",
+                    Math.abs(r.premiumPct) < 0.1
+                      ? "text-sky-400"
+                      : positive
+                        ? "text-amber-400"
+                        : "text-sky-300",
+                  )}
+                >
+                  {positive ? "+" : ""}
+                  {r.premiumPct.toFixed(3)}%
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                  ₩{r.upbitKrw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                  ${r.binanceUsd.toLocaleString("en-US", {
+                    maximumFractionDigits: r.binanceUsd < 1 ? 6 : 2,
+                  })}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono tabular-nums text-muted-foreground">
+                  ₩{r.fairKrw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  <Button
+                    size="sm"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => onEnter(r)}
+                  >
+                    진입
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -408,8 +450,8 @@ function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
             <th className="px-2 py-1.5 text-left">종료</th>
             <th className="px-2 py-1.5 text-left">코인</th>
             <th className="px-2 py-1.5 text-right">노출</th>
-            <th className="px-2 py-1.5 text-left">Long 진입→청산</th>
-            <th className="px-2 py-1.5 text-left">Short 진입→청산</th>
+            <th className="px-2 py-1.5 text-right">진입 김프</th>
+            <th className="px-2 py-1.5 text-right">목표</th>
             <th className="px-2 py-1.5 text-right">PnL</th>
             <th className="px-2 py-1.5 text-left">사유</th>
           </tr>
@@ -417,6 +459,8 @@ function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
         <tbody>
           {rows.map((r) => {
             const closeAt = r.closed_at ? new Date(r.closed_at) : null;
+            const entryPct = r.entry_premium_pct != null ? Number(r.entry_premium_pct) : null;
+            const targetPct = r.target_premium_pct != null ? Number(r.target_premium_pct) : null;
             return (
               <tr key={r.id} className="border-t border-border hover:bg-accent/40">
                 <td className="px-2 py-1.5">
@@ -428,23 +472,13 @@ function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
                 <td className="px-2 py-1.5 text-right font-mono">
                   ${formatNumber(r.notional_usd, { maximumFractionDigits: 0 })}
                 </td>
-                <td className="px-2 py-1.5 font-mono text-[10px]">
-                  {r.long_exchange}
-                  <div className="text-muted-foreground">
-                    ${Number(r.long_entry_price).toFixed(2)} → $
-                    {r.long_exit_price != null
-                      ? Number(r.long_exit_price).toFixed(2)
-                      : "—"}
-                  </div>
+                <td className="px-2 py-1.5 text-right font-mono">
+                  {entryPct != null
+                    ? `${entryPct >= 0 ? "+" : ""}${entryPct.toFixed(2)}%`
+                    : "—"}
                 </td>
-                <td className="px-2 py-1.5 font-mono text-[10px]">
-                  {r.short_exchange}
-                  <div className="text-muted-foreground">
-                    ${Number(r.short_entry_price).toFixed(2)} → $
-                    {r.short_exit_price != null
-                      ? Number(r.short_exit_price).toFixed(2)
-                      : "—"}
-                  </div>
+                <td className="px-2 py-1.5 text-right font-mono">
+                  {targetPct != null ? `+${targetPct.toFixed(2)}%` : "—"}
                 </td>
                 <td className="px-2 py-1.5 text-right font-mono">
                   {r.realized_pnl != null ? (
@@ -465,9 +499,11 @@ function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
                     ? "수동"
                     : r.close_reason === "expired"
                       ? "만료"
-                      : r.close_reason === "converged"
-                        ? "수렴"
-                        : "—"}
+                      : r.close_reason === "target"
+                        ? "목표 도달"
+                        : r.close_reason === "converged"
+                          ? "수렴"
+                          : "—"}
                 </td>
               </tr>
             );
@@ -489,12 +525,23 @@ function EntryModal({
 }) {
   const router = useRouter();
   const [notional, setNotional] = useState(1000);
+  // 청산 목표 = 진입 김프 + 1.5%p (기본). 사용자 조정 가능.
+  const [targetPct, setTargetPct] = useState(
+    () => Math.round((target.premiumPct + KIMCHI_TARGET_OFFSET_PCT) * 10) / 10,
+  );
   const [pending, startTransition] = useTransition();
 
   const totalMargin = notional * 2;
   const canAfford = wallet != null && wallet.available >= totalMargin;
+  const targetValid =
+    targetPct > target.premiumPct && targetPct <= KIMCHI_MAX_TARGET_PCT;
+  const expectedPnl = ((targetPct - target.premiumPct) / 100) * notional;
 
   function submit() {
+    if (!targetValid) {
+      toast.error("청산 목표 김프는 진입 김프보다 커야 하고 20% 이하여야 합니다.");
+      return;
+    }
     startTransition(async () => {
       const r = await enterArbitrageAction({
         symbol: target.symbol,
@@ -504,6 +551,7 @@ function EntryModal({
         shortExchange: target.shortExchange,
         shortEntryPrice: target.shortPrice,
         entryPremiumPct: target.premiumPct,
+        targetPremiumPct: targetPct,
       });
       if (!r.ok) {
         toast.error(r.error ?? "진입 실패");
@@ -532,15 +580,15 @@ function EntryModal({
               <span
                 className={cn(
                   "font-mono",
-                  target.premiumPct > 0 ? "text-grade-a" : "text-grade-d",
+                  target.premiumPct >= 0 ? "text-amber-400" : "text-sky-300",
                 )}
               >
-                {target.premiumPct > 0 ? "+" : ""}
+                {target.premiumPct >= 0 ? "+" : ""}
                 {target.premiumPct.toFixed(2)}%
               </span>
             </div>
             <div className="text-[11px] text-muted-foreground">
-              김프가 0%로 수렴하면 수익. 만료 7일.
+              김프가 목표값에 도달하면 자동 청산. 만료 7일.
             </div>
           </div>
 
@@ -562,27 +610,56 @@ function EntryModal({
               필요 마진 = ${formatNumber(totalMargin, { maximumFractionDigits: 0 })}{" "}
               (양쪽 합산){" "}
               {wallet ? (
-                <span
-                  className={
-                    canAfford ? "text-muted-foreground" : "text-grade-d"
-                  }
-                >
+                <span className={canAfford ? "text-muted-foreground" : "text-grade-d"}>
                   · 사용 가능 ${formatNumber(wallet.available, { maximumFractionDigits: 0 })}
                 </span>
               ) : null}
             </p>
           </div>
 
+          <div>
+            <Label htmlFor="target" className="text-xs">
+              청산 목표 김프 (%)
+            </Label>
+            <Input
+              id="target"
+              type="number"
+              step="0.1"
+              min={(target.premiumPct + 0.1).toFixed(1)}
+              max={KIMCHI_MAX_TARGET_PCT}
+              value={targetPct}
+              onChange={(e) => setTargetPct(Number(e.target.value))}
+              className="mt-1 font-mono"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              예상 PnL (수수료 차감 전):{" "}
+              <span
+                className={cn(
+                  "font-mono font-semibold",
+                  expectedPnl >= 0 ? "text-grade-a" : "text-grade-d",
+                )}
+              >
+                {expectedPnl >= 0 ? "+" : ""}
+                {expectedPnl.toFixed(2)} vUSDT
+              </span>{" "}
+              · 김프 변화 {(targetPct - target.premiumPct).toFixed(2)}%p
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md border border-grade-a/30 bg-grade-a/5 p-2">
-              <div className="font-semibold text-grade-a">Long</div>
-              <div className="font-mono text-[11px]">{target.longExchange}</div>
-              <div className="font-mono text-[11px]">@ ${target.longPrice.toFixed(2)}</div>
+              <div className="font-semibold text-grade-a">Long · Upbit</div>
+              <div className="font-mono text-[11px]">
+                ₩{target.upbitKrw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}
+              </div>
+              <div className="font-mono text-[11px] text-muted-foreground">
+                ≈ ${target.longPrice.toFixed(2)}
+              </div>
             </div>
             <div className="rounded-md border border-grade-d/30 bg-grade-d/5 p-2">
-              <div className="font-semibold text-grade-d">Short</div>
-              <div className="font-mono text-[11px]">{target.shortExchange}</div>
-              <div className="font-mono text-[11px]">@ ${target.shortPrice.toFixed(2)}</div>
+              <div className="font-semibold text-grade-d">Short · Binance</div>
+              <div className="font-mono text-[11px]">${target.shortPrice.toFixed(2)}</div>
+              <div className="font-mono text-[11px] text-muted-foreground">perp</div>
             </div>
           </div>
 
@@ -598,7 +675,7 @@ function EntryModal({
             <Button
               className="flex-1"
               onClick={submit}
-              disabled={pending || !canAfford || notional < 100}
+              disabled={pending || !canAfford || notional < 100 || !targetValid}
             >
               <Wallet className="mr-2 h-4 w-4" />
               {pending ? "진입 중…" : "가상 진입"}

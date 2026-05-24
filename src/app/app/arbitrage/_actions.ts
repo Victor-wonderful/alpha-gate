@@ -12,6 +12,8 @@ export interface EnterArbitrageInput {
   shortExchange: string;
   shortEntryPrice: number;
   entryPremiumPct?: number;
+  /** 청산 목표 김프 (%). 기본 1.0. cron 이 현재 김프 >= 이 값일 때 자동 청산. */
+  targetPremiumPct?: number;
 }
 
 /** 김치 프리미엄 차익거래 진입 — 양쪽 다리 노출 합(2×notional)을 마진으로 잠금. */
@@ -36,6 +38,15 @@ export async function enterArbitrageAction(
   )
     return { ok: false, error: "가격 정보가 유효하지 않습니다." };
 
+  const targetPct = p.targetPremiumPct ?? 1.0;
+  if (!Number.isFinite(targetPct) || targetPct <= 0 || targetPct > 20)
+    return { ok: false, error: "청산 목표 김프는 0~20% 사이여야 합니다." };
+  if (p.entryPremiumPct != null && targetPct <= p.entryPremiumPct)
+    return {
+      ok: false,
+      error: "청산 목표 김프는 진입 김프보다 커야 합니다.",
+    };
+
   // 양쪽 다리 노출 = 2 × notional. 둘 다 1× 레버리지로 가정.
   const totalMargin = p.notionalUsd * 2;
 
@@ -59,6 +70,7 @@ export async function enterArbitrageAction(
       short_entry_price: p.shortEntryPrice,
       short_qty: shortQty,
       entry_premium_pct: p.entryPremiumPct ?? null,
+      target_premium_pct: targetPct,
     })
     .select("id")
     .single();

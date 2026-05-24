@@ -18,6 +18,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/resolve-arbitrage",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/distribute-rankings",
       "schedule": "0 15 * * 0"
     }

@@ -707,17 +707,38 @@ function TradeFormInner({
 
             {/* Price inputs with auto-% */}
             <div className="space-y-2">
-              <PriceRow
-                label={orderType === "limit" ? "지정가" : "진입가"}
-                value={entry}
-                onChange={setEntry}
-                accent={ENTRY_ACCENT}
-                hint={
-                  currentPrice && entryNumV > 0
-                    ? `현재가 대비 ${(((entryNumV - currentPrice) / currentPrice) * 100).toFixed(2)}%`
-                    : null
-                }
-              />
+              {orderType === "market" ? (
+                <div
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-md border bg-background/40 px-3 py-2.5",
+                    ENTRY_ACCENT,
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      진입가
+                    </span>
+                    <span className="font-mono text-base font-bold tabular-nums">
+                      {currentPrice ? `$${currentPrice.toLocaleString()}` : "—"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    시장가 · 체결 시점 가격으로 진입
+                  </span>
+                </div>
+              ) : (
+                <PriceRow
+                  label="지정가"
+                  value={entry}
+                  onChange={setEntry}
+                  accent={ENTRY_ACCENT}
+                  hint={
+                    currentPrice && entryNumV > 0
+                      ? `현재가 대비 ${(((entryNumV - currentPrice) / currentPrice) * 100).toFixed(2)}%`
+                      : null
+                  }
+                />
+              )}
               <PriceRow
                 label="손절 SL"
                 value={stop}

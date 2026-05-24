@@ -474,20 +474,24 @@ export default async function JournalListPage({
             </CardContent>
           </Card>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[1400px] text-sm">
               <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-2 text-left">날짜</th>
-                  <th className="px-4 py-2 text-left">코인</th>
-                  <th className="px-4 py-2 text-left">방향</th>
-                  <th className="px-4 py-2 text-left">TF</th>
-                  <th className="px-4 py-2 text-left">등급</th>
-                  <th className="px-4 py-2 text-right">진입 R:R</th>
-                  <th className="px-4 py-2 text-right">실현 R</th>
-                  <th className="px-4 py-2 text-right">실현 PnL</th>
-                  <th className="px-4 py-2 text-right">ROI</th>
-                  <th className="px-4 py-2 text-left">사유</th>
+                  <th className="px-3 py-2 text-left">시간</th>
+                  <th className="px-3 py-2 text-left">코인</th>
+                  <th className="px-3 py-2 text-left">방향</th>
+                  <th className="px-3 py-2 text-left">TF</th>
+                  <th className="px-3 py-2 text-left">등급</th>
+                  <th className="px-3 py-2 text-right">진입가 / 체결</th>
+                  <th className="px-3 py-2 text-right">손절 / 청산</th>
+                  <th className="px-3 py-2 text-right">수량</th>
+                  <th className="px-3 py-2 text-right">수수료</th>
+                  <th className="px-3 py-2 text-right">진입 R:R</th>
+                  <th className="px-3 py-2 text-right">실현 R</th>
+                  <th className="px-3 py-2 text-right">실현 PnL</th>
+                  <th className="px-3 py-2 text-right">ROI</th>
+                  <th className="px-3 py-2 text-left">사유</th>
                 </tr>
               </thead>
               <tbody>
@@ -509,21 +513,62 @@ export default async function JournalListPage({
                   }
                   const acct = t.account_size != null ? Number(t.account_size) : null;
                   const roiPct = pnl != null && acct && acct > 0 ? (pnl / acct) * 100 : null;
+                  const entryNum = t.entry != null ? Number(t.entry) : null;
+                  const entryActualNum = t.entry_actual != null ? Number(t.entry_actual) : null;
+                  const stopNum = t.stop != null ? Number(t.stop) : null;
+                  const exitActualNum =
+                    t.exit_actual != null
+                      ? Number(t.exit_actual)
+                      : t.exit_price != null
+                        ? Number(t.exit_price)
+                        : null;
+                  const qtyNum = t.position_quantity != null ? Number(t.position_quantity) : null;
+                  const feesPctNum = t.fees_pct != null ? Number(t.fees_pct) : null;
+                  const entryTime = new Date(t.created_at);
+                  const exitTime = t.closed_at ? new Date(t.closed_at) : null;
+                  const fmtPx = (n: number | null) =>
+                    n == null ? "—" : n >= 1000 ? n.toLocaleString("en-US", { maximumFractionDigits: 0 }) : n.toFixed(4);
                   return (
                     <tr key={t.id} className="border-t border-border hover:bg-accent/40">
-                      <td className="px-4 py-2">
-                        <Link href={`/app/journal/${t.id}`} className="text-foreground hover:underline">
-                          {new Date(t.created_at).toLocaleDateString("ko-KR")}
+                      <td className="px-3 py-2">
+                        <Link href={`/app/journal/${t.id}`} className="block text-foreground hover:underline">
+                          <div className="text-xs">
+                            진입 {entryTime.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}{" "}
+                            {entryTime.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {exitTime
+                              ? `청산 ${exitTime.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })} ${exitTime.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}`
+                              : "—"}
+                          </div>
                         </Link>
                       </td>
-                      <td className="px-4 py-2 font-mono">{t.symbol}</td>
-                      <td className="px-4 py-2">{t.direction === "long" ? "롱" : "숏"}</td>
-                      <td className="px-4 py-2">{t.timeframe}</td>
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2 font-mono">{t.symbol}</td>
+                      <td className="px-3 py-2">{t.direction === "long" ? "롱" : "숏"}</td>
+                      <td className="px-3 py-2">{t.timeframe}</td>
+                      <td className="px-3 py-2">
                         <GradeBadge grade={t.pre_grade as Grade} size="sm" />
                       </td>
-                      <td className="px-4 py-2 text-right font-mono">{Number(t.pre_rr ?? 0).toFixed(2)}</td>
-                      <td className="px-4 py-2 text-right font-mono">
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                        <div>{fmtPx(entryNum)}</div>
+                        <div className="text-[10px] text-muted-foreground" title="실제 체결가 (슬리피지 포함)">
+                          체결 {fmtPx(entryActualNum)}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                        <div>{fmtPx(stopNum)}</div>
+                        <div className="text-[10px] text-muted-foreground" title="실제 청산가">
+                          청산 {fmtPx(exitActualNum)}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">
+                        {qtyNum != null ? qtyNum.toFixed(4) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums text-xs text-muted-foreground">
+                        {feesPctNum != null ? `${feesPctNum.toFixed(2)}%` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">{Number(t.pre_rr ?? 0).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-mono">
                         {t.result_r != null ? (
                           <span className={Number(t.result_r) >= 0 ? "text-grade-a" : "text-grade-d"}>
                             {Number(t.result_r) >= 0 ? "+" : ""}
@@ -533,7 +578,7 @@ export default async function JournalListPage({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono">
+                      <td className="px-3 py-2 text-right font-mono">
                         {pnl != null ? (
                           <span className={pnl >= 0 ? "text-grade-a" : "text-grade-d"}>
                             {pnl >= 0 ? "+" : ""}
@@ -544,7 +589,7 @@ export default async function JournalListPage({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono">
+                      <td className="px-3 py-2 text-right font-mono">
                         {roiPct != null ? (
                           <span className={roiPct >= 0 ? "text-grade-a" : "text-grade-d"}>
                             {roiPct >= 0 ? "+" : ""}
@@ -554,7 +599,7 @@ export default async function JournalListPage({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-xs">
+                      <td className="px-3 py-2 text-xs">
                         {t.exit_reason === "target" ? (
                           <span className="text-grade-a">목표 도달</span>
                         ) : t.exit_reason === "stop" ? (

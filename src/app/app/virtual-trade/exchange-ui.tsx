@@ -62,11 +62,12 @@ type Position = {
   extendedUntil: string | null;
 };
 
+// resolve-trades/route.ts 의 TIMEOUT_MS 와 반드시 일치.
 const POSITION_TIMEOUT_MS: Record<string, number> = {
-  "15m": 2 * 24 * 60 * 60_000,
-  "1h": 7 * 24 * 60 * 60_000,
-  "4h": 14 * 24 * 60 * 60_000,
-  "1D": 30 * 24 * 60 * 60_000,
+  "15m": 24 * 60 * 60_000, // 24h
+  "1h": 4 * 24 * 60 * 60_000, // 4d
+  "4h": 14 * 24 * 60 * 60_000, // 14d
+  "1D": 60 * 24 * 60 * 60_000, // 60d
 };
 
 type PendingOrder = {

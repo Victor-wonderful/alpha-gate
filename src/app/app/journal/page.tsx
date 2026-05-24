@@ -52,6 +52,7 @@ interface TradeRow {
   position_quantity: number | null;
   account_size: number | null;
   fees_pct: number | null;
+  context_flags: { leverage?: number } | null;
   exit_reason: "target" | "stop" | "manual" | null;
   paper_realized_pnl: number | null;
   exit_price: number | null;
@@ -74,7 +75,7 @@ export default async function JournalListPage({
     supabase
       .from("trades")
       .select(
-        "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual",
+        "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual",
       )
       .order("created_at", { ascending: false })
       .limit(100),
@@ -475,13 +476,14 @@ export default async function JournalListPage({
           </Card>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1400px] text-sm">
+            <table className="w-full min-w-[1480px] text-sm">
               <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left">시간</th>
                   <th className="px-3 py-2 text-left">코인</th>
                   <th className="px-3 py-2 text-left">방향</th>
                   <th className="px-3 py-2 text-left">TF</th>
+                  <th className="px-3 py-2 text-right">레버리지</th>
                   <th className="px-3 py-2 text-left">등급</th>
                   <th className="px-3 py-2 text-right">진입가 / 체결</th>
                   <th className="px-3 py-2 text-right">손절 / 청산</th>
@@ -524,6 +526,7 @@ export default async function JournalListPage({
                         : null;
                   const qtyNum = t.position_quantity != null ? Number(t.position_quantity) : null;
                   const feesPctNum = t.fees_pct != null ? Number(t.fees_pct) : null;
+                  const leverage = t.context_flags?.leverage ?? null;
                   const entryTime = new Date(t.created_at);
                   const exitTime = t.closed_at ? new Date(t.closed_at) : null;
                   const fmtPx = (n: number | null) =>
@@ -546,6 +549,23 @@ export default async function JournalListPage({
                       <td className="px-3 py-2 font-mono">{t.symbol}</td>
                       <td className="px-3 py-2">{t.direction === "long" ? "롱" : "숏"}</td>
                       <td className="px-3 py-2">{t.timeframe}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                        {leverage != null ? (
+                          <span
+                            className={
+                              leverage >= 20
+                                ? "text-grade-d"
+                                : leverage >= 10
+                                  ? "text-amber-400"
+                                  : "text-foreground"
+                            }
+                          >
+                            {leverage}x
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         <GradeBadge grade={t.pre_grade as Grade} size="sm" />
                       </td>

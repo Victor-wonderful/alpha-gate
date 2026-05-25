@@ -14,18 +14,26 @@ export const metadata = {
   title: "차익거래 · Alpha Gate",
 };
 
-export default async function ArbitragePage() {
+export default async function ArbitragePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ threshold?: string }>;
+}) {
   const supabase = await getSupabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/app/arbitrage");
 
+  const sp = await searchParams;
+  const thresholdParam = Number(sp.threshold);
+  const threshold = [0.2, 0.3, 0.5, 1.0].includes(thresholdParam) ? thresholdParam : 0.5;
+
   const [wallet, kimchi, currentPremiums, volatility, openRes, closedRes] = await Promise.all([
     getOrCreateWallet(user.id).catch(() => null),
     scanKimchi(),
     fetchCurrentPremiums(),
-    fetchKimchiVolatility(7).catch(() => []),
+    fetchKimchiVolatility(7, threshold).catch(() => []),
     supabase
       .from("arbitrage_positions")
       .select(
@@ -108,6 +116,7 @@ export default async function ArbitragePage() {
         kimchi={kimchi}
         currentPremiums={premiumMap}
         volatility={volatility}
+        volatilityThreshold={threshold}
         openPositions={openRes.data ?? []}
         closedPositions={closedRes.data ?? []}
         cyclesByPosition={cyclesMap}

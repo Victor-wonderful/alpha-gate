@@ -76,6 +76,7 @@ interface Props {
   kimchi: KimchiOpportunity[];
   currentPremiums: Record<string, number>;
   volatility: KimchiVolatility[];
+  volatilityThreshold: number;
   openPositions: OpenPosition[];
   closedPositions: ClosedPosition[];
   cyclesByPosition: Record<string, CycleEvent[]>;
@@ -86,6 +87,7 @@ export function ArbitrageUI({
   kimchi,
   currentPremiums,
   volatility,
+  volatilityThreshold,
   openPositions,
   closedPositions,
   cyclesByPosition,
@@ -143,7 +145,12 @@ export function ArbitrageUI({
       </section>
 
       {/* 김프 변동성 랭킹 (최근 7일) */}
-      <VolatilitySection rows={volatility} />
+      <VolatilitySection
+        rows={volatility}
+        threshold={volatilityThreshold}
+        kimchi={kimchi}
+        onEnter={setEntryTarget}
+      />
 
       {/* 진행 중 포지션 */}
       {openPositions.length > 0 ? (
@@ -190,24 +197,60 @@ export function ArbitrageUI({
   );
 }
 
-function VolatilitySection({ rows }: { rows: KimchiVolatility[] }) {
+function VolatilitySection({
+  rows,
+  threshold,
+  kimchi,
+  onEnter,
+}: {
+  rows: KimchiVolatility[];
+  threshold: number;
+  kimchi: KimchiOpportunity[];
+  onEnter: (k: KimchiOpportunity) => void;
+}) {
+  const kimchiBySymbol = new Map(kimchi.map((k) => [k.symbol, k]));
   const PREVIEW_COUNT = 8;
   const [expanded, setExpanded] = useState(false);
   const canCollapse = rows.length > PREVIEW_COUNT;
   const visible = expanded || !canCollapse ? rows : rows.slice(0, PREVIEW_COUNT);
   const minSamples = rows.length > 0 ? Math.min(...rows.map((r) => r.samples)) : 0;
   const lowConfidence = minSamples < 100;
+  const maxSpan = rows.length > 0 ? Math.max(...rows.map((r) => r.spanHours)) : 0;
+
+  const THRESHOLDS = [0.2, 0.3, 0.5, 1.0];
 
   return (
     <section className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-base font-semibold">
-          김프 변동성 랭킹 (최근 7일)
-          {rows.length > 0 ? <span className="ml-2 text-muted-foreground">({rows.length}개)</span> : null}
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          표준편차가 클수록 김프가 자주 튐 → 리밸런싱 사이클 발생 가능성 높음
-        </p>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold">
+            리밸런싱 사이클 랭킹 (최근 7일)
+            {rows.length > 0 ? <span className="ml-2 text-muted-foreground">({rows.length}개)</span> : null}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            임계값 ±{threshold}% 가정 시 일평균 사이클 수 — 많을수록 수익 기회 많음
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-muted-foreground mr-1">임계값</span>
+          {THRESHOLDS.map((t) => {
+            const active = t === threshold;
+            return (
+              <a
+                key={t}
+                href={`?threshold=${t}`}
+                className={cn(
+                  "rounded-md border px-2 py-1 text-xs font-mono tabular-nums transition-colors",
+                  active
+                    ? "border-primary bg-primary/20 text-primary"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
+                )}
+              >
+                ±{t}%
+              </a>
+            );
+          })}
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -216,44 +259,49 @@ function VolatilitySection({ rows }: { rows: KimchiVolatility[] }) {
         <div className="space-y-2">
           {lowConfidence ? (
             <p className="text-[11px] text-amber-400">
-              ⚠️ 표본 수 적음 (최소 {minSamples}개). 일주일 누적 후 신뢰도 높아집니다.
+              ⚠️ 표본 수 적음 (최소 {minSamples}개 · 측정 {maxSpan.toFixed(1)}시간). 24시간 이후 의미 있는 추정, 일주일 후 신뢰도 충분.
             </p>
-          ) : null}
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              측정 구간 {maxSpan.toFixed(1)}시간 · 5분마다 김프 ≥ ±임계값 인 tick 을 사이클로 카운트
+            </p>
+          )}
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 text-left">순위</th>
                   <th className="px-4 py-3 text-left">코인</th>
+                  <th className="px-4 py-3 text-right">일평균 사이클</th>
+                  <th className="px-4 py-3 text-right">총 사이클</th>
                   <th className="px-4 py-3 text-right">표준편차</th>
-                  <th className="px-4 py-3 text-right">범위 (최대 - 최소)</th>
-                  <th className="px-4 py-3 text-right">최소</th>
-                  <th className="px-4 py-3 text-right">최대</th>
+                  <th className="px-4 py-3 text-right">범위</th>
                   <th className="px-4 py-3 text-right">평균</th>
                   <th className="px-4 py-3 text-right">표본</th>
+                  <th className="px-4 py-3 text-center">액션</th>
                 </tr>
               </thead>
               <tbody>
-                {visible.map((r, i) => (
+                {visible.map((r, i) => {
+                  const opp = kimchiBySymbol.get(r.symbol);
+                  return (
                   <tr
                     key={r.symbol}
                     className="border-t border-border/60 hover:bg-accent/30 transition-colors"
                   >
                     <td className="px-4 py-2.5 text-muted-foreground">{i + 1}</td>
                     <td className="px-4 py-2.5 font-mono font-bold">{r.symbol}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums font-bold text-amber-400">
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums font-bold text-emerald-400">
+                      {r.cyclesPerDay.toFixed(1)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                      {r.cyclesTotal}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-amber-400">
                       {r.stdev.toFixed(3)}%
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                       {r.range.toFixed(3)}%
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-sky-300">
-                      {r.min >= 0 ? "+" : ""}
-                      {r.min.toFixed(3)}%
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-amber-300">
-                      {r.max >= 0 ? "+" : ""}
-                      {r.max.toFixed(3)}%
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                       {r.avg >= 0 ? "+" : ""}
@@ -262,8 +310,18 @@ function VolatilitySection({ rows }: { rows: KimchiVolatility[] }) {
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                       {r.samples}
                     </td>
+                    <td className="px-4 py-2.5 text-center">
+                      {opp ? (
+                        <Button size="sm" className="h-7 px-3 text-xs" onClick={() => onEnter(opp)}>
+                          진입
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">시세 없음</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

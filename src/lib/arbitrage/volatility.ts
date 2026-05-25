@@ -19,6 +19,12 @@ export type KimchiVolatility = {
   simNegativeCycles: number;  // - 방향 사이클 수 (Upbit 매수)
   simFinalCoinUpbitPct: number; // 백테스트 종료 시 Upbit 코인 비중 (50% 균형, 0/100% 고갈)
   simFinalUsdtUpbitPct: number; // 백테스트 종료 시 Upbit USDT 비중
+  // 코인 가격 노출 위험 (7일)
+  priceCurrentUsd: number;     // 마지막 평균가
+  priceMinUsd: number;
+  priceMaxUsd: number;
+  priceMaxDrawdownPct: number; // 7일 내 최대 낙폭 (%, 양수)
+  priceMaxRunupPct: number;    // 7일 내 최대 상승 (%, 양수)
 };
 
 const DEFAULT_THRESHOLD = 0.5;
@@ -191,6 +197,27 @@ export async function fetchKimchiVolatility(
     const bt = backtestProfit(series, threshold, DEFAULT_NOTIONAL);
     const simProfitPerDay = spanHours > 0 ? (bt.profit / spanHours) * 24 : 0;
 
+    // 코인 가격 변동 추적 (양쪽 거래소 평균가)
+    const prices = series
+      .filter((s) => s.upbitUsd > 0 && s.binanceUsd > 0)
+      .map((s) => (s.upbitUsd + s.binanceUsd) / 2);
+    const priceCurrentUsd = prices.length > 0 ? prices[prices.length - 1] : 0;
+    const priceMinUsd = prices.length > 0 ? Math.min(...prices) : 0;
+    const priceMaxUsd = prices.length > 0 ? Math.max(...prices) : 0;
+    // 최대 낙폭/상승 — peak-to-trough / trough-to-peak running 계산
+    let maxDD = 0;
+    let maxRU = 0;
+    let runningPeak = priceCurrentUsd;
+    let runningTrough = priceCurrentUsd;
+    for (const p of prices) {
+      if (p > runningPeak) runningPeak = p;
+      if (p < runningTrough) runningTrough = p;
+      const dd = runningPeak > 0 ? ((runningPeak - p) / runningPeak) * 100 : 0;
+      const ru = runningTrough > 0 ? ((p - runningTrough) / runningTrough) * 100 : 0;
+      if (dd > maxDD) maxDD = dd;
+      if (ru > maxRU) maxRU = ru;
+    }
+
     result.push({
       symbol,
       samples: n,
@@ -209,6 +236,11 @@ export async function fetchKimchiVolatility(
       simNegativeCycles: bt.negativeCycles,
       simFinalCoinUpbitPct: bt.finalCoinUpbitPct,
       simFinalUsdtUpbitPct: bt.finalUsdtUpbitPct,
+      priceCurrentUsd,
+      priceMinUsd,
+      priceMaxUsd,
+      priceMaxDrawdownPct: maxDD,
+      priceMaxRunupPct: maxRU,
     });
   }
 

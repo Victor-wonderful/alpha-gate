@@ -172,6 +172,7 @@ export function ArbitrageUI({
         <EntryModal
           target={entryTarget}
           wallet={wallet}
+          volatility={volatility.find((v) => v.symbol === entryTarget.symbol) ?? null}
           onClose={() => setEntryTarget(null)}
         />
       ) : null}
@@ -402,6 +403,116 @@ function VolatilitySection({
         </div>
       )}
     </section>
+  );
+}
+
+function PriceExposureWarning({
+  symbol,
+  notional,
+  volatility,
+  estPerCycle,
+}: {
+  symbol: string;
+  notional: number;
+  volatility: KimchiVolatility | null;
+  estPerCycle: number;
+}) {
+  // 데이터 없으면 일반 경고만
+  if (!volatility || volatility.priceCurrentUsd <= 0) {
+    return (
+      <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-[11px] space-y-1">
+        <div className="flex items-center gap-1.5 font-semibold text-amber-400">
+          ⚠️ 가격 노출 위험
+        </div>
+        <p className="text-muted-foreground">
+          이 포지션은 양쪽에 {symbol} 보유 → 시장중립 아닙니다. {symbol} 가격이 떨어지면 사이클 수익과 무관하게 손실 발생.
+          7일 가격 변동 데이터가 아직 부족합니다 — 신중히 결정하세요.
+        </p>
+      </div>
+    );
+  }
+
+  const { priceMaxDrawdownPct, priceMaxRunupPct, priceMinUsd, priceMaxUsd } = volatility;
+  // 시나리오 손실 예상 — 양쪽 합쳐 notional 만큼 코인 보유 가정
+  const totalCoinExposureUsd = notional; // (한쪽 notional/2 × 2거래소 = notional)
+  const lossAt5 = totalCoinExposureUsd * 0.05;
+  const lossAt10 = totalCoinExposureUsd * 0.1;
+  const lossAtMax = totalCoinExposureUsd * (priceMaxDrawdownPct / 100);
+
+  // 손실 회복 위해 필요한 사이클 수
+  const cyclesToRecover10 = estPerCycle > 0 ? Math.ceil(lossAt10 / estPerCycle) : Infinity;
+
+  const severity =
+    priceMaxDrawdownPct > 15 ? "critical" : priceMaxDrawdownPct > 7 ? "warning" : "info";
+
+  const tone =
+    severity === "critical"
+      ? "border-red-500/50 bg-red-500/10"
+      : severity === "warning"
+        ? "border-amber-500/40 bg-amber-500/5"
+        : "border-sky-500/30 bg-sky-500/5";
+  const iconColor =
+    severity === "critical"
+      ? "text-red-400"
+      : severity === "warning"
+        ? "text-amber-400"
+        : "text-sky-300";
+
+  return (
+    <div className={cn("rounded-md border p-3 text-[11px] space-y-2", tone)}>
+      <div className={cn("flex items-center gap-1.5 font-semibold", iconColor)}>
+        ⚠️ {symbol} 가격 노출 위험
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-0.5">
+          <div className="text-[10px] uppercase text-muted-foreground">7일 가격 범위</div>
+          <div className="font-mono tabular-nums">
+            ${priceMinUsd.toFixed(priceMinUsd < 1 ? 6 : 2)} ~ ${priceMaxUsd.toFixed(priceMaxUsd < 1 ? 6 : 2)}
+          </div>
+        </div>
+        <div className="space-y-0.5">
+          <div className="text-[10px] uppercase text-muted-foreground">최대 낙폭 / 상승</div>
+          <div className="font-mono tabular-nums">
+            <span className="text-red-400">-{priceMaxDrawdownPct.toFixed(1)}%</span>
+            {" / "}
+            <span className="text-emerald-400">+{priceMaxRunupPct.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-border/40 pt-2 space-y-1 text-muted-foreground">
+        <div>
+          노출 ${notional} 진입 시 {symbol} 보유 가치 ≈ <span className="font-mono">${totalCoinExposureUsd.toFixed(0)}</span>
+        </div>
+        <div className="flex justify-between font-mono">
+          <span>{symbol} -5% 시 손실</span>
+          <span className="text-red-400">-${lossAt5.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between font-mono">
+          <span>{symbol} -10% 시 손실</span>
+          <span className="text-red-400">-${lossAt10.toFixed(2)}</span>
+        </div>
+        {priceMaxDrawdownPct > 5 ? (
+          <div className="flex justify-between font-mono">
+            <span>지난 7일 최대 낙폭 시</span>
+            <span className="text-red-400 font-semibold">-${lossAtMax.toFixed(2)}</span>
+          </div>
+        ) : null}
+        {Number.isFinite(cyclesToRecover10) && estPerCycle > 0 ? (
+          <div className="text-[10px] pt-1">
+            -10% 손실 회복하려면 사이클 <span className="font-mono font-semibold text-foreground">{cyclesToRecover10}회</span> 필요
+            (사이클당 ${estPerCycle.toFixed(2)})
+          </div>
+        ) : null}
+      </div>
+
+      {severity === "critical" ? (
+        <div className="border-t border-red-500/30 pt-2 text-red-400 font-semibold">
+          🚨 최근 7일간 -{priceMaxDrawdownPct.toFixed(1)}% 큰 낙폭 발생. 사이클 수익보다 가격 변동 손실 위험이 훨씬 큽니다.
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1108,10 +1219,12 @@ function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
 function EntryModal({
   target,
   wallet,
+  volatility,
   onClose,
 }: {
   target: KimchiOpportunity;
   wallet: WalletInfo | null;
+  volatility: KimchiVolatility | null;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -1197,6 +1310,14 @@ function EntryModal({
               사이클마다 수익 누적. 양방향 모두 수익 가능. 만료 30일.
             </div>
           </div>
+
+          {/* ⚠️ 가격 노출 위험 경고 */}
+          <PriceExposureWarning
+            symbol={target.symbol}
+            notional={notional}
+            volatility={volatility}
+            estPerCycle={estPerCycle}
+          />
 
           <div>
             <Label htmlFor="notional" className="text-xs">

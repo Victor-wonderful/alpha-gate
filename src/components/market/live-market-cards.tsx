@@ -613,7 +613,7 @@ export async function KimchiCard() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.slice(0, 5).map((r) => (
               <tr key={r.symbol} className="border-t border-border/40">
                 <td className="py-1.5 font-mono font-bold">{r.symbol}</td>
                 <td className="py-1.5 text-right font-mono tabular-nums">
@@ -637,9 +637,14 @@ export async function KimchiCard() {
             ))}
           </tbody>
         </table>
-        <p className="mt-1.5 text-[9px] text-muted-foreground">
-          김프 = (Upbit ₩ − Binance $ × ₩{btc.usdKrwRate.toFixed(0)}) ÷ Binance ₩ × 100
-        </p>
+        {rows.length > 5 ? (
+          <a
+            href="/app/arbitrage"
+            className="mt-1.5 block text-[10px] text-primary hover:underline"
+          >
+            전체 {rows.length}개 → 차익거래 페이지
+          </a>
+        ) : null}
       </div>
 
       <Insight title={ins.title}>{ins.body}</Insight>

@@ -194,10 +194,13 @@ function VolatilitySection({
   const [expanded, setExpanded] = useState(false);
   const volBySymbol = new Map(rows.map((r) => [r.symbol, r]));
 
-  // kimchi 스냅샷 베이스. 사이클 통계가 있으면 어그멘트. 정렬: 사이클 많은 순 → 현재 김프 절댓값 큰 순.
+  // kimchi 스냅샷 베이스. 사이클 통계가 있으면 어그멘트. 정렬: 백테스트 예상 수익 큰 순 → 사이클 → 현재 김프 절댓값.
   const merged = kimchi
     .map((k) => ({ symbol: k.symbol, opp: k, vol: volBySymbol.get(k.symbol) ?? null }))
     .sort((a, b) => {
+      const aProfit = a.vol?.simProfit ?? Number.NEGATIVE_INFINITY;
+      const bProfit = b.vol?.simProfit ?? Number.NEGATIVE_INFINITY;
+      if (aProfit !== bProfit) return bProfit - aProfit;
       const aCycles = a.vol?.cyclesPerDay ?? -1;
       const bCycles = b.vol?.cyclesPerDay ?? -1;
       if (aCycles !== bCycles) return bCycles - aCycles;
@@ -217,11 +220,11 @@ function VolatilitySection({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold">
-            리밸런싱 사이클 랭킹
+            기대 수익 랭킹 (백테스트)
             {merged.length > 0 ? <span className="ml-2 text-muted-foreground">({merged.length}개)</span> : null}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            현재 김프 + 임계값 ±{threshold}% 가정 시 일평균 사이클 수 (최근 7일). 많을수록 수익 기회 많음.
+            최근 7일 김프 시계열에 실제 cron 로직을 그대로 돌린 결과 — $1000 노출 + 임계값 ±{threshold}% 가정. 인벤토리 고갈/코인 가격 변동까지 반영됨.
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -264,34 +267,44 @@ function VolatilitySection({
             </p>
           )}
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[1080px] text-sm">
               <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 text-left">순위</th>
-                  <th className="px-4 py-3 text-left">코인</th>
-                  <th className="px-4 py-3 text-right">현재 김프</th>
-                  <th className="px-4 py-3 text-right">일평균 사이클</th>
-                  <th className="px-4 py-3 text-right">총 사이클</th>
-                  <th className="px-4 py-3 text-right">표준편차</th>
-                  <th className="px-4 py-3 text-right">범위</th>
-                  <th className="px-4 py-3 text-right">평균</th>
-                  <th className="px-4 py-3 text-right">표본</th>
-                  <th className="px-4 py-3 text-center">액션</th>
+                  <th className="px-3 py-3 text-left">순위</th>
+                  <th className="px-3 py-3 text-left">코인</th>
+                  <th className="px-3 py-3 text-right">현재 김프</th>
+                  <th className="px-3 py-3 text-right" title="$1000 노출 가정, 7일 시뮬레이션 누적 PnL (인벤토리 고갈 + 코인가 변동 반영)">
+                    예상 수익 ($)
+                  </th>
+                  <th className="px-3 py-3 text-right">일환산</th>
+                  <th className="px-3 py-3 text-right">실효 사이클</th>
+                  <th className="px-3 py-3 text-right">단순 사이클</th>
+                  <th className="px-3 py-3 text-right">표준편차</th>
+                  <th className="px-3 py-3 text-right">평균</th>
+                  <th className="px-3 py-3 text-right">표본</th>
+                  <th className="px-3 py-3 text-center">액션</th>
                 </tr>
               </thead>
               <tbody>
                 {visible.map(({ symbol, opp, vol }, i) => {
                   const positive = opp.premiumPct > 0;
+                  const profit = vol?.simProfit;
+                  const profitClass =
+                    profit == null
+                      ? "text-muted-foreground"
+                      : profit >= 0
+                        ? "text-grade-a"
+                        : "text-grade-d";
                   return (
                   <tr
                     key={symbol}
                     className="border-t border-border/60 hover:bg-accent/30 transition-colors"
                   >
-                    <td className="px-4 py-2.5 text-muted-foreground">{i + 1}</td>
-                    <td className="px-4 py-2.5 font-mono font-bold">{symbol}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{i + 1}</td>
+                    <td className="px-3 py-2.5 font-mono font-bold">{symbol}</td>
                     <td
                       className={cn(
-                        "px-4 py-2.5 text-right font-mono tabular-nums font-bold",
+                        "px-3 py-2.5 text-right font-mono tabular-nums font-bold",
                         Math.abs(opp.premiumPct) < 0.1
                           ? "text-sky-400"
                           : positive
@@ -302,25 +315,30 @@ function VolatilitySection({
                       {positive ? "+" : ""}
                       {opp.premiumPct.toFixed(3)}%
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums font-bold text-emerald-400">
-                      {vol ? vol.cyclesPerDay.toFixed(1) : "—"}
+                    <td className={cn("px-3 py-2.5 text-right font-mono tabular-nums font-bold", profitClass)}>
+                      {profit == null ? "—" : `${profit >= 0 ? "+" : ""}$${profit.toFixed(2)}`}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                    <td className={cn("px-3 py-2.5 text-right font-mono tabular-nums text-xs", profitClass)}>
+                      {vol == null
+                        ? "—"
+                        : `${vol.simProfitPerDay >= 0 ? "+" : ""}$${vol.simProfitPerDay.toFixed(2)}`}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-emerald-400">
+                      {vol ? vol.simEffectiveCycles : "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                       {vol ? vol.cyclesTotal : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-amber-400">
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-amber-400">
                       {vol ? `${vol.stdev.toFixed(3)}%` : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                      {vol ? `${vol.range.toFixed(3)}%` : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                       {vol ? `${vol.avg >= 0 ? "+" : ""}${vol.avg.toFixed(3)}%` : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                       {vol ? vol.samples : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-center">
+                    <td className="px-3 py-2.5 text-center">
                       <Button size="sm" className="h-7 px-3 text-xs" onClick={() => onEnter(opp)}>
                         진입
                       </Button>

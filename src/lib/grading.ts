@@ -48,17 +48,6 @@ export function gradeTrade(input: TradeInput): GradeResult {
   if (targetPct > 0.15 || rr > 4)
     reasons.push({ code: "target_unrealistic", label: "목표가가 현실적이지 않음", points: -1 });
 
-  // ─── 트리거 검증 ──────────────────────────────────────
-  const triggerPasses = (Object.values(input.trigger) as boolean[]).filter(Boolean).length;
-  if (triggerPasses === 3)
-    reasons.push({ code: "trigger_confirmed", label: "트리거 3개 모두 확인됨", points: 2 });
-  if (!input.trigger.within_entry_band)
-    reasons.push({ code: "chasing_entry", label: "계획 진입 구간을 벗어남 (추격)", points: -2 });
-  if (!input.trigger.candle_closed)
-    reasons.push({ code: "candle_unconfirmed", label: "미확정 캔들에서 진입", points: -1 });
-  if (!input.trigger.trigger_confirmed)
-    reasons.push({ code: "trigger_missing", label: "트리거 조건 미확인", points: -1 });
-
   // ─── 자금 관리 자동 감지 ──────────────────────────────
   const { todayCumulativeR, openPositions, openExposurePct } = input.money;
   if (todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5) {
@@ -123,10 +112,6 @@ export function gradeTrade(input: TradeInput): GradeResult {
     actions.push("박스권 중간입니다. 눌림 대기 또는 포지션을 절반으로 줄이세요.");
   if (!isBtcPair && !input.market.aligned_with_btc)
     actions.push("현재 시장 국면(BTC.D/USDT.D/총시총)과 다른 방향. 알트 디버전스 셋업이 아니면 추가 확인 필요.");
-  if (!input.trigger.within_entry_band)
-    actions.push("계획 진입 구간을 벗어났습니다. 추격 대신 다음 기회를 기다리세요.");
-  if (!input.trigger.candle_closed)
-    actions.push("캔들이 종가까지 확정된 후 진입하세요.");
   if (input.marketCtx.minutesToFunding !== null && input.marketCtx.minutesToFunding <= 10)
     actions.push("펀딩 정산이 임박합니다. 슬리피지/펀딩비 부담을 감안하세요.");
 

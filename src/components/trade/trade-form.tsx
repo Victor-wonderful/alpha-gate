@@ -18,6 +18,8 @@ import {
   TRIGGER_CHECK_KEYS,
   TRIGGER_CHECK_LABELS,
   ENTRY_BAND_PCT,
+  DAILY_LOSS_LIMIT_R,
+  SAME_DIRECTION_EXPOSURE_PCT,
   type Direction,
   type MarketContext,
   type MoneyContext,
@@ -912,49 +914,103 @@ function TradeFormInner({
         </details>
         ) : null}
 
-        {/* 3. 트리거 검증 — AI 모드에서는 시나리오 클릭으로 암묵 확인되므로 숨김 */}
-        {!aiMode ? (
+        {/* 3. 자금 관리 상태 — 자동 집계 (저널 DB) */}
         <details open className="group">
           <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
             <span className="transition-transform group-open:rotate-90">▶</span>
-            트리거 검증
+            자금 관리 상태 (자동)
           </summary>
           <div className="mt-2">
             <Card>
               <CardHeader>
-                <CardTitle>트리거 검증</CardTitle>
+                <CardTitle>자금 관리 상태</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {triggerHint ? (
-                  <div className="rounded-md border border-border bg-background/30 p-3 text-sm">
-                    <div className="text-[11px] uppercase text-muted-foreground">AI 시나리오 트리거</div>
-                    <div className="mt-1">{triggerHint}</div>
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-dashed border-border bg-background/20 p-3 text-xs text-muted-foreground">
-                    AI 분석 페이지에서 시나리오를 선택하면 트리거 조건이 자동으로 채워집니다.
-                  </div>
-                )}
-                <div className="space-y-1">
-                  {TRIGGER_CHECK_KEYS.map((k) => (
-                    <Checkbox
-                      key={k}
-                      checked={trigger[k]}
-                      onChange={(e) => setTrigger({ ...trigger, [k]: e.target.checked })}
-                      label={TRIGGER_CHECK_LABELS[k]}
-                    />
-                  ))}
+              <CardContent className="space-y-3 text-sm">
+                <div className="grid grid-cols-3 gap-3">
+                  <StatCell
+                    label="오늘 거래"
+                    value={`${money.todayClosedCount}건`}
+                    sub="종료된 건수"
+                  />
+                  <StatCell
+                    label="오늘 누적"
+                    value={`${money.todayCumulativeR >= 0 ? "+" : ""}${money.todayCumulativeR.toFixed(2)}R`}
+                    sub={`한도 ${DAILY_LOSS_LIMIT_R}R`}
+                    tone={
+                      money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5
+                        ? "bad"
+                        : money.todayCumulativeR < 0
+                          ? undefined
+                          : "good"
+                    }
+                  />
+                  <StatCell
+                    label="진행 중 노출"
+                    value={`${money.openExposurePct.toFixed(0)}%`}
+                    sub={`${money.openPositions.length}개 포지션`}
+                    tone={money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? "bad" : undefined}
+                  />
                 </div>
-                {entryNum > 0 ? (
-                  <div className="text-[11px] text-muted-foreground">
-                    계획 진입 구간 (±{ENTRY_BAND_PCT}%): {entryBandLow.toFixed(2)} ~ {entryBandHigh.toFixed(2)}
+                {money.openPositions.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] uppercase text-muted-foreground">진행 중 포지션</div>
+                    <div className="space-y-1">
+                      {money.openPositions.slice(0, 5).map((p) => {
+                        const isDuplicate = p.symbol === symbol;
+                        return (
+                          <div
+                            key={p.id}
+                            className={cn(
+                              "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs",
+                              isDuplicate
+                                ? "border-amber-500/40 bg-amber-500/5"
+                                : "border-border bg-background/30",
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-semibold">{p.symbol}</span>
+                              <span
+                                className={cn(
+                                  "rounded px-1.5 py-0.5 text-[10px] uppercase",
+                                  p.direction === "long"
+                                    ? "bg-emerald-500/10 text-emerald-400"
+                                    : "bg-red-500/10 text-red-400",
+                                )}
+                              >
+                                {p.direction}
+                              </span>
+                              {isDuplicate ? (
+                                <span className="text-[10px] text-amber-400">⚠️ 현재 입력과 중복</span>
+                              ) : null}
+                            </div>
+                            <span className="font-mono tabular-nums text-muted-foreground">
+                              ${p.positionSize.toFixed(0)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {money.openPositions.length > 5 ? (
+                        <div className="text-[10px] text-muted-foreground text-center">
+                          + {money.openPositions.length - 5}개 더
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
+                ) : null}
+                {money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ? (
+                  <WarnBar
+                    text={`오늘 누적 ${money.todayCumulativeR.toFixed(2)}R — 일일 손실 한도(${DAILY_LOSS_LIMIT_R}R) 근접. 추가 진입은 신중히.`}
+                  />
+                ) : null}
+                {money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? (
+                  <WarnBar
+                    text={`진행 중 포지션이 계좌의 ${money.openExposurePct.toFixed(0)}%를 차지. 추가 진입은 과노출.`}
+                  />
                 ) : null}
               </CardContent>
             </Card>
           </div>
         </details>
-        ) : null}
 
         {/* 4. 시장 컨텍스트 — AI 모드에서는 분석 결과에 이미 포함되므로 숨김 */}
         {!aiMode ? (

@@ -27,7 +27,10 @@ export default async function ArbitragePage({
 
   const sp = await searchParams;
   const thresholdParam = Number(sp.threshold);
-  const threshold = [0.2, 0.3, 0.5, 1.0].includes(thresholdParam) ? thresholdParam : 0.5;
+  const threshold =
+    Number.isFinite(thresholdParam) && thresholdParam >= 0.2 && thresholdParam <= 10
+      ? thresholdParam
+      : 0.5;
 
   const [wallet, kimchi, currentPremiums, volatility, openRes, closedRes] = await Promise.all([
     getOrCreateWallet(user.id).catch(() => null),

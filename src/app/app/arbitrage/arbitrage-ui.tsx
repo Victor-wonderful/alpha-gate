@@ -193,6 +193,7 @@ function VolatilitySection({
 }) {
   const PREVIEW_COUNT = 8;
   const [expanded, setExpanded] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const volBySymbol = new Map(rows.map((r) => [r.symbol, r]));
 
   // kimchi 스냅샷 베이스. 사이클 통계가 있으면 어그멘트. 정렬: 백테스트 예상 수익 큰 순 → 사이클 → 현재 김프 절댓값.
@@ -228,25 +229,20 @@ function VolatilitySection({
             최근 7일 김프 시계열에 실제 cron 로직을 그대로 돌린 결과 — $1000 노출 + 임계값 ±{threshold}% 가정. 인벤토리 고갈/코인 가격 변동까지 반영됨.
           </p>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[11px] text-muted-foreground mr-1">임계값</span>
-          {THRESHOLDS.map((t) => {
-            const active = t === threshold;
-            return (
-              <a
-                key={t}
-                href={`?threshold=${t}`}
-                className={cn(
-                  "rounded-md border px-2 py-1 text-xs font-mono tabular-nums transition-colors",
-                  active
-                    ? "border-primary bg-primary/20 text-primary"
-                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
-                )}
-              >
-                ±{t}%
-              </a>
-            );
-          })}
+        <div className="flex flex-wrap items-center gap-2">
+          <ThresholdControl current={threshold} presets={THRESHOLDS} />
+          <button
+            type="button"
+            onClick={() => setShowDetails((v) => !v)}
+            className={cn(
+              "rounded-md border px-2 py-1 text-xs transition-colors",
+              showDetails
+                ? "border-primary bg-primary/20 text-primary"
+                : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
+            )}
+          >
+            {showDetails ? "기본 보기" : "상세 보기"}
+          </button>
         </div>
       </div>
 
@@ -268,7 +264,7 @@ function VolatilitySection({
             </p>
           )}
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1240px] text-sm">
+            <table className={cn("w-full text-sm", showDetails ? "min-w-[1240px]" : "min-w-[760px]")}>
               <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-3 py-3 text-left">순위</th>
@@ -277,22 +273,26 @@ function VolatilitySection({
                   <th className="px-3 py-3 text-right" title="$1000 노출 가정, 7일 시뮬레이션 누적 PnL (인벤토리 고갈 + 코인가 변동 반영)">
                     예상 수익 ($)
                   </th>
-                  <th className="px-3 py-3 text-right">일환산</th>
                   <th className="px-3 py-3 text-right" title="실제 인벤토리가 이동한 사이클 수 (백테스트)">
                     실효 사이클
                   </th>
                   <th className="px-3 py-3 text-center" title="+ : - 방향 사이클 비율. 50/50 균형 = 지속 가능, 한쪽 쏠림 = 빨리 고갈">
                     방향
                   </th>
-                  <th className="px-3 py-3 text-center" title="백테스트 종료 시 코인 분포 (Upbit %). 50% 균형, 0%/100% 고갈">
-                    최종 코인
-                  </th>
-                  <th className="px-3 py-3 text-center" title="백테스트 종료 시 USDT 분포 (Upbit %)">
-                    최종 USDT
-                  </th>
-                  <th className="px-3 py-3 text-right">표준편차</th>
-                  <th className="px-3 py-3 text-right">평균</th>
-                  <th className="px-3 py-3 text-right">표본</th>
+                  {showDetails ? (
+                    <>
+                      <th className="px-3 py-3 text-right">일환산</th>
+                      <th className="px-3 py-3 text-center" title="백테스트 종료 시 코인 분포 (Upbit %). 50% 균형, 0%/100% 고갈">
+                        최종 코인
+                      </th>
+                      <th className="px-3 py-3 text-center" title="백테스트 종료 시 USDT 분포 (Upbit %)">
+                        최종 USDT
+                      </th>
+                      <th className="px-3 py-3 text-right">표준편차</th>
+                      <th className="px-3 py-3 text-right">평균</th>
+                      <th className="px-3 py-3 text-right">표본</th>
+                    </>
+                  ) : null}
                   <th className="px-3 py-3 text-center">액션</th>
                 </tr>
               </thead>
@@ -329,11 +329,6 @@ function VolatilitySection({
                     <td className={cn("px-3 py-2.5 text-right font-mono tabular-nums font-bold", profitClass)}>
                       {profit == null ? "—" : `${profit >= 0 ? "+" : ""}$${profit.toFixed(2)}`}
                     </td>
-                    <td className={cn("px-3 py-2.5 text-right font-mono tabular-nums text-xs", profitClass)}>
-                      {vol == null
-                        ? "—"
-                        : `${vol.simProfitPerDay >= 0 ? "+" : ""}$${vol.simProfitPerDay.toFixed(2)}`}
-                    </td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums text-emerald-400">
                       {vol ? vol.simEffectiveCycles : "—"}
                     </td>
@@ -347,29 +342,38 @@ function VolatilitySection({
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
-                      {vol ? (
-                        <SplitBar leftPct={vol.simFinalCoinUpbitPct} />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {vol ? (
-                        <SplitBar leftPct={vol.simFinalUsdtUpbitPct} />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-amber-400">
-                      {vol ? `${vol.stdev.toFixed(3)}%` : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                      {vol ? `${vol.avg >= 0 ? "+" : ""}${vol.avg.toFixed(3)}%` : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                      {vol ? vol.samples : "—"}
-                    </td>
+                    {showDetails ? (
+                      <>
+                        <td className={cn("px-3 py-2.5 text-right font-mono tabular-nums text-xs", profitClass)}>
+                          {vol == null
+                            ? "—"
+                            : `${vol.simProfitPerDay >= 0 ? "+" : ""}$${vol.simProfitPerDay.toFixed(2)}`}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {vol ? (
+                            <SplitBar leftPct={vol.simFinalCoinUpbitPct} />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {vol ? (
+                            <SplitBar leftPct={vol.simFinalUsdtUpbitPct} />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums text-amber-400">
+                          {vol ? `${vol.stdev.toFixed(3)}%` : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                          {vol ? `${vol.avg >= 0 ? "+" : ""}${vol.avg.toFixed(3)}%` : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                          {vol ? vol.samples : "—"}
+                        </td>
+                      </>
+                    ) : null}
                     <td className="px-3 py-2.5 text-center">
                       <Button size="sm" className="h-7 px-3 text-xs" onClick={() => onEnter(opp)}>
                         진입
@@ -403,6 +407,151 @@ function VolatilitySection({
         </div>
       )}
     </section>
+  );
+}
+
+function BacktestSummary({
+  symbol,
+  volatility,
+  threshold,
+}: {
+  symbol: string;
+  volatility: KimchiVolatility;
+  threshold: number;
+}) {
+  const v = volatility;
+  const profitClass = v.simProfit >= 0 ? "text-grade-a" : "text-grade-d";
+  const totalCycles = v.simPositiveCycles + v.simNegativeCycles;
+  const posPct = totalCycles > 0 ? (v.simPositiveCycles / totalCycles) * 100 : 50;
+  const finalCoinDeviation = Math.abs(v.simFinalCoinUpbitPct - 50);
+  const exhaustedFlag =
+    finalCoinDeviation > 40 || (totalCycles > 5 && (posPct < 10 || posPct > 90));
+
+  return (
+    <div className="rounded-md border border-border/60 bg-background/40 p-3 text-[11px] space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold">📊 {symbol} 백테스트 요약 (최근 7일, ±{threshold}%)</span>
+        <span className="text-muted-foreground">
+          측정 {v.spanHours.toFixed(1)}h · 표본 {v.samples}개
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded border border-border/40 bg-muted/20 p-2 space-y-0.5">
+          <div className="text-[10px] uppercase text-muted-foreground">예상 수익 ($1000)</div>
+          <div className={cn("font-mono tabular-nums text-sm font-bold", profitClass)}>
+            {v.simProfit >= 0 ? "+" : ""}${v.simProfit.toFixed(2)}
+          </div>
+          <div className="text-[10px] font-mono tabular-nums text-muted-foreground">
+            일환산 {v.simProfitPerDay >= 0 ? "+" : ""}${v.simProfitPerDay.toFixed(2)}
+          </div>
+        </div>
+        <div className="rounded border border-border/40 bg-muted/20 p-2 space-y-0.5">
+          <div className="text-[10px] uppercase text-muted-foreground">실효 사이클</div>
+          <div className="font-mono tabular-nums text-sm font-bold text-emerald-400">
+            {v.simEffectiveCycles}회
+          </div>
+          <div className="text-[10px] font-mono tabular-nums text-muted-foreground">
+            <span className="text-amber-400">+{v.simPositiveCycles}</span>
+            {" / "}
+            <span className="text-sky-300">-{v.simNegativeCycles}</span>
+          </div>
+        </div>
+        <div className="rounded border border-border/40 bg-muted/20 p-2 space-y-0.5">
+          <div className="text-[10px] uppercase text-muted-foreground">최종 인벤토리</div>
+          <div className="text-xs">
+            {symbol}:{" "}
+            <span
+              className={cn(
+                "font-mono",
+                finalCoinDeviation > 40 ? "text-red-400 font-semibold" : "text-foreground",
+              )}
+            >
+              U{v.simFinalCoinUpbitPct.toFixed(0)}/B{(100 - v.simFinalCoinUpbitPct).toFixed(0)}
+            </span>
+          </div>
+          <div className="text-xs">
+            USDT:{" "}
+            <span className="font-mono text-muted-foreground">
+              U{v.simFinalUsdtUpbitPct.toFixed(0)}/B{(100 - v.simFinalUsdtUpbitPct).toFixed(0)}
+            </span>
+          </div>
+        </div>
+      </div>
+      {exhaustedFlag ? (
+        <div className="text-[10px] text-amber-400">
+          ⚠️ 한 방향 쏠림 — 시간이 갈수록 인벤토리 고갈로 사이클 발생 감소 예상
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ThresholdControl({
+  current,
+  presets,
+}: {
+  current: number;
+  presets: number[];
+}) {
+  const router = useRouter();
+  const [custom, setCustom] = useState<string>(
+    presets.includes(current) ? "" : current.toString(),
+  );
+
+  function apply(value: number) {
+    if (!Number.isFinite(value) || value < 0.2 || value > 10) return;
+    router.push(`?threshold=${value}`);
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-[11px] text-muted-foreground mr-1">임계값</span>
+      {presets.map((t) => {
+        const active = t === current;
+        return (
+          <button
+            key={t}
+            type="button"
+            onClick={() => {
+              setCustom("");
+              apply(t);
+            }}
+            className={cn(
+              "rounded-md border px-2 py-1 text-xs font-mono tabular-nums transition-colors",
+              active
+                ? "border-primary bg-primary/20 text-primary"
+                : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
+            )}
+          >
+            ±{t}%
+          </button>
+        );
+      })}
+      <div className="flex items-center gap-1 ml-1">
+        <input
+          type="number"
+          step="0.1"
+          min="0.2"
+          max="10"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") apply(Number(custom));
+          }}
+          placeholder="커스텀"
+          className="h-7 w-16 rounded-md border border-border bg-muted/30 px-2 text-xs font-mono tabular-nums focus:border-primary focus:outline-none"
+        />
+        {custom !== "" && Number(custom) !== current ? (
+          <button
+            type="button"
+            onClick={() => apply(Number(custom))}
+            className="rounded-md border border-primary bg-primary/20 px-2 py-1 text-xs text-primary"
+          >
+            적용
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -1310,6 +1459,11 @@ function EntryModal({
               사이클마다 수익 누적. 양방향 모두 수익 가능. 만료 30일.
             </div>
           </div>
+
+          {/* 📊 백테스트 요약 (7일 시뮬레이션) */}
+          {volatility ? (
+            <BacktestSummary symbol={target.symbol} volatility={volatility} threshold={threshold} />
+          ) : null}
 
           {/* ⚠️ 가격 노출 위험 경고 */}
           <PriceExposureWarning

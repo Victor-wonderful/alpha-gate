@@ -49,7 +49,7 @@ const MAIN: SidebarItem[] = [{ href: "/app", label: "홈", icon: "home" }];
 const TRADE: SidebarItem[] = [
   { href: "/app/analyze", label: "AI 분석", icon: "sparkles" },
   { href: "/app/trade", label: "주문 검토", icon: "check" },
-  { href: "/app/virtual-trade", label: "가상 트레이딩", icon: "wallet" },
+  { href: "/app/virtual-trade", label: "트레이딩 터미널", icon: "wallet" },
   { href: "/app/game", label: "가격 예측 게임", icon: "gamepad" },
 ];
 

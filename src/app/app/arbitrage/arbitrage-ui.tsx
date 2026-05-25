@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeftRight, Wallet, X, Clock, Repeat, TrendingUp } from "lucide-react";
+import { ArrowLeftRight, Wallet, X, Clock, Repeat, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn, formatNumber } from "@/lib/utils";
 import type { KimchiOpportunity } from "@/lib/arbitrage/constants";
+import type { KimchiVolatility } from "@/lib/arbitrage/volatility";
 import {
   enterArbitrageAction,
   closeArbitrageAction,
@@ -74,6 +75,7 @@ interface Props {
   wallet: WalletInfo | null;
   kimchi: KimchiOpportunity[];
   currentPremiums: Record<string, number>;
+  volatility: KimchiVolatility[];
   openPositions: OpenPosition[];
   closedPositions: ClosedPosition[];
   cyclesByPosition: Record<string, CycleEvent[]>;
@@ -83,6 +85,7 @@ export function ArbitrageUI({
   wallet,
   kimchi,
   currentPremiums,
+  volatility,
   openPositions,
   closedPositions,
   cyclesByPosition,
@@ -139,6 +142,9 @@ export function ArbitrageUI({
         )}
       </section>
 
+      {/* 김프 변동성 랭킹 (최근 7일) */}
+      <VolatilitySection rows={volatility} />
+
       {/* 진행 중 포지션 */}
       {openPositions.length > 0 ? (
         <section className="space-y-3">
@@ -181,6 +187,108 @@ export function ArbitrageUI({
         />
       ) : null}
     </div>
+  );
+}
+
+function VolatilitySection({ rows }: { rows: KimchiVolatility[] }) {
+  const PREVIEW_COUNT = 8;
+  const [expanded, setExpanded] = useState(false);
+  const canCollapse = rows.length > PREVIEW_COUNT;
+  const visible = expanded || !canCollapse ? rows : rows.slice(0, PREVIEW_COUNT);
+  const minSamples = rows.length > 0 ? Math.min(...rows.map((r) => r.samples)) : 0;
+  const lowConfidence = minSamples < 100;
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-semibold">
+          김프 변동성 랭킹 (최근 7일)
+          {rows.length > 0 ? <span className="ml-2 text-muted-foreground">({rows.length}개)</span> : null}
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          표준편차가 클수록 김프가 자주 튐 → 리밸런싱 사이클 발생 가능성 높음
+        </p>
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyMessage text="아직 데이터가 쌓이지 않았습니다. 5분마다 자동 기록 시작 — 몇 시간 후 다시 확인해 주세요." />
+      ) : (
+        <div className="space-y-2">
+          {lowConfidence ? (
+            <p className="text-[11px] text-amber-400">
+              ⚠️ 표본 수 적음 (최소 {minSamples}개). 일주일 누적 후 신뢰도 높아집니다.
+            </p>
+          ) : null}
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-left">순위</th>
+                  <th className="px-4 py-3 text-left">코인</th>
+                  <th className="px-4 py-3 text-right">표준편차</th>
+                  <th className="px-4 py-3 text-right">범위 (최대 - 최소)</th>
+                  <th className="px-4 py-3 text-right">최소</th>
+                  <th className="px-4 py-3 text-right">최대</th>
+                  <th className="px-4 py-3 text-right">평균</th>
+                  <th className="px-4 py-3 text-right">표본</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((r, i) => (
+                  <tr
+                    key={r.symbol}
+                    className="border-t border-border/60 hover:bg-accent/30 transition-colors"
+                  >
+                    <td className="px-4 py-2.5 text-muted-foreground">{i + 1}</td>
+                    <td className="px-4 py-2.5 font-mono font-bold">{r.symbol}</td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums font-bold text-amber-400">
+                      {r.stdev.toFixed(3)}%
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                      {r.range.toFixed(3)}%
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-sky-300">
+                      {r.min >= 0 ? "+" : ""}
+                      {r.min.toFixed(3)}%
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-amber-300">
+                      {r.max >= 0 ? "+" : ""}
+                      {r.max.toFixed(3)}%
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                      {r.avg >= 0 ? "+" : ""}
+                      {r.avg.toFixed(3)}%
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                      {r.samples}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {canCollapse ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="flex w-full items-center justify-center gap-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5" />
+                  접기
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                  전체 보기 ({rows.length - PREVIEW_COUNT}개 더)
+                </>
+              )}
+            </button>
+          ) : null}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -232,7 +340,13 @@ function KimchiPremiumTable({
   rows: KimchiOpportunity[];
   onEnter: (k: KimchiOpportunity) => void;
 }) {
+  const PREVIEW_COUNT = 5;
+  const [expanded, setExpanded] = useState(false);
+  const canCollapse = rows.length > PREVIEW_COUNT;
+  const visibleRows = expanded || !canCollapse ? rows : rows.slice(0, PREVIEW_COUNT);
+
   return (
+    <div className="space-y-2">
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[820px] text-sm">
         <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -246,7 +360,7 @@ function KimchiPremiumTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {visibleRows.map((r) => {
             const positive = r.premiumPct > 0;
             return (
               <tr
@@ -288,6 +402,26 @@ function KimchiPremiumTable({
           })}
         </tbody>
       </table>
+    </div>
+    {canCollapse ? (
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-center gap-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+      >
+        {expanded ? (
+          <>
+            <ChevronUp className="h-3.5 w-3.5" />
+            접기
+          </>
+        ) : (
+          <>
+            <ChevronDown className="h-3.5 w-3.5" />
+            전체 보기 ({rows.length - PREVIEW_COUNT}개 더)
+          </>
+        )}
+      </button>
+    ) : null}
     </div>
   );
 }

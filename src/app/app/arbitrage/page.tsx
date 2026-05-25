@@ -5,6 +5,7 @@ import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
 import { scanKimchi, fetchCurrentPremiums } from "@/lib/arbitrage/scan";
+import { fetchKimchiVolatility } from "@/lib/arbitrage/volatility";
 import { ArbitrageUI } from "./arbitrage-ui";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +21,11 @@ export default async function ArbitragePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/app/arbitrage");
 
-  const [wallet, kimchi, currentPremiums, openRes, closedRes] = await Promise.all([
+  const [wallet, kimchi, currentPremiums, volatility, openRes, closedRes] = await Promise.all([
     getOrCreateWallet(user.id).catch(() => null),
     scanKimchi(),
     fetchCurrentPremiums(),
+    fetchKimchiVolatility(7).catch(() => []),
     supabase
       .from("arbitrage_positions")
       .select(
@@ -105,6 +107,7 @@ export default async function ArbitragePage() {
         }
         kimchi={kimchi}
         currentPremiums={premiumMap}
+        volatility={volatility}
         openPositions={openRes.data ?? []}
         closedPositions={closedRes.data ?? []}
         cyclesByPosition={cyclesMap}

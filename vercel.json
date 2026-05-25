@@ -22,6 +22,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/record-kimchi",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/distribute-rankings",
       "schedule": "0 15 * * 0"
     }

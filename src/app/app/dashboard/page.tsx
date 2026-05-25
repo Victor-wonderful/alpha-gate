@@ -54,7 +54,7 @@ export default async function DashboardPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [tradesRes, gamesRes, wallet] = await Promise.all([
+  const [tradesRes, gamesRes, arbitrageRes, wallet] = await Promise.all([
     supabase
       .from("trades")
       .select(
@@ -71,8 +71,36 @@ export default async function DashboardPage({
           .eq("status", "settled")
           .order("created_at", { ascending: true })
       : Promise.resolve({ data: [] as Array<{ won: boolean | null; pnl_points: number | null; bet_points: number; created_at: string; direction: "call" | "put" }> }),
+    user
+      ? supabase
+          .from("arbitrage_positions")
+          .select("realized_pnl, cycles_count, closed_at, symbol")
+          .eq("user_id", user.id)
+          .eq("kind", "kimchi")
+          .neq("status", "open")
+          .not("closed_at", "is", null)
+          .order("closed_at", { ascending: true })
+      : Promise.resolve({ data: [] as Array<{ realized_pnl: number | null; cycles_count: number | null; closed_at: string; symbol: string }> }),
     user ? getOrCreateWallet(user.id).catch(() => null) : Promise.resolve(null),
   ]);
+  const arbitrageRows = (arbitrageRes.data ?? []) as Array<{
+    realized_pnl: number | null;
+    cycles_count: number | null;
+    closed_at: string;
+    symbol: string;
+  }>;
+  const arbitragePnl = arbitrageRows.reduce(
+    (s, a) => s + (a.realized_pnl != null ? Number(a.realized_pnl) : 0),
+    0,
+  );
+  const arbitrageCycles = arbitrageRows.reduce(
+    (s, a) => s + Number(a.cycles_count ?? 0),
+    0,
+  );
+  const arbitrageRoi =
+    (wallet?.startingBalance ?? 10000) > 0
+      ? (arbitragePnl / (wallet?.startingBalance ?? 10000)) * 100
+      : 0;
 
   const rows = ((tradesRes.data ?? []) as unknown as ClosedRow[]).filter((r) => r.result_r != null);
   const games = (gamesRes.data ?? []) as Array<{
@@ -111,12 +139,12 @@ export default async function DashboardPage({
   const gamePnl = games.reduce((s, g) => s + (g.pnl_points != null ? Number(g.pnl_points) : 0), 0);
   const gameRoi = startingBalance > 0 ? (gamePnl / startingBalance) * 100 : 0;
   const totalBet = games.reduce((s, g) => s + Number(g.bet_points), 0);
-  // Combined stats (전체)
-  const combinedPnl = totalPnl + gamePnl;
+  // Combined stats (전체 — 거래 + 게임 + 차익거래)
+  const combinedPnl = totalPnl + gamePnl + arbitragePnl;
   const combinedRoi = startingBalance > 0 ? (combinedPnl / startingBalance) * 100 : 0;
   const combinedWins = wins + gameWins;
   const combinedLosses = losses + gameLosses;
-  const combinedN = n + totalGames;
+  const combinedN = n + totalGames + arbitrageRows.length;
   const combinedWinRate = combinedN > 0 ? (combinedWins / combinedN) * 100 : 0;
 
   // ── Equity curve points ──────────────────────────────────
@@ -165,8 +193,15 @@ export default async function DashboardPage({
     rightSlot: <HelpLink href="/app/guide/results" />,
   });
 
-  // Empty state depends on view: 'games' needs games, others need trades
-  const hasData = view === "games" ? totalGames > 0 : view === "all" ? combinedN > 0 : n > 0;
+  // Empty state depends on view
+  const hasData =
+    view === "games"
+      ? totalGames > 0
+      : view === "arbitrage"
+        ? arbitrageRows.length > 0
+        : view === "all"
+          ? combinedN > 0
+          : n > 0;
 
   return (
     <div className="space-y-5">
@@ -176,9 +211,11 @@ export default async function DashboardPage({
         description={
           view === "games"
             ? `종료된 게임 ${totalGames}건 기준.`
-            : view === "all"
-              ? `종료된 거래 ${n}건 + 게임 ${totalGames}건 기준.`
-              : `종료된 라이브 거래 ${n}건 기준. 백테스트 결과는 제외됩니다.`
+            : view === "arbitrage"
+              ? `종료된 차익거래 ${arbitrageRows.length}건 기준.`
+              : view === "all"
+                ? `종료된 거래 ${n}건 + 게임 ${totalGames}건 + 차익 ${arbitrageRows.length}건 기준.`
+                : `종료된 라이브 거래 ${n}건 기준. 백테스트 결과는 제외됩니다.`
         }
         tabs={cluster.tabs}
         rightSlot={cluster.rightSlot}
@@ -187,7 +224,12 @@ export default async function DashboardPage({
       <ViewTabs
         basePath="/app/dashboard"
         current={view}
-        counts={{ all: n + totalGames, trades: n, games: totalGames }}
+        counts={{
+          all: n + totalGames + arbitrageRows.length,
+          trades: n,
+          games: totalGames,
+          arbitrage: arbitrageRows.length,
+        }}
       />
 
       {!hasData ? (
@@ -242,12 +284,60 @@ export default async function DashboardPage({
                   sub="콜(call) / 풋(put) 베팅 수"
                 />
               </>
+            ) : view === "arbitrage" ? (
+              <>
+                <Kpi
+                  label="누적 차익 PnL"
+                  value={`${arbitragePnl >= 0 ? "+" : ""}${arbitragePnl.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}`}
+                  sub="vUSDT — 차익거래 실현 손익 합계"
+                  tone={arbitragePnl >= 0 ? "good" : "bad"}
+                  icon={arbitragePnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                />
+                <Kpi
+                  label="ROI"
+                  value={`${arbitrageRoi >= 0 ? "+" : ""}${arbitrageRoi.toFixed(2)}%`}
+                  sub={`시작 잔액 ${startingBalance.toLocaleString("ko-KR")} vUSDT 기준`}
+                  tone={arbitrageRoi >= 0 ? "good" : "bad"}
+                />
+                <Kpi
+                  label="종료된 차익 포지션"
+                  value={`${arbitrageRows.length}건`}
+                  sub={`누적 사이클 ${arbitrageCycles}회`}
+                />
+                <Kpi
+                  label="평균 사이클 수익"
+                  value={
+                    arbitrageCycles > 0
+                      ? `${arbitragePnl / arbitrageCycles >= 0 ? "+" : ""}${(arbitragePnl / arbitrageCycles).toFixed(2)}`
+                      : "—"
+                  }
+                  sub="vUSDT / 사이클"
+                />
+                <Kpi
+                  label="포지션당 평균 PnL"
+                  value={
+                    arbitrageRows.length > 0
+                      ? `${arbitragePnl / arbitrageRows.length >= 0 ? "+" : ""}${(arbitragePnl / arbitrageRows.length).toFixed(2)}`
+                      : "—"
+                  }
+                  sub="vUSDT / 포지션"
+                />
+                <Kpi
+                  label="포지션당 평균 사이클"
+                  value={
+                    arbitrageRows.length > 0
+                      ? (arbitrageCycles / arbitrageRows.length).toFixed(1)
+                      : "—"
+                  }
+                  sub="사이클 / 포지션"
+                />
+              </>
             ) : view === "all" ? (
               <>
                 <Kpi
                   label="통합 PnL"
                   value={`${combinedPnl >= 0 ? "+" : ""}${combinedPnl.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}`}
-                  sub={`vUSDT · 거래 ${formatSigned(totalPnl, 0)} · 게임 ${formatSigned(gamePnl, 0)}`}
+                  sub={`vUSDT · 거래 ${formatSigned(totalPnl, 0)} · 게임 ${formatSigned(gamePnl, 0)} · 차익 ${formatSigned(arbitragePnl, 2)}`}
                   tone={combinedPnl >= 0 ? "good" : "bad"}
                   icon={combinedPnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                 />
@@ -278,7 +368,7 @@ export default async function DashboardPage({
                 <Kpi
                   label="활동 수"
                   value={`${combinedN}건`}
-                  sub={`거래 ${n} · 게임 ${totalGames}`}
+                  sub={`거래 ${n} · 게임 ${totalGames} · 차익 ${arbitrageRows.length}`}
                 />
               </>
             ) : (

@@ -61,6 +61,21 @@ interface TradeRow {
   exit_actual: number | null;
 }
 
+interface ArbitrageRow {
+  id: string;
+  symbol: string;
+  notional_usd: number;
+  entry_premium_pct: number | null;
+  target_threshold_pct: number | null;
+  cycles_count: number | null;
+  accrued_cycle_pnl: number | null;
+  realized_pnl: number | null;
+  close_reason: string | null;
+  status: string;
+  created_at: string;
+  closed_at: string | null;
+}
+
 export default async function JournalListPage({
   searchParams,
 }: {
@@ -73,7 +88,7 @@ export default async function JournalListPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [tradesRes, gamesRes] = await Promise.all([
+  const [tradesRes, gamesRes, arbitragesRes] = await Promise.all([
     supabase
       .from("trades")
       .select(
@@ -92,7 +107,25 @@ export default async function JournalListPage({
           .order("created_at", { ascending: false })
           .limit(50)
       : Promise.resolve({ data: [] as GameRow[] }),
+    user
+      ? supabase
+          .from("arbitrage_positions")
+          .select(
+            "id, symbol, notional_usd, entry_premium_pct, target_threshold_pct, cycles_count, accrued_cycle_pnl, realized_pnl, close_reason, status, created_at, closed_at",
+          )
+          .eq("user_id", user.id)
+          .eq("kind", "kimchi")
+          .order("created_at", { ascending: false })
+          .limit(100)
+      : Promise.resolve({ data: [] as ArbitrageRow[] }),
   ]);
+  const arbitrages = (arbitragesRes.data ?? []) as ArbitrageRow[];
+  const arbitrageClosed = arbitrages.filter((a) => a.status !== "open");
+  const arbitrageOpen = arbitrages.filter((a) => a.status === "open");
+  const arbitragePnl = arbitrageClosed.reduce(
+    (s, a) => s + (a.realized_pnl != null ? Number(a.realized_pnl) : 0),
+    0,
+  );
   const tradesRaw = tradesRes.data;
   const games = (gamesRes.data ?? []) as GameRow[];
 
@@ -289,11 +322,16 @@ export default async function JournalListPage({
         rightSlot={cluster.rightSlot}
       />
 
-      {/* View sub-tabs: 전체 / 거래 / 게임 */}
+      {/* View sub-tabs: 전체 / 거래 / 게임 / 차익 */}
       <ViewTabs
         basePath="/app/journal"
         current={view}
-        counts={{ all: closed.length + games.length, trades: closed.length, games: games.length }}
+        counts={{
+          all: closed.length + games.length + arbitrageClosed.length,
+          trades: closed.length,
+          games: games.length,
+          arbitrage: arbitrageClosed.length,
+        }}
       />
 
       {/* KPI cards — content depends on view */}
@@ -379,6 +417,50 @@ export default async function JournalListPage({
               }
             />
           </>
+        ) : view === "arbitrage" ? (
+          <>
+            <KpiCard
+              icon={<Activity className="h-4 w-4" />}
+              label="진행 중 차익"
+              value={`${arbitrageOpen.length}건`}
+              sub={arbitrageOpen.length > 0 ? "사이클 자동 누적 중" : "없음"}
+            />
+            <KpiCard
+              icon={<Layers className="h-4 w-4" />}
+              label="종료된 차익"
+              value={`${arbitrageClosed.length}건`}
+              sub={
+                arbitrageClosed.length > 0
+                  ? `누적 사이클 ${arbitrageClosed.reduce((s, a) => s + Number(a.cycles_count ?? 0), 0)}회`
+                  : "없음"
+              }
+            />
+            <KpiCard
+              icon={arbitragePnl >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+              label="누적 차익 PnL"
+              value={
+                arbitrageClosed.length > 0
+                  ? `${arbitragePnl >= 0 ? "+" : ""}${formatNumber(arbitragePnl, { maximumFractionDigits: 2 })}`
+                  : "—"
+              }
+              sub="vUSDT (수수료/슬리피지 차감 후)"
+              tone={arbitragePnl > 0 ? "good" : arbitragePnl < 0 ? "bad" : "neutral"}
+            />
+            <KpiCard
+              icon={<Wallet className="h-4 w-4" />}
+              label="평균 사이클당 수익"
+              value={(() => {
+                const totalCycles = arbitrageClosed.reduce(
+                  (s, a) => s + Number(a.cycles_count ?? 0),
+                  0,
+                );
+                if (totalCycles === 0) return "—";
+                const avg = arbitragePnl / totalCycles;
+                return `${avg >= 0 ? "+" : ""}${avg.toFixed(2)}`;
+              })()}
+              sub="vUSDT / 사이클"
+            />
+          </>
         ) : (
           /* all view — combined */
           <>
@@ -396,28 +478,38 @@ export default async function JournalListPage({
             <KpiCard
               icon={<Layers className="h-4 w-4" />}
               label="진행 중 포지션"
-              value={`${positions.length}건`}
-              sub={positions.length > 0 ? "거래만 (게임은 즉시 정산)" : "없음"}
+              value={`${positions.length + arbitrageOpen.length}건`}
+              sub={
+                positions.length + arbitrageOpen.length > 0
+                  ? `거래 ${positions.length} · 차익 ${arbitrageOpen.length}`
+                  : "없음"
+              }
             />
             <KpiCard
               icon={<TrendingUp className="h-4 w-4" />}
               label="누적 통합 PnL"
-              value={`${totalTradePnl + gamePnl >= 0 ? "+" : ""}${formatNumber(totalTradePnl + gamePnl, { maximumFractionDigits: 0 })}`}
-              sub={`vUSDT · 거래 ${formatNumber(totalTradePnl, { maximumFractionDigits: 0 })} · 게임 ${formatNumber(gamePnl, { maximumFractionDigits: 0 })}`}
-              tone={totalTradePnl + gamePnl > 0 ? "good" : totalTradePnl + gamePnl < 0 ? "bad" : "neutral"}
+              value={`${totalTradePnl + gamePnl + arbitragePnl >= 0 ? "+" : ""}${formatNumber(totalTradePnl + gamePnl + arbitragePnl, { maximumFractionDigits: 0 })}`}
+              sub={`vUSDT · 거래 ${formatNumber(totalTradePnl, { maximumFractionDigits: 0 })} · 게임 ${formatNumber(gamePnl, { maximumFractionDigits: 0 })} · 차익 ${formatNumber(arbitragePnl, { maximumFractionDigits: 0 })}`}
+              tone={
+                totalTradePnl + gamePnl + arbitragePnl > 0
+                  ? "good"
+                  : totalTradePnl + gamePnl + arbitragePnl < 0
+                    ? "bad"
+                    : "neutral"
+              }
             />
             <KpiCard
               icon={<Wallet className="h-4 w-4" />}
               label="활동 횟수"
-              value={`${closed.length + totalGames}건`}
-              sub={`거래 ${closed.length} · 게임 ${totalGames}`}
+              value={`${closed.length + totalGames + arbitrageClosed.length}건`}
+              sub={`거래 ${closed.length} · 게임 ${totalGames} · 차익 ${arbitrageClosed.length}`}
             />
           </>
         )}
       </div>
 
       {/* Pending limit orders — trades only */}
-      {view !== "games" && pendingLimits.length > 0 ? (
+      {(view === "trades" || view === "all") && pendingLimits.length > 0 ? (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
@@ -491,7 +583,7 @@ export default async function JournalListPage({
       ) : null}
 
       {/* Open positions board — trades only */}
-      {view !== "games" && positions.length > 0 ? (
+      {(view === "trades" || view === "all") && positions.length > 0 ? (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-grade-a" />
@@ -506,7 +598,7 @@ export default async function JournalListPage({
       ) : null}
 
       {/* Closed trades table — hidden in 'games' view */}
-      {view !== "games" ? (
+      {(view === "trades" || view === "all") ? (
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           종료된 거래 ({closed.length})
@@ -524,7 +616,7 @@ export default async function JournalListPage({
       ) : null}
 
       {/* Game history table — shown in 'games' or 'all' view */}
-      {view !== "trades" && games.length > 0 ? (
+      {(view === "games" || view === "all") && games.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             종료된 게임 ({games.length})
@@ -617,6 +709,87 @@ export default async function JournalListPage({
               가격 예측 게임
             </Link>
             에서 첫 베팅을 해보세요.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* 차익거래 종료 리스트 — arbitrage view 또는 all view */}
+      {(view === "arbitrage" || view === "all") && arbitrageClosed.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            종료된 차익거래 ({arbitrageClosed.length})
+          </h2>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-left">종료</th>
+                  <th className="px-4 py-3 text-left">코인</th>
+                  <th className="px-4 py-3 text-right">노출</th>
+                  <th className="px-4 py-3 text-right">임계값</th>
+                  <th className="px-4 py-3 text-right">사이클</th>
+                  <th className="px-4 py-3 text-right">PnL (vUSDT)</th>
+                  <th className="px-4 py-3 text-left">사유</th>
+                </tr>
+              </thead>
+              <tbody>
+                {arbitrageClosed.map((a) => {
+                  const closeAt = a.closed_at ? new Date(a.closed_at) : null;
+                  const pnl = a.realized_pnl != null ? Number(a.realized_pnl) : null;
+                  return (
+                    <tr key={a.id} className="border-t border-border/60 hover:bg-accent/30">
+                      <td className="px-4 py-3 text-xs">
+                        {closeAt
+                          ? `${closeAt.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })} ${closeAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}`
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 font-mono font-semibold">{a.symbol}</td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">
+                        ${formatNumber(a.notional_usd, { maximumFractionDigits: 0 })}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">
+                        {a.target_threshold_pct != null ? `±${Number(a.target_threshold_pct).toFixed(1)}%` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">
+                        {a.cycles_count ?? 0}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">
+                        {pnl != null ? (
+                          <span className={pnl >= 0 ? "text-grade-a" : "text-grade-d"}>
+                            {pnl >= 0 ? "+" : ""}
+                            {pnl.toFixed(2)}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {a.close_reason === "manual"
+                          ? "수동"
+                          : a.close_reason === "expired"
+                            ? "만료"
+                            : a.close_reason ?? "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      {view === "arbitrage" && arbitrageClosed.length === 0 && arbitrageOpen.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center text-sm text-muted-foreground">
+            아직 차익거래 이력이 없습니다.{" "}
+            <Link
+              href="/app/arbitrage"
+              className="text-primary underline-offset-2 hover:underline"
+            >
+              차익거래 페이지
+            </Link>
+            에서 첫 진입을 해보세요.
           </CardContent>
         </Card>
       ) : null}

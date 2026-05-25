@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type View = "all" | "trades" | "games";
+export type View = "all" | "trades" | "games" | "arbitrage";
 
 /** Sub-tab bar used inside Journal and Dashboard to switch the data source.
  *  Server-driven via ?view= search param so each tab is a regular link
@@ -13,12 +13,18 @@ export function ViewTabs({
 }: {
   basePath: string;
   current: View;
-  counts?: { all?: number; trades?: number; games?: number };
+  counts?: {
+    all?: number;
+    trades?: number;
+    games?: number;
+    arbitrage?: number;
+  };
 }) {
   const tabs: { key: View; label: string }[] = [
     { key: "all", label: "전체" },
     { key: "trades", label: "거래" },
     { key: "games", label: "게임" },
+    { key: "arbitrage", label: "차익" },
   ];
   return (
     <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card/40 p-0.5 text-sm">
@@ -56,5 +62,7 @@ export function ViewTabs({
 }
 
 export function parseView(raw: string | undefined | null): View {
-  return raw === "trades" || raw === "games" ? raw : "all";
+  return raw === "trades" || raw === "games" || raw === "arbitrage"
+    ? raw
+    : "all";
 }

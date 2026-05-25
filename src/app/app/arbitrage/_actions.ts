@@ -4,19 +4,72 @@ import { revalidatePath } from "next/cache";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { canAffordMargin, lockMargin, settleMargin } from "@/lib/paper-wallet";
 
-export interface EnterArbitrageInput {
-  symbol: string;
-  notionalUsd: number;
-  longExchange: string;
-  longEntryPrice: number;
-  shortExchange: string;
-  shortEntryPrice: number;
-  entryPremiumPct?: number;
-  /** 청산 목표 김프 (%). 기본 1.0. cron 이 현재 김프 >= 이 값일 때 자동 청산. */
-  targetPremiumPct?: number;
+/**
+ * 수동 cron 트리거 — 로컬 dev 테스트 또는 즉시 사이클 확인용.
+ * resolve-arbitrage 라우트를 내부 호출. CRON_SECRET 환경변수 필요.
+ */
+export async function runArbitrageCronAction(): Promise<{
+  ok: boolean;
+  error?: string;
+  checked?: number;
+  cycles?: number;
+  closed?: number;
+}> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
+
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return { ok: false, error: "CRON_SECRET 환경변수 없음" };
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
+
+  try {
+    const res = await fetch(`${baseUrl}/api/cron/resolve-arbitrage`, {
+      headers: { authorization: `Bearer ${secret}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, error: `cron HTTP ${res.status}` };
+    const json = await res.json();
+    revalidatePath("/app/arbitrage");
+    return {
+      ok: true,
+      checked: json.checked ?? 0,
+      cycles: json.cycles ?? 0,
+      closed: json.closed ?? 0,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "cron 호출 실패",
+    };
+  }
 }
 
-/** 김치 프리미엄 차익거래 진입 — 양쪽 다리 노출 합(2×notional)을 마진으로 잠금. */
+/**
+ * 리밸런싱 인벤토리 모델 — 진입 입력.
+ *
+ * 사용자는 한쪽 다리 노출(USD) + 리밸런싱 임계값(%)을 지정.
+ * 시스템은 양쪽 거래소에 BTC 절반씩 + 나머지 USDT 절반씩 보유한 상태로 시작.
+ * 김프가 ±threshold 도달 시 cron이 자동 리밸런싱하여 사이클당 수익 누적.
+ */
+export interface EnterArbitrageInput {
+  symbol: string;
+  /** 한쪽 다리 노출 (USD). 총 마진 = 2 × notional. */
+  notionalUsd: number;
+  /** 진입 시점 Upbit BTC 가격 (USD 환산) — UI에서 시세 prefill */
+  upbitPriceUsd: number;
+  /** 진입 시점 Binance BTC 가격 (USD) */
+  binancePriceUsd: number;
+  /** 진입 시점 김프 % (참고 기록용) */
+  entryPremiumPct?: number;
+  /** 리밸런싱 발동 임계값 |김프| % (기본 1.0). */
+  thresholdPct?: number;
+}
+
 export async function enterArbitrageAction(
   p: EnterArbitrageInput,
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
@@ -31,30 +84,38 @@ export async function enterArbitrageAction(
   if (p.notionalUsd > 100_000)
     return { ok: false, error: "노출 금액은 $100,000 이하" };
   if (
-    !Number.isFinite(p.longEntryPrice) ||
-    !Number.isFinite(p.shortEntryPrice) ||
-    p.longEntryPrice <= 0 ||
-    p.shortEntryPrice <= 0
+    !Number.isFinite(p.upbitPriceUsd) ||
+    !Number.isFinite(p.binancePriceUsd) ||
+    p.upbitPriceUsd <= 0 ||
+    p.binancePriceUsd <= 0
   )
     return { ok: false, error: "가격 정보가 유효하지 않습니다." };
 
-  const targetPct = p.targetPremiumPct ?? 1.0;
-  if (!Number.isFinite(targetPct) || targetPct <= 0 || targetPct > 20)
-    return { ok: false, error: "청산 목표 김프는 0~20% 사이여야 합니다." };
-  if (p.entryPremiumPct != null && targetPct <= p.entryPremiumPct)
+  const threshold = p.thresholdPct ?? 1.0;
+  if (!Number.isFinite(threshold) || threshold < 0.2 || threshold > 10)
     return {
       ok: false,
-      error: "청산 목표 김프는 진입 김프보다 커야 합니다.",
+      error:
+        "리밸런싱 임계값은 0.2~10% 사이여야 합니다 (0.12% 미만은 수수료+슬리피지로 손실).",
     };
 
-  // 양쪽 다리 노출 = 2 × notional. 둘 다 1× 레버리지로 가정.
+  // 양쪽 다리 노출 = 2 × notional. 양쪽 모두 1× (마진 = 노출 전액).
   const totalMargin = p.notionalUsd * 2;
 
   const afford = await canAffordMargin(user.id, totalMargin);
   if (!afford.ok) return { ok: false, error: afford.reason };
 
-  const longQty = p.notionalUsd / p.longEntryPrice;
-  const shortQty = p.notionalUsd / p.shortEntryPrice;
+  // 인벤토리 초기 분배:
+  //  - 양쪽 각각 notional USD 가치의 BTC 보유 (= USDT의 절반은 BTC로 환전 효과)
+  //  - 리밸런싱 여유분으로 양쪽에 USDT 도 일부 보유 (절반은 BTC, 절반은 USDT)
+  const halfUsd = p.notionalUsd / 2;
+  const btcUpbit = halfUsd / p.upbitPriceUsd;
+  const btcBinance = halfUsd / p.binancePriceUsd;
+  const usdtUpbit = halfUsd;
+  const usdtBinance = halfUsd;
+
+  // 평균 진입 BTC 가격 (수익률 계산 베이스)
+  const avgBtcPriceUsd = (p.upbitPriceUsd + p.binancePriceUsd) / 2;
 
   const { data, error } = await supabase
     .from("arbitrage_positions")
@@ -63,14 +124,25 @@ export async function enterArbitrageAction(
       kind: "kimchi",
       symbol: p.symbol,
       notional_usd: p.notionalUsd,
-      long_exchange: p.longExchange,
-      long_entry_price: p.longEntryPrice,
-      long_qty: longQty,
-      short_exchange: p.shortExchange,
-      short_entry_price: p.shortEntryPrice,
-      short_qty: shortQty,
+      // 기존 헤지 모델 필드는 진입 가격만 기록 (호환성)
+      long_exchange: "upbit",
+      long_entry_price: p.upbitPriceUsd,
+      long_qty: btcUpbit,
+      short_exchange: "binance",
+      short_entry_price: p.binancePriceUsd,
+      short_qty: btcBinance,
       entry_premium_pct: p.entryPremiumPct ?? null,
-      target_premium_pct: targetPct,
+      // 인벤토리 모델 신규 필드
+      inventory_btc_upbit: btcUpbit,
+      inventory_btc_binance: btcBinance,
+      inventory_usdt_upbit: usdtUpbit,
+      inventory_usdt_binance: usdtBinance,
+      target_threshold_pct: threshold,
+      cycles_count: 0,
+      accrued_cycle_pnl: 0,
+      btc_price_at_entry_usd: avgBtcPriceUsd,
+      // 인벤토리 모델은 cron이 사이클로 청산하므로 target_premium_pct는 미사용 (null)
+      target_premium_pct: null,
     })
     .select("id")
     .single();
@@ -81,18 +153,20 @@ export async function enterArbitrageAction(
     userId: user.id,
     margin: totalMargin,
     tradeId: data.id,
-    note: `차익거래 (김치 ${p.symbol})`,
+    note: `김프 리밸런싱 (${p.symbol}, ±${threshold.toFixed(1)}%)`,
   });
 
   revalidatePath("/app/arbitrage");
   return { ok: true, id: data.id };
 }
 
-/** 차익거래 청산 — 양쪽 다리 현재가로 동시 청산 + 마진 settle. */
+/**
+ * 리밸런싱 인벤토리 청산 — 양쪽 BTC 를 청산 시점 가격으로 USDT 환산 + 누적 사이클 수익 + BTC 가격 노출 손익 합산.
+ */
 export async function closeArbitrageAction(
   id: string,
-  longExitPrice: number,
-  shortExitPrice: number,
+  upbitPriceUsdNow: number,
+  binancePriceUsdNow: number,
 ): Promise<{ ok: boolean; error?: string; pnl?: number }> {
   const supabase = await getSupabaseServer();
   const {
@@ -110,27 +184,40 @@ export async function closeArbitrageAction(
   if (error || !pos) return { ok: false, error: "포지션을 찾을 수 없습니다." };
   if (pos.status !== "open")
     return { ok: false, error: "이미 종료된 포지션입니다." };
-  if (!Number.isFinite(longExitPrice) || !Number.isFinite(shortExitPrice))
+  if (!Number.isFinite(upbitPriceUsdNow) || !Number.isFinite(binancePriceUsdNow))
     return { ok: false, error: "청산 가격이 유효하지 않습니다." };
 
-  const longQty = Number(pos.long_qty);
-  const shortQty = Number(pos.short_qty);
-  const longEntry = Number(pos.long_entry_price);
-  const shortEntry = Number(pos.short_entry_price);
+  const btcUpbit = Number(pos.inventory_btc_upbit ?? 0);
+  const btcBinance = Number(pos.inventory_btc_binance ?? 0);
+  const usdtUpbit = Number(pos.inventory_usdt_upbit ?? 0);
+  const usdtBinance = Number(pos.inventory_usdt_binance ?? 0);
+  const accrued = Number(pos.accrued_cycle_pnl ?? 0);
+  const notional = Number(pos.notional_usd);
 
-  // PnL — 양쪽 다리 합. 수수료 0.08% 왕복.
-  const longPnl = (longExitPrice - longEntry) * longQty;
-  const shortPnl = (shortEntry - shortExitPrice) * shortQty;
-  const fees = (longEntry * longQty + shortEntry * shortQty) * 0.0008;
-  const realizedPnl = longPnl + shortPnl - fees;
+  // 청산 시 보유 BTC를 USDT로 환산 (양쪽 거래소 가격 적용)
+  const upbitBtcValueUsd = btcUpbit * upbitPriceUsdNow;
+  const binanceBtcValueUsd = btcBinance * binancePriceUsdNow;
+
+  const finalTotalUsd =
+    upbitBtcValueUsd + usdtUpbit + binanceBtcValueUsd + usdtBinance;
+
+  // 시작 자본 = 2 × notional
+  // realizedPnl = (현재 가치 - 시작 자본) — 누적 사이클 수익은 이미 finalTotalUsd 에 반영됨
+  // 단순화: realizedPnl = finalTotalUsd - 2*notional (사이클 수익 + BTC 가격 변동 포함)
+  const grossPnl = finalTotalUsd - 2 * notional;
+
+  // 수수료: 진입 시 2회 매수 + 청산 시 2회 매도 = 4회 fills × notional × 0.04% = 0.16% × notional
+  // 사이클별 수수료는 별도로 누적 (사이클 처리 시 차감했다고 가정)
+  const fees = 2 * notional * 0.0008;
+  const realizedPnl = grossPnl - fees;
 
   const { error: upErr } = await supabase
     .from("arbitrage_positions")
     .update({
       status: "closed",
       closed_at: new Date().toISOString(),
-      long_exit_price: longExitPrice,
-      short_exit_price: shortExitPrice,
+      long_exit_price: upbitPriceUsdNow,
+      short_exit_price: binancePriceUsdNow,
       realized_pnl: realizedPnl,
       close_reason: "manual",
     })
@@ -138,10 +225,9 @@ export async function closeArbitrageAction(
 
   if (upErr) return { ok: false, error: upErr.message };
 
-  const totalMargin = Number(pos.notional_usd) * 2;
   await settleMargin({
     userId: user.id,
-    margin: totalMargin,
+    margin: 2 * notional,
     realizedPnl,
     tradeId: id,
   });

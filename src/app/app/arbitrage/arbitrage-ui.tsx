@@ -267,7 +267,7 @@ function VolatilitySection({
             </p>
           )}
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1080px] text-sm">
+            <table className="w-full min-w-[1240px] text-sm">
               <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-3 py-3 text-left">순위</th>
@@ -277,8 +277,18 @@ function VolatilitySection({
                     예상 수익 ($)
                   </th>
                   <th className="px-3 py-3 text-right">일환산</th>
-                  <th className="px-3 py-3 text-right">실효 사이클</th>
-                  <th className="px-3 py-3 text-right">단순 사이클</th>
+                  <th className="px-3 py-3 text-right" title="실제 인벤토리가 이동한 사이클 수 (백테스트)">
+                    실효 사이클
+                  </th>
+                  <th className="px-3 py-3 text-center" title="+ : - 방향 사이클 비율. 50/50 균형 = 지속 가능, 한쪽 쏠림 = 빨리 고갈">
+                    방향
+                  </th>
+                  <th className="px-3 py-3 text-center" title="백테스트 종료 시 코인 분포 (Upbit %). 50% 균형, 0%/100% 고갈">
+                    최종 코인
+                  </th>
+                  <th className="px-3 py-3 text-center" title="백테스트 종료 시 USDT 분포 (Upbit %)">
+                    최종 USDT
+                  </th>
                   <th className="px-3 py-3 text-right">표준편차</th>
                   <th className="px-3 py-3 text-right">평균</th>
                   <th className="px-3 py-3 text-right">표본</th>
@@ -326,8 +336,29 @@ function VolatilitySection({
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums text-emerald-400">
                       {vol ? vol.simEffectiveCycles : "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                      {vol ? vol.cyclesTotal : "—"}
+                    <td className="px-3 py-2.5">
+                      {vol ? (
+                        <DirectionBar
+                          positive={vol.simPositiveCycles}
+                          negative={vol.simNegativeCycles}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {vol ? (
+                        <SplitBar leftPct={vol.simFinalCoinUpbitPct} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {vol ? (
+                        <SplitBar leftPct={vol.simFinalUsdtUpbitPct} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums text-amber-400">
                       {vol ? `${vol.stdev.toFixed(3)}%` : "—"}
@@ -371,6 +402,52 @@ function VolatilitySection({
         </div>
       )}
     </section>
+  );
+}
+
+function DirectionBar({ positive, negative }: { positive: number; negative: number }) {
+  const total = positive + negative;
+  if (total === 0) return <span className="block text-center text-xs text-muted-foreground">—</span>;
+  const posPct = (positive / total) * 100;
+  return (
+    <div className="min-w-[80px] space-y-0.5">
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-muted/40">
+        <div className="bg-amber-400" style={{ width: `${posPct}%` }} />
+        <div className="bg-sky-400" style={{ width: `${100 - posPct}%` }} />
+      </div>
+      <div className="flex justify-between text-[10px] font-mono tabular-nums text-muted-foreground">
+        <span className="text-amber-400">+{positive}</span>
+        <span className="text-sky-300">-{negative}</span>
+      </div>
+    </div>
+  );
+}
+
+function SplitBar({ leftPct }: { leftPct: number }) {
+  // 50%에서 멀어질수록 한쪽 고갈 → 색깔 강도 변화
+  const distance = Math.abs(leftPct - 50);
+  const exhausted = distance > 40;
+  return (
+    <div className="min-w-[80px] space-y-0.5">
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-muted/40">
+        <div
+          className={cn(exhausted ? "bg-red-400" : "bg-amber-400")}
+          style={{ width: `${leftPct}%` }}
+        />
+        <div
+          className={cn(exhausted ? "bg-red-400/30" : "bg-sky-400")}
+          style={{ width: `${100 - leftPct}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-[10px] font-mono tabular-nums">
+        <span className={cn(exhausted ? "text-red-400" : "text-amber-400")}>
+          U {leftPct.toFixed(0)}%
+        </span>
+        <span className={cn(exhausted ? "text-red-400" : "text-sky-300")}>
+          B {(100 - leftPct).toFixed(0)}%
+        </span>
+      </div>
+    </div>
   );
 }
 

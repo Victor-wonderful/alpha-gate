@@ -15,6 +15,10 @@ export type KimchiVolatility = {
   simProfit: number;    // 백테스트 누적 수익 ($1000 노출 기준)
   simProfitPerDay: number; // 일평균 환산
   simEffectiveCycles: number; // 백테스트 중 실제 인벤토리 이동 사이클 수
+  simPositiveCycles: number;  // + 방향 사이클 수 (Upbit 매도)
+  simNegativeCycles: number;  // - 방향 사이클 수 (Upbit 매수)
+  simFinalCoinUpbitPct: number; // 백테스트 종료 시 Upbit 코인 비중 (50% 균형, 0/100% 고갈)
+  simFinalUsdtUpbitPct: number; // 백테스트 종료 시 Upbit USDT 비중
 };
 
 const DEFAULT_THRESHOLD = 0.5;
@@ -47,20 +51,33 @@ function backtestProfit(
   series: Array<{ premium: number; upbitUsd: number; binanceUsd: number }>,
   threshold: number,
   notional: number,
-): { profit: number; effectiveCycles: number } {
-  if (series.length < 2) return { profit: 0, effectiveCycles: 0 };
+): {
+  profit: number;
+  effectiveCycles: number;
+  positiveCycles: number;
+  negativeCycles: number;
+  finalCoinUpbitPct: number;
+  finalUsdtUpbitPct: number;
+} {
+  const empty = {
+    profit: 0,
+    effectiveCycles: 0,
+    positiveCycles: 0,
+    negativeCycles: 0,
+    finalCoinUpbitPct: 50,
+    finalUsdtUpbitPct: 50,
+  };
+  if (series.length < 2) return empty;
 
-  // 첫 스냅샷 가격으로 초기 인벤토리 셋업
   const first = series[0];
-  if (first.upbitUsd <= 0 || first.binanceUsd <= 0)
-    return { profit: 0, effectiveCycles: 0 };
+  if (first.upbitUsd <= 0 || first.binanceUsd <= 0) return empty;
   let coinUpbit = notional / 2 / first.upbitUsd;
   let coinBinance = notional / 2 / first.binanceUsd;
   let usdtUpbit = notional / 2;
   let usdtBinance = notional / 2;
 
-  let cycleProfit = 0;
-  let effectiveCycles = 0;
+  let positiveCycles = 0;
+  let negativeCycles = 0;
 
   for (const tick of series) {
     const { premium, upbitUsd, binanceUsd } = tick;
@@ -76,11 +93,7 @@ function backtestProfit(
       usdtUpbit += coinMoved * upbitUsd;
       coinBinance += coinMoved;
       usdtBinance -= coinMoved * binanceUsd;
-
-      const gross = coinMoved * (upbitUsd - binanceUsd);
-      const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
-      cycleProfit += gross - tradeNotional * (FEE_RATE + SLIPPAGE_RATE);
-      effectiveCycles++;
+      positiveCycles++;
     } else if (premium <= -threshold) {
       const maxToUpbit = usdtUpbit / upbitUsd;
       const maxFromBinance = coinBinance;
@@ -91,26 +104,31 @@ function backtestProfit(
       usdtUpbit -= coinMoved * upbitUsd;
       coinBinance -= coinMoved;
       usdtBinance += coinMoved * binanceUsd;
-
-      const gross = coinMoved * (binanceUsd - upbitUsd);
-      const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
-      cycleProfit += gross - tradeNotional * (FEE_RATE + SLIPPAGE_RATE);
-      effectiveCycles++;
+      negativeCycles++;
     }
   }
 
-  // 마지막 시점 인벤토리 시가 평가 → 코인 가격 변동 손익 포함
   const last = series[series.length - 1];
   const finalValue =
     coinUpbit * last.upbitUsd +
     coinBinance * last.binanceUsd +
     usdtUpbit +
     usdtBinance;
-  const priceExposurePnl = finalValue - 2 * notional;
+  const profit = finalValue - 2 * notional;
 
-  // 총 수익 = 사이클 누적 + 코인 가격 변동 (이미 finalValue에 사이클 결과 포함되어 있음)
-  // priceExposurePnl 이 cycleProfit + (coin price change) 를 모두 담고 있음
-  return { profit: priceExposurePnl, effectiveCycles };
+  const totalCoin = coinUpbit + coinBinance;
+  const totalUsdt = usdtUpbit + usdtBinance;
+  const finalCoinUpbitPct = totalCoin > 0 ? (coinUpbit / totalCoin) * 100 : 50;
+  const finalUsdtUpbitPct = totalUsdt > 0 ? (usdtUpbit / totalUsdt) * 100 : 50;
+
+  return {
+    profit,
+    effectiveCycles: positiveCycles + negativeCycles,
+    positiveCycles,
+    negativeCycles,
+    finalCoinUpbitPct,
+    finalUsdtUpbitPct,
+  };
 }
 
 /**
@@ -170,12 +188,8 @@ export async function fetchKimchiVolatility(
     const cyclesTotal = simulateCycles(values, threshold);
     const cyclesPerDay = spanHours > 0 ? (cyclesTotal / spanHours) * 24 : 0;
 
-    const { profit: simProfit, effectiveCycles: simEffectiveCycles } = backtestProfit(
-      series,
-      threshold,
-      DEFAULT_NOTIONAL,
-    );
-    const simProfitPerDay = spanHours > 0 ? (simProfit / spanHours) * 24 : 0;
+    const bt = backtestProfit(series, threshold, DEFAULT_NOTIONAL);
+    const simProfitPerDay = spanHours > 0 ? (bt.profit / spanHours) * 24 : 0;
 
     result.push({
       symbol,
@@ -188,9 +202,13 @@ export async function fetchKimchiVolatility(
       cyclesPerDay,
       cyclesTotal,
       spanHours,
-      simProfit,
+      simProfit: bt.profit,
       simProfitPerDay,
-      simEffectiveCycles,
+      simEffectiveCycles: bt.effectiveCycles,
+      simPositiveCycles: bt.positiveCycles,
+      simNegativeCycles: bt.negativeCycles,
+      simFinalCoinUpbitPct: bt.finalCoinUpbitPct,
+      simFinalUsdtUpbitPct: bt.finalUsdtUpbitPct,
     });
   }
 

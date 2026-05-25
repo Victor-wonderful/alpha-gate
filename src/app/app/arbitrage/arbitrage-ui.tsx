@@ -577,6 +577,19 @@ function ActivePositionCard({
           />
         </div>
 
+        {/* 거래소간 잔액 비교 + 다음 사이클 여력 */}
+        {currentPrices ? (
+          <BalanceCapacityBar
+            symbol={pos.symbol}
+            coinUpbit={coinUpbit}
+            coinBinance={coinBinance}
+            usdtUpbit={usdtUpbit}
+            usdtBinance={usdtBinance}
+            upbitUsd={currentPrices.upbitUsd}
+            binanceUsd={currentPrices.binanceUsd}
+          />
+        ) : null}
+
         {/* 미실현 손익 합계 */}
         <div className="space-y-1 border-t border-border/60 pt-3 text-sm">
           <div className="flex items-center justify-between">
@@ -755,6 +768,7 @@ function InventoryBox({
 }) {
   const coinUsd = currentCoinUsd ? coin * currentCoinUsd : null;
   const total = coinUsd != null ? coinUsd + usdt : null;
+  const coinPct = total != null && total > 0 && coinUsd != null ? (coinUsd / total) * 100 : null;
   return (
     <div
       className={cn(
@@ -787,11 +801,133 @@ function InventoryBox({
           <span>${usdt.toFixed(2)}</span>
         </div>
         {total != null ? (
-          <div className="flex justify-between border-t border-border/40 pt-1 font-semibold">
-            <span className="text-muted-foreground">합계</span>
-            <span>${total.toFixed(2)}</span>
-          </div>
+          <>
+            <div className="flex justify-between border-t border-border/40 pt-1 font-semibold">
+              <span className="text-muted-foreground">합계</span>
+              <span>${total.toFixed(2)}</span>
+            </div>
+            {coinPct != null ? (
+              <div className="space-y-0.5 pt-1">
+                <div className="flex h-1.5 overflow-hidden rounded-full bg-muted/40">
+                  <div
+                    className={cn(tone === "upbit" ? "bg-amber-400" : "bg-sky-400")}
+                    style={{ width: `${coinPct}%` }}
+                  />
+                  <div
+                    className="bg-muted-foreground/40"
+                    style={{ width: `${100 - coinPct}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>{symbol} {coinPct.toFixed(0)}%</span>
+                  <span>USDT {(100 - coinPct).toFixed(0)}%</span>
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function BalanceCapacityBar({
+  symbol,
+  coinUpbit,
+  coinBinance,
+  usdtUpbit,
+  usdtBinance,
+  upbitUsd,
+  binanceUsd,
+}: {
+  symbol: string;
+  coinUpbit: number;
+  coinBinance: number;
+  usdtUpbit: number;
+  usdtBinance: number;
+  upbitUsd: number;
+  binanceUsd: number;
+}) {
+  // 거래소간 자산 비교
+  const upbitValue = coinUpbit * upbitUsd + usdtUpbit;
+  const binanceValue = coinBinance * binanceUsd + usdtBinance;
+  const total = upbitValue + binanceValue;
+  const upbitPct = total > 0 ? (upbitValue / total) * 100 : 50;
+
+  // 다음 사이클 여력
+  // positive (+ direction): Upbit 매도 + Binance 매수 → limited by min(coinUpbit, usdtBinance/binanceUsd) × 25%
+  // negative (- direction): Upbit 매수 + Binance 매도 → limited by min(usdtUpbit/upbitUsd, coinBinance) × 25%
+  const FRACTION = 0.25;
+  const positiveCapCoin =
+    binanceUsd > 0 ? Math.min(coinUpbit, usdtBinance / binanceUsd) * FRACTION : 0;
+  const negativeCapCoin =
+    upbitUsd > 0 ? Math.min(usdtUpbit / upbitUsd, coinBinance) * FRACTION : 0;
+  const positiveCapUsd = positiveCapCoin * ((upbitUsd + binanceUsd) / 2);
+  const negativeCapUsd = negativeCapCoin * ((upbitUsd + binanceUsd) / 2);
+
+  // 인벤토리 고갈 경고 (한 방향 여력 < 다른 방향의 10%)
+  const ratioWarning =
+    positiveCapUsd > 0 && negativeCapUsd > 0
+      ? Math.min(positiveCapUsd, negativeCapUsd) / Math.max(positiveCapUsd, negativeCapUsd)
+      : 0;
+  const heavilyImbalanced = ratioWarning < 0.1 && Math.max(positiveCapUsd, negativeCapUsd) > 0;
+
+  return (
+    <div className="rounded-md border border-border/60 bg-background/40 p-3 space-y-3">
+      {/* 거래소간 잔액 분포 */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground">거래소간 자산 분포</span>
+          <span className="font-mono tabular-nums text-muted-foreground">
+            합계 ${total.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex h-2 overflow-hidden rounded-full bg-muted/40">
+          <div className="bg-amber-400" style={{ width: `${upbitPct}%` }} />
+          <div className="bg-sky-400" style={{ width: `${100 - upbitPct}%` }} />
+        </div>
+        <div className="flex justify-between text-[10px] font-mono tabular-nums">
+          <span className="text-amber-400">
+            Upbit ${upbitValue.toFixed(2)} ({upbitPct.toFixed(0)}%)
+          </span>
+          <span className="text-sky-300">
+            Binance ${binanceValue.toFixed(2)} ({(100 - upbitPct).toFixed(0)}%)
+          </span>
+        </div>
+      </div>
+
+      {/* 다음 사이클 여력 */}
+      <div className="space-y-1.5 border-t border-border/40 pt-3">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground">다음 사이클 이동 가능량 (인벤토리 25%)</span>
+          {heavilyImbalanced ? (
+            <span className="text-[10px] text-amber-400">⚠️ 한 방향 인벤토리 거의 고갈</span>
+          ) : null}
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2">
+            <div className="text-[10px] uppercase text-amber-400 font-semibold">
+              ↗ + 방향 (Upbit 매도)
+            </div>
+            <div className="mt-1 font-mono tabular-nums">
+              {positiveCapCoin.toFixed(6)} {symbol}
+            </div>
+            <div className="font-mono tabular-nums text-muted-foreground text-[10px]">
+              ≈ ${positiveCapUsd.toFixed(2)}
+            </div>
+          </div>
+          <div className="rounded border border-sky-500/30 bg-sky-500/5 p-2">
+            <div className="text-[10px] uppercase text-sky-300 font-semibold">
+              ↘ - 방향 (Upbit 매수)
+            </div>
+            <div className="mt-1 font-mono tabular-nums">
+              {negativeCapCoin.toFixed(6)} {symbol}
+            </div>
+            <div className="font-mono tabular-nums text-muted-foreground text-[10px]">
+              ≈ ${negativeCapUsd.toFixed(2)}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

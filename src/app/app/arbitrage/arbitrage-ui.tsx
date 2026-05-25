@@ -126,25 +126,7 @@ export function ArbitrageUI({
         ) : null}
       </header>
 
-      {/* 코인별 김프 현황 */}
-      <section className="space-y-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-base font-semibold">
-            코인별 김프 현황 ({kimchi.length})
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            0에 가까운 순 · 진입 클릭하면 양쪽 인벤토리 셋업
-          </p>
-        </div>
-
-        {kimchi.length === 0 ? (
-          <EmptyMessage text="김프 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요." />
-        ) : (
-          <KimchiPremiumTable rows={kimchi} onEnter={setEntryTarget} />
-        )}
-      </section>
-
-      {/* 김프 변동성 랭킹 (최근 7일) */}
+      {/* 리밸런싱 사이클 랭킹 (현재 김프 + 7일 변동성 + 시뮬레이션) */}
       <VolatilitySection
         rows={volatility}
         threshold={volatilityThreshold}
@@ -208,13 +190,24 @@ function VolatilitySection({
   kimchi: KimchiOpportunity[];
   onEnter: (k: KimchiOpportunity) => void;
 }) {
-  const kimchiBySymbol = new Map(kimchi.map((k) => [k.symbol, k]));
   const PREVIEW_COUNT = 8;
   const [expanded, setExpanded] = useState(false);
-  const canCollapse = rows.length > PREVIEW_COUNT;
-  const visible = expanded || !canCollapse ? rows : rows.slice(0, PREVIEW_COUNT);
+  const volBySymbol = new Map(rows.map((r) => [r.symbol, r]));
+
+  // kimchi 스냅샷 베이스. 사이클 통계가 있으면 어그멘트. 정렬: 사이클 많은 순 → 현재 김프 절댓값 큰 순.
+  const merged = kimchi
+    .map((k) => ({ symbol: k.symbol, opp: k, vol: volBySymbol.get(k.symbol) ?? null }))
+    .sort((a, b) => {
+      const aCycles = a.vol?.cyclesPerDay ?? -1;
+      const bCycles = b.vol?.cyclesPerDay ?? -1;
+      if (aCycles !== bCycles) return bCycles - aCycles;
+      return Math.abs(b.opp.premiumPct) - Math.abs(a.opp.premiumPct);
+    });
+
+  const canCollapse = merged.length > PREVIEW_COUNT;
+  const visible = expanded || !canCollapse ? merged : merged.slice(0, PREVIEW_COUNT);
   const minSamples = rows.length > 0 ? Math.min(...rows.map((r) => r.samples)) : 0;
-  const lowConfidence = minSamples < 100;
+  const lowConfidence = rows.length === 0 || minSamples < 100;
   const maxSpan = rows.length > 0 ? Math.max(...rows.map((r) => r.spanHours)) : 0;
 
   const THRESHOLDS = [0.2, 0.3, 0.5, 1.0];
@@ -224,11 +217,11 @@ function VolatilitySection({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold">
-            리밸런싱 사이클 랭킹 (최근 7일)
-            {rows.length > 0 ? <span className="ml-2 text-muted-foreground">({rows.length}개)</span> : null}
+            리밸런싱 사이클 랭킹
+            {merged.length > 0 ? <span className="ml-2 text-muted-foreground">({merged.length}개)</span> : null}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            임계값 ±{threshold}% 가정 시 일평균 사이클 수 — 많을수록 수익 기회 많음
+            현재 김프 + 임계값 ±{threshold}% 가정 시 일평균 사이클 수 (최근 7일). 많을수록 수익 기회 많음.
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -253,13 +246,17 @@ function VolatilitySection({
         </div>
       </div>
 
-      {rows.length === 0 ? (
-        <EmptyMessage text="아직 데이터가 쌓이지 않았습니다. 5분마다 자동 기록 시작 — 몇 시간 후 다시 확인해 주세요." />
+      {merged.length === 0 ? (
+        <EmptyMessage text="김프 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요." />
       ) : (
         <div className="space-y-2">
           {lowConfidence ? (
             <p className="text-[11px] text-amber-400">
-              ⚠️ 표본 수 적음 (최소 {minSamples}개 · 측정 {maxSpan.toFixed(1)}시간). 24시간 이후 의미 있는 추정, 일주일 후 신뢰도 충분.
+              ⚠️ 사이클 통계 표본 적음
+              {rows.length > 0
+                ? ` (최소 ${minSamples}개 · 측정 ${maxSpan.toFixed(1)}시간)`
+                : " (데이터 누적 중)"}
+              . 24시간 이후 의미 있는 추정, 일주일 후 신뢰도 충분.
             </p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
@@ -267,11 +264,12 @@ function VolatilitySection({
             </p>
           )}
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 text-left">순위</th>
                   <th className="px-4 py-3 text-left">코인</th>
+                  <th className="px-4 py-3 text-right">현재 김프</th>
                   <th className="px-4 py-3 text-right">일평균 사이클</th>
                   <th className="px-4 py-3 text-right">총 사이클</th>
                   <th className="px-4 py-3 text-right">표준편차</th>
@@ -282,42 +280,50 @@ function VolatilitySection({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((r, i) => {
-                  const opp = kimchiBySymbol.get(r.symbol);
+                {visible.map(({ symbol, opp, vol }, i) => {
+                  const positive = opp.premiumPct > 0;
                   return (
                   <tr
-                    key={r.symbol}
+                    key={symbol}
                     className="border-t border-border/60 hover:bg-accent/30 transition-colors"
                   >
                     <td className="px-4 py-2.5 text-muted-foreground">{i + 1}</td>
-                    <td className="px-4 py-2.5 font-mono font-bold">{r.symbol}</td>
+                    <td className="px-4 py-2.5 font-mono font-bold">{symbol}</td>
+                    <td
+                      className={cn(
+                        "px-4 py-2.5 text-right font-mono tabular-nums font-bold",
+                        Math.abs(opp.premiumPct) < 0.1
+                          ? "text-sky-400"
+                          : positive
+                            ? "text-amber-400"
+                            : "text-sky-300",
+                      )}
+                    >
+                      {positive ? "+" : ""}
+                      {opp.premiumPct.toFixed(3)}%
+                    </td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums font-bold text-emerald-400">
-                      {r.cyclesPerDay.toFixed(1)}
+                      {vol ? vol.cyclesPerDay.toFixed(1) : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                      {r.cyclesTotal}
+                      {vol ? vol.cyclesTotal : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-amber-400">
-                      {r.stdev.toFixed(3)}%
+                      {vol ? `${vol.stdev.toFixed(3)}%` : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                      {r.range.toFixed(3)}%
+                      {vol ? `${vol.range.toFixed(3)}%` : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                      {r.avg >= 0 ? "+" : ""}
-                      {r.avg.toFixed(3)}%
+                      {vol ? `${vol.avg >= 0 ? "+" : ""}${vol.avg.toFixed(3)}%` : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                      {r.samples}
+                      {vol ? vol.samples : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-center">
-                      {opp ? (
-                        <Button size="sm" className="h-7 px-3 text-xs" onClick={() => onEnter(opp)}>
-                          진입
-                        </Button>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground">시세 없음</span>
-                      )}
+                      <Button size="sm" className="h-7 px-3 text-xs" onClick={() => onEnter(opp)}>
+                        진입
+                      </Button>
                     </td>
                   </tr>
                   );
@@ -339,7 +345,7 @@ function VolatilitySection({
               ) : (
                 <>
                   <ChevronDown className="h-3.5 w-3.5" />
-                  전체 보기 ({rows.length - PREVIEW_COUNT}개 더)
+                  전체 보기 ({merged.length - PREVIEW_COUNT}개 더)
                 </>
               )}
             </button>
@@ -388,99 +394,6 @@ function RunCronButton() {
       <Repeat className="mr-1 h-3 w-3" />
       {pending ? "실행 중…" : "지금 cron 실행"}
     </Button>
-  );
-}
-
-function KimchiPremiumTable({
-  rows,
-  onEnter,
-}: {
-  rows: KimchiOpportunity[];
-  onEnter: (k: KimchiOpportunity) => void;
-}) {
-  const PREVIEW_COUNT = 5;
-  const [expanded, setExpanded] = useState(false);
-  const canCollapse = rows.length > PREVIEW_COUNT;
-  const visibleRows = expanded || !canCollapse ? rows : rows.slice(0, PREVIEW_COUNT);
-
-  return (
-    <div className="space-y-2">
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[820px] text-sm">
-        <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-          <tr>
-            <th className="px-4 py-3 text-left">코인</th>
-            <th className="px-4 py-3 text-right">김프</th>
-            <th className="px-4 py-3 text-right">Upbit (KRW)</th>
-            <th className="px-4 py-3 text-right">Binance (USD)</th>
-            <th className="px-4 py-3 text-right">Binance (KRW 환산)</th>
-            <th className="px-4 py-3 text-center">액션</th>
-          </tr>
-        </thead>
-        <tbody>
-          {visibleRows.map((r) => {
-            const positive = r.premiumPct > 0;
-            return (
-              <tr
-                key={r.symbol}
-                className="border-t border-border/60 hover:bg-accent/30 transition-colors"
-              >
-                <td className="px-4 py-3 font-mono font-bold text-base">{r.symbol}</td>
-                <td
-                  className={cn(
-                    "px-4 py-3 text-right font-mono tabular-nums font-bold text-base",
-                    Math.abs(r.premiumPct) < 0.1
-                      ? "text-sky-400"
-                      : positive
-                        ? "text-amber-400"
-                        : "text-sky-300",
-                  )}
-                >
-                  {positive ? "+" : ""}
-                  {r.premiumPct.toFixed(3)}%
-                </td>
-                <td className="px-4 py-3 text-right font-mono tabular-nums">
-                  ₩{r.upbitKrw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}
-                </td>
-                <td className="px-4 py-3 text-right font-mono tabular-nums">
-                  ${r.binanceUsd.toLocaleString("en-US", {
-                    maximumFractionDigits: r.binanceUsd < 1 ? 6 : 2,
-                  })}
-                </td>
-                <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                  ₩{r.fairKrw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <Button size="sm" className="h-8 px-3" onClick={() => onEnter(r)}>
-                    진입
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-    {canCollapse ? (
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-center gap-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
-      >
-        {expanded ? (
-          <>
-            <ChevronUp className="h-3.5 w-3.5" />
-            접기
-          </>
-        ) : (
-          <>
-            <ChevronDown className="h-3.5 w-3.5" />
-            전체 보기 ({rows.length - PREVIEW_COUNT}개 더)
-          </>
-        )}
-      </button>
-    ) : null}
-    </div>
   );
 }
 

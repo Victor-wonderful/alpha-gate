@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { canAffordMargin, lockMargin, settleMargin } from "@/lib/paper-wallet";
+import { runArbitrageResolve } from "@/lib/arbitrage/resolve";
 
 /**
  * 수동 cron 트리거 — 로컬 dev 테스트 또는 즉시 사이클 확인용.
- * resolve-arbitrage 라우트를 내부 호출. CRON_SECRET 환경변수 필요.
+ * resolve 로직을 직접 호출 (HTTP round-trip 없음).
  */
 export async function runArbitrageCronAction(): Promise<{
   ok: boolean;
@@ -21,30 +22,19 @@ export async function runArbitrageCronAction(): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
 
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return { ok: false, error: "CRON_SECRET 환경변수 없음" };
-
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
-
   try {
-    const res = await fetch(`${baseUrl}/api/cron/resolve-arbitrage`, {
-      headers: { authorization: `Bearer ${secret}` },
-      cache: "no-store",
-    });
-    if (!res.ok) return { ok: false, error: `cron HTTP ${res.status}` };
-    const json = await res.json();
+    const result = await runArbitrageResolve();
     revalidatePath("/app/arbitrage");
     return {
       ok: true,
-      checked: json.checked ?? 0,
-      cycles: json.cycles ?? 0,
-      closed: json.closed ?? 0,
+      checked: result.checked,
+      cycles: result.cycles,
+      closed: result.closed,
     };
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "cron 호출 실패",
+      error: e instanceof Error ? e.message : "사이클 실행 실패",
     };
   }
 }

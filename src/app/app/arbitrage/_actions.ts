@@ -96,16 +96,16 @@ export async function enterArbitrageAction(
   if (!afford.ok) return { ok: false, error: afford.reason };
 
   // 인벤토리 초기 분배:
-  //  - 양쪽 각각 notional USD 가치의 BTC 보유 (= USDT의 절반은 BTC로 환전 효과)
-  //  - 리밸런싱 여유분으로 양쪽에 USDT 도 일부 보유 (절반은 BTC, 절반은 USDT)
+  //  - 양쪽 각각 notional/2 USD 가치의 진입 코인 보유 (= USDT의 절반은 코인으로 환전 효과)
+  //  - 리밸런싱 여유분으로 양쪽에 USDT 도 절반 보유
   const halfUsd = p.notionalUsd / 2;
-  const btcUpbit = halfUsd / p.upbitPriceUsd;
-  const btcBinance = halfUsd / p.binancePriceUsd;
+  const coinUpbit = halfUsd / p.upbitPriceUsd;
+  const coinBinance = halfUsd / p.binancePriceUsd;
   const usdtUpbit = halfUsd;
   const usdtBinance = halfUsd;
 
-  // 평균 진입 BTC 가격 (수익률 계산 베이스)
-  const avgBtcPriceUsd = (p.upbitPriceUsd + p.binancePriceUsd) / 2;
+  // 평균 진입 코인 가격 (수익률 계산 베이스)
+  const avgCoinPriceUsd = (p.upbitPriceUsd + p.binancePriceUsd) / 2;
 
   const { data, error } = await supabase
     .from("arbitrage_positions")
@@ -117,20 +117,20 @@ export async function enterArbitrageAction(
       // 기존 헤지 모델 필드는 진입 가격만 기록 (호환성)
       long_exchange: "upbit",
       long_entry_price: p.upbitPriceUsd,
-      long_qty: btcUpbit,
+      long_qty: coinUpbit,
       short_exchange: "binance",
       short_entry_price: p.binancePriceUsd,
-      short_qty: btcBinance,
+      short_qty: coinBinance,
       entry_premium_pct: p.entryPremiumPct ?? null,
       // 인벤토리 모델 신규 필드
-      inventory_btc_upbit: btcUpbit,
-      inventory_btc_binance: btcBinance,
+      inventory_coin_upbit: coinUpbit,
+      inventory_coin_binance: coinBinance,
       inventory_usdt_upbit: usdtUpbit,
       inventory_usdt_binance: usdtBinance,
       target_threshold_pct: threshold,
       cycles_count: 0,
       accrued_cycle_pnl: 0,
-      btc_price_at_entry_usd: avgBtcPriceUsd,
+      coin_price_at_entry_usd: avgCoinPriceUsd,
       // 인벤토리 모델은 cron이 사이클로 청산하므로 target_premium_pct는 미사용 (null)
       target_premium_pct: null,
     })
@@ -177,19 +177,18 @@ export async function closeArbitrageAction(
   if (!Number.isFinite(upbitPriceUsdNow) || !Number.isFinite(binancePriceUsdNow))
     return { ok: false, error: "청산 가격이 유효하지 않습니다." };
 
-  const btcUpbit = Number(pos.inventory_btc_upbit ?? 0);
-  const btcBinance = Number(pos.inventory_btc_binance ?? 0);
+  const coinUpbit = Number(pos.inventory_coin_upbit ?? 0);
+  const coinBinance = Number(pos.inventory_coin_binance ?? 0);
   const usdtUpbit = Number(pos.inventory_usdt_upbit ?? 0);
   const usdtBinance = Number(pos.inventory_usdt_binance ?? 0);
-  const accrued = Number(pos.accrued_cycle_pnl ?? 0);
   const notional = Number(pos.notional_usd);
 
-  // 청산 시 보유 BTC를 USDT로 환산 (양쪽 거래소 가격 적용)
-  const upbitBtcValueUsd = btcUpbit * upbitPriceUsdNow;
-  const binanceBtcValueUsd = btcBinance * binancePriceUsdNow;
+  // 청산 시 보유 코인을 USDT 로 환산 (양쪽 거래소 가격 적용)
+  const upbitCoinValueUsd = coinUpbit * upbitPriceUsdNow;
+  const binanceCoinValueUsd = coinBinance * binancePriceUsdNow;
 
   const finalTotalUsd =
-    upbitBtcValueUsd + usdtUpbit + binanceBtcValueUsd + usdtBinance;
+    upbitCoinValueUsd + usdtUpbit + binanceCoinValueUsd + usdtBinance;
 
   // 시작 자본 = 2 × notional
   // realizedPnl = (현재 가치 - 시작 자본) — 누적 사이클 수익은 이미 finalTotalUsd 에 반영됨

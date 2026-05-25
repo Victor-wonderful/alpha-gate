@@ -8,8 +8,8 @@ interface OpenKimchiPosition {
   user_id: string;
   symbol: string;
   notional_usd: number;
-  inventory_btc_upbit: number;
-  inventory_btc_binance: number;
+  inventory_coin_upbit: number;
+  inventory_coin_binance: number;
   inventory_usdt_upbit: number;
   inventory_usdt_binance: number;
   target_threshold_pct: number;
@@ -48,7 +48,7 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
   const { data: positions, error } = await svc
     .from("arbitrage_positions")
     .select(
-      "id, user_id, symbol, notional_usd, inventory_btc_upbit, inventory_btc_binance, inventory_usdt_upbit, inventory_usdt_binance, target_threshold_pct, cycles_count, accrued_cycle_pnl, expires_at",
+      "id, user_id, symbol, notional_usd, inventory_coin_upbit, inventory_coin_binance, inventory_usdt_upbit, inventory_usdt_binance, target_threshold_pct, cycles_count, accrued_cycle_pnl, expires_at",
     )
     .eq("kind", "kimchi")
     .eq("status", "open")
@@ -97,8 +97,8 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
       const upbitUsd = snap.upbitKrw / snap.usdKrwRate;
       const binanceUsd = snap.binanceUsd;
       const finalUsd =
-        Number(p.inventory_btc_upbit) * upbitUsd +
-        Number(p.inventory_btc_binance) * binanceUsd +
+        Number(p.inventory_coin_upbit) * upbitUsd +
+        Number(p.inventory_coin_binance) * binanceUsd +
         Number(p.inventory_usdt_upbit) +
         Number(p.inventory_usdt_binance);
       const fees = 2 * Number(p.notional_usd) * 0.0008;
@@ -143,13 +143,13 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
       continue;
     }
 
-    if (cycleResult.btcMoved <= 0) continue;
+    if (cycleResult.coinMoved <= 0) continue;
 
     const { error: upErr } = await svc
       .from("arbitrage_positions")
       .update({
-        inventory_btc_upbit: cycleResult.newInventory.btcUpbit,
-        inventory_btc_binance: cycleResult.newInventory.btcBinance,
+        inventory_coin_upbit: cycleResult.newInventory.coinUpbit,
+        inventory_coin_binance: cycleResult.newInventory.coinBinance,
         inventory_usdt_upbit: cycleResult.newInventory.usdtUpbit,
         inventory_usdt_binance: cycleResult.newInventory.usdtBinance,
         cycles_count: Number(p.cycles_count) + 1,
@@ -172,11 +172,11 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
       direction,
       premium_at_cycle: premium,
       threshold_pct: threshold,
-      btc_moved: cycleResult.btcMoved,
+      coin_moved: cycleResult.coinMoved,
       profit_usdt: cycleResult.profitUsdt,
-      upbit_btc_after: cycleResult.newInventory.btcUpbit,
+      upbit_coin_after: cycleResult.newInventory.coinUpbit,
       upbit_usdt_after: cycleResult.newInventory.usdtUpbit,
-      binance_btc_after: cycleResult.newInventory.btcBinance,
+      binance_coin_after: cycleResult.newInventory.coinBinance,
       binance_usdt_after: cycleResult.newInventory.usdtBinance,
     });
     if (logErr)
@@ -204,73 +204,73 @@ function runRebalanceCycle(args: {
   binanceUsd: number;
   fraction: number;
 }): {
-  btcMoved: number;
+  coinMoved: number;
   profitUsdt: number;
   newInventory: {
-    btcUpbit: number;
-    btcBinance: number;
+    coinUpbit: number;
+    coinBinance: number;
     usdtUpbit: number;
     usdtBinance: number;
   };
 } {
   const { position: p, direction, upbitUsd, binanceUsd, fraction } = args;
 
-  let btcUpbit = Number(p.inventory_btc_upbit);
-  let btcBinance = Number(p.inventory_btc_binance);
+  let coinUpbit = Number(p.inventory_coin_upbit);
+  let coinBinance = Number(p.inventory_coin_binance);
   let usdtUpbit = Number(p.inventory_usdt_upbit);
   let usdtBinance = Number(p.inventory_usdt_binance);
 
-  let btcMoved = 0;
+  let coinMoved = 0;
   let profitUsdt = 0;
 
   if (direction === "positive") {
-    const maxFromUpbit = btcUpbit;
+    const maxFromUpbit = coinUpbit;
     const maxFromBinance = binanceUsd > 0 ? usdtBinance / binanceUsd : 0;
-    btcMoved = Math.min(maxFromUpbit, maxFromBinance) * fraction;
-    if (btcMoved <= 0)
+    coinMoved = Math.min(maxFromUpbit, maxFromBinance) * fraction;
+    if (coinMoved <= 0)
       return {
-        btcMoved: 0,
+        coinMoved: 0,
         profitUsdt: 0,
-        newInventory: { btcUpbit, btcBinance, usdtUpbit, usdtBinance },
+        newInventory: { coinUpbit, coinBinance, usdtUpbit, usdtBinance },
       };
 
-    btcUpbit -= btcMoved;
-    usdtUpbit += btcMoved * upbitUsd;
-    btcBinance += btcMoved;
-    usdtBinance -= btcMoved * binanceUsd;
+    coinUpbit -= coinMoved;
+    usdtUpbit += coinMoved * upbitUsd;
+    coinBinance += coinMoved;
+    usdtBinance -= coinMoved * binanceUsd;
 
-    const gross = btcMoved * (upbitUsd - binanceUsd);
-    const tradeNotional = btcMoved * (upbitUsd + binanceUsd);
+    const gross = coinMoved * (upbitUsd - binanceUsd);
+    const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
     const fees = tradeNotional * 0.0004;
     const slippage = tradeNotional * 0.0002;
     profitUsdt = gross - fees - slippage;
   } else {
     const maxToUpbit = upbitUsd > 0 ? usdtUpbit / upbitUsd : 0;
-    const maxFromBinance = btcBinance;
-    btcMoved = Math.min(maxToUpbit, maxFromBinance) * fraction;
-    if (btcMoved <= 0)
+    const maxFromBinance = coinBinance;
+    coinMoved = Math.min(maxToUpbit, maxFromBinance) * fraction;
+    if (coinMoved <= 0)
       return {
-        btcMoved: 0,
+        coinMoved: 0,
         profitUsdt: 0,
-        newInventory: { btcUpbit, btcBinance, usdtUpbit, usdtBinance },
+        newInventory: { coinUpbit, coinBinance, usdtUpbit, usdtBinance },
       };
 
-    btcUpbit += btcMoved;
-    usdtUpbit -= btcMoved * upbitUsd;
-    btcBinance -= btcMoved;
-    usdtBinance += btcMoved * binanceUsd;
+    coinUpbit += coinMoved;
+    usdtUpbit -= coinMoved * upbitUsd;
+    coinBinance -= coinMoved;
+    usdtBinance += coinMoved * binanceUsd;
 
-    const gross = btcMoved * (binanceUsd - upbitUsd);
-    const tradeNotional = btcMoved * (upbitUsd + binanceUsd);
+    const gross = coinMoved * (binanceUsd - upbitUsd);
+    const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
     const fees = tradeNotional * 0.0004;
     const slippage = tradeNotional * 0.0002;
     profitUsdt = gross - fees - slippage;
   }
 
   return {
-    btcMoved,
+    coinMoved,
     profitUsdt,
-    newInventory: { btcUpbit, btcBinance, usdtUpbit, usdtBinance },
+    newInventory: { coinUpbit, coinBinance, usdtUpbit, usdtBinance },
   };
 }
 

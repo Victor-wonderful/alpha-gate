@@ -31,14 +31,14 @@ interface OpenPosition {
   long_entry_price: number; // = upbit USD 가격 (진입)
   short_entry_price: number; // = binance USD 가격 (진입)
   entry_premium_pct: number | null;
-  inventory_btc_upbit: number;
-  inventory_btc_binance: number;
+  inventory_coin_upbit: number;
+  inventory_coin_binance: number;
   inventory_usdt_upbit: number;
   inventory_usdt_binance: number;
   target_threshold_pct: number;
   cycles_count: number;
   accrued_cycle_pnl: number;
-  btc_price_at_entry_usd: number | null;
+  coin_price_at_entry_usd: number | null;
   expires_at: string;
   created_at: string;
 }
@@ -67,7 +67,7 @@ export interface CycleEvent {
   executed_at: string;
   direction: string;
   premium_at_cycle: number;
-  btc_moved: number;
+  coin_moved: number;
   profit_usdt: number;
 }
 
@@ -110,7 +110,7 @@ export function ArbitrageUI({
         <div>
           <h1 className="text-3xl font-bold leading-[1.15]">차익거래</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            🇰🇷 김프 리밸런싱 — 양쪽에 BTC + USDT 보유. 김프가 ±임계값 도달 시 자동 리밸런싱으로 사이클마다 수익 누적.
+            🇰🇷 김프 리밸런싱 — 양쪽 거래소에 진입 코인 + USDT 보유. 김프가 ±임계값 도달 시 자동 리밸런싱으로 사이클마다 수익 누적.
           </p>
         </div>
         {wallet ? (
@@ -500,30 +500,30 @@ function ActivePositionCard({
   const [closing, startClose] = useTransition();
 
   const notional = Number(pos.notional_usd);
-  const btcUpbit = Number(pos.inventory_btc_upbit);
-  const btcBinance = Number(pos.inventory_btc_binance);
+  const coinUpbit = Number(pos.inventory_coin_upbit);
+  const coinBinance = Number(pos.inventory_coin_binance);
   const usdtUpbit = Number(pos.inventory_usdt_upbit);
   const usdtBinance = Number(pos.inventory_usdt_binance);
   const cyclesCount = Number(pos.cycles_count);
   const accrued = Number(pos.accrued_cycle_pnl);
   const threshold = Number(pos.target_threshold_pct);
   const entryPct = pos.entry_premium_pct != null ? Number(pos.entry_premium_pct) : null;
-  const entryBtcPrice = pos.btc_price_at_entry_usd != null ? Number(pos.btc_price_at_entry_usd) : null;
+  const entryCoinPrice = pos.coin_price_at_entry_usd != null ? Number(pos.coin_price_at_entry_usd) : null;
 
   // 현재 자산 가치 계산
-  const upbitBtcValueUsd = currentPrices ? btcUpbit * currentPrices.upbitUsd : 0;
-  const binanceBtcValueUsd = currentPrices ? btcBinance * currentPrices.binanceUsd : 0;
+  const upbitCoinValueUsd = currentPrices ? coinUpbit * currentPrices.upbitUsd : 0;
+  const binanceCoinValueUsd = currentPrices ? coinBinance * currentPrices.binanceUsd : 0;
   const totalAssetUsd = currentPrices
-    ? upbitBtcValueUsd + binanceBtcValueUsd + usdtUpbit + usdtBinance
+    ? upbitCoinValueUsd + binanceCoinValueUsd + usdtUpbit + usdtBinance
     : null;
   const unrealizedPnl =
     totalAssetUsd != null ? totalAssetUsd - 2 * notional : null;
 
-  const totalBtc = btcUpbit + btcBinance;
-  const btcPriceDelta =
-    entryBtcPrice && currentPrices
-      ? (((currentPrices.upbitUsd + currentPrices.binanceUsd) / 2 - entryBtcPrice) /
-          entryBtcPrice) *
+  const totalCoin = coinUpbit + coinBinance;
+  const coinPriceDelta =
+    entryCoinPrice && currentPrices
+      ? (((currentPrices.upbitUsd + currentPrices.binanceUsd) / 2 - entryCoinPrice) /
+          entryCoinPrice) *
         100
       : null;
 
@@ -631,16 +631,18 @@ function ActivePositionCard({
           <InventoryBox
             label="Upbit (KRW 환산)"
             tone="upbit"
-            btc={btcUpbit}
+            symbol={pos.symbol}
+            coin={coinUpbit}
             usdt={usdtUpbit}
-            currentBtcUsd={currentPrices?.upbitUsd}
+            currentCoinUsd={currentPrices?.upbitUsd}
           />
           <InventoryBox
             label="Binance (USDT)"
             tone="binance"
-            btc={btcBinance}
+            symbol={pos.symbol}
+            coin={coinBinance}
             usdt={usdtBinance}
-            currentBtcUsd={currentPrices?.binanceUsd}
+            currentCoinUsd={currentPrices?.binanceUsd}
           />
         </div>
 
@@ -654,7 +656,7 @@ function ActivePositionCard({
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">미실현 손익 (사이클 + BTC 가격)</span>
+            <span className="text-muted-foreground">미실현 손익 (사이클 + {pos.symbol} 가격)</span>
             {unrealizedPnl != null ? (
               <span
                 className={cn(
@@ -669,15 +671,15 @@ function ActivePositionCard({
               <span className="text-muted-foreground">데이터 없음</span>
             )}
           </div>
-          {btcPriceDelta != null ? (
+          {coinPriceDelta != null ? (
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
-                진입 후 BTC 평균가 변동
+                진입 후 {pos.symbol} 평균가 변동
               </span>
               <span className="font-mono tabular-nums">
-                {btcPriceDelta >= 0 ? "+" : ""}
-                {btcPriceDelta.toFixed(2)}% · {totalBtc.toFixed(6)} BTC 보유
+                {coinPriceDelta >= 0 ? "+" : ""}
+                {coinPriceDelta.toFixed(2)}% · {totalCoin.toFixed(6)} {pos.symbol} 보유
               </span>
             </div>
           ) : null}
@@ -709,7 +711,7 @@ function ActivePositionCard({
                       <th className="px-3 py-2 text-left">시간</th>
                       <th className="px-3 py-2 text-left">방향</th>
                       <th className="px-3 py-2 text-right">김프</th>
-                      <th className="px-3 py-2 text-right">이동 BTC</th>
+                      <th className="px-3 py-2 text-right">이동 {pos.symbol}</th>
                       <th className="px-3 py-2 text-right">수익 (USDT)</th>
                     </tr>
                   </thead>
@@ -750,7 +752,7 @@ function ActivePositionCard({
                             {c.premium_at_cycle.toFixed(3)}%
                           </td>
                           <td className="px-3 py-2 text-right font-mono tabular-nums">
-                            {c.btc_moved.toFixed(6)}
+                            {c.coin_moved.toFixed(6)}
                           </td>
                           <td
                             className={cn(
@@ -808,18 +810,20 @@ function StatBox({
 function InventoryBox({
   label,
   tone,
-  btc,
+  symbol,
+  coin,
   usdt,
-  currentBtcUsd,
+  currentCoinUsd,
 }: {
   label: string;
   tone: "upbit" | "binance";
-  btc: number;
+  symbol: string;
+  coin: number;
   usdt: number;
-  currentBtcUsd?: number;
+  currentCoinUsd?: number;
 }) {
-  const btcUsd = currentBtcUsd ? btc * currentBtcUsd : null;
-  const total = btcUsd != null ? btcUsd + usdt : null;
+  const coinUsd = currentCoinUsd ? coin * currentCoinUsd : null;
+  const total = coinUsd != null ? coinUsd + usdt : null;
   return (
     <div
       className={cn(
@@ -839,11 +843,11 @@ function InventoryBox({
       </div>
       <div className="space-y-0.5 font-mono text-xs tabular-nums">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">BTC</span>
+          <span className="text-muted-foreground">{symbol}</span>
           <span>
-            {btc.toFixed(6)}{" "}
-            {btcUsd != null ? (
-              <span className="text-muted-foreground">≈ ${btcUsd.toFixed(2)}</span>
+            {coin.toFixed(6)}{" "}
+            {coinUsd != null ? (
+              <span className="text-muted-foreground">≈ ${coinUsd.toFixed(2)}</span>
             ) : null}
           </span>
         </div>
@@ -961,7 +965,7 @@ function EntryModal({
   //  - 이동량 = 인벤토리(=notional/2)의 25% = notional/8 (USD)
   //  - Gross = (notional/8) × (threshold/100)
   //  - Fees (수수료 0.04% × 양쪽 거래) = (notional/4) × 0.0004
-  //  - 슬리피지 가정 = (notional/4) × 0.0002 (BTC ~0.01% × 양쪽)
+  //  - 슬리피지 가정 = (notional/4) × 0.0002 (코인 ~0.01% × 양쪽)
   const cycleTradeVolume = notional / 4; // 양쪽 합산 거래액
   const cycleGross = (notional / 8) * (threshold / 100);
   const cycleFees = cycleTradeVolume * 0.0004;
@@ -1022,7 +1026,7 @@ function EntryModal({
               </span>
             </div>
             <div className="text-[11px] text-muted-foreground">
-              양쪽 거래소에 BTC + USDT 절반씩 보유. 김프가 ±임계값 도달 시 자동 리밸런싱(인벤토리의 25%씩) →
+              양쪽 거래소에 {target.symbol} + USDT 절반씩 보유. 김프가 ±임계값 도달 시 자동 리밸런싱(인벤토리의 25%씩) →
               사이클마다 수익 누적. 양방향 모두 수익 가능. 만료 30일.
             </div>
           </div>
@@ -1101,7 +1105,7 @@ function EntryModal({
                 Upbit 셋업
               </div>
               <div className="font-mono text-[11px]">
-                BTC {(notional / 2 / (target.upbitKrw / target.usdKrwRate)).toFixed(6)}
+                {target.symbol} {(notional / 2 / (target.upbitKrw / target.usdKrwRate)).toFixed(6)}
               </div>
               <div className="font-mono text-[11px] text-muted-foreground">
                 USDT ${(notional / 2).toFixed(2)}
@@ -1112,7 +1116,7 @@ function EntryModal({
                 Binance 셋업
               </div>
               <div className="font-mono text-[11px]">
-                BTC {(notional / 2 / target.binanceUsd).toFixed(6)}
+                {target.symbol} {(notional / 2 / target.binanceUsd).toFixed(6)}
               </div>
               <div className="font-mono text-[11px] text-muted-foreground">
                 USDT ${(notional / 2).toFixed(2)}

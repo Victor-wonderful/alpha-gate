@@ -37,7 +37,7 @@ export default async function ArbitragePage({
     supabase
       .from("arbitrage_positions")
       .select(
-        "id, kind, symbol, notional_usd, long_entry_price, short_entry_price, entry_premium_pct, inventory_btc_upbit, inventory_btc_binance, inventory_usdt_upbit, inventory_usdt_binance, target_threshold_pct, cycles_count, accrued_cycle_pnl, btc_price_at_entry_usd, expires_at, created_at",
+        "id, kind, symbol, notional_usd, long_entry_price, short_entry_price, entry_premium_pct, inventory_coin_upbit, inventory_coin_binance, inventory_usdt_upbit, inventory_usdt_binance, target_threshold_pct, cycles_count, accrued_cycle_pnl, coin_price_at_entry_usd, expires_at, created_at",
       )
       .eq("user_id", user.id)
       .eq("kind", "kimchi")
@@ -65,13 +65,13 @@ export default async function ArbitragePage({
     executed_at: string;
     direction: string;
     premium_at_cycle: number;
-    btc_moved: number;
+    coin_moved: number;
     profit_usdt: number;
   }>> = {};
   if (openIds.length > 0) {
     const { data: cycles } = await supabase
       .from("arbitrage_cycles")
-      .select("id, position_id, executed_at, direction, premium_at_cycle, btc_moved, profit_usdt")
+      .select("id, position_id, executed_at, direction, premium_at_cycle, coin_moved, profit_usdt")
       .in("position_id", openIds)
       .order("executed_at", { ascending: false })
       .limit(200);
@@ -83,7 +83,7 @@ export default async function ArbitragePage({
           executed_at: c.executed_at,
           direction: c.direction,
           premium_at_cycle: Number(c.premium_at_cycle),
-          btc_moved: Number(c.btc_moved),
+          coin_moved: Number(c.coin_moved),
           profit_usdt: Number(c.profit_usdt),
         });
         return acc;

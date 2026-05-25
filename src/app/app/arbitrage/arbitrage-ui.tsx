@@ -848,11 +848,12 @@ function BalanceCapacityBar({
   upbitUsd: number;
   binanceUsd: number;
 }) {
-  // 거래소간 자산 비교
-  const upbitValue = coinUpbit * upbitUsd + usdtUpbit;
-  const binanceValue = coinBinance * binanceUsd + usdtBinance;
-  const total = upbitValue + binanceValue;
-  const upbitPct = total > 0 ? (upbitValue / total) * 100 : 50;
+  // 코인의 거래소간 분포 (수량 기준)
+  const totalCoin = coinUpbit + coinBinance;
+  const coinUpbitPct = totalCoin > 0 ? (coinUpbit / totalCoin) * 100 : 50;
+  // USDT의 거래소간 분포
+  const totalUsdt = usdtUpbit + usdtBinance;
+  const usdtUpbitPct = totalUsdt > 0 ? (usdtUpbit / totalUsdt) * 100 : 50;
 
   // 다음 사이클 여력
   // positive (+ direction): Upbit 매도 + Binance 매수 → limited by min(coinUpbit, usdtBinance/binanceUsd) × 25%
@@ -874,24 +875,46 @@ function BalanceCapacityBar({
 
   return (
     <div className="rounded-md border border-border/60 bg-background/40 p-3 space-y-3">
-      {/* 거래소간 잔액 분포 */}
+      {/* 코인 거래소간 분포 */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">거래소간 자산 분포</span>
+          <span className="text-muted-foreground">{symbol} 거래소간 분포</span>
           <span className="font-mono tabular-nums text-muted-foreground">
-            합계 ${total.toFixed(2)}
+            총 {totalCoin.toFixed(6)} {symbol}
           </span>
         </div>
         <div className="flex h-2 overflow-hidden rounded-full bg-muted/40">
-          <div className="bg-amber-400" style={{ width: `${upbitPct}%` }} />
-          <div className="bg-sky-400" style={{ width: `${100 - upbitPct}%` }} />
+          <div className="bg-amber-400" style={{ width: `${coinUpbitPct}%` }} />
+          <div className="bg-sky-400" style={{ width: `${100 - coinUpbitPct}%` }} />
         </div>
         <div className="flex justify-between text-[10px] font-mono tabular-nums">
           <span className="text-amber-400">
-            Upbit ${upbitValue.toFixed(2)} ({upbitPct.toFixed(0)}%)
+            Upbit {coinUpbit.toFixed(6)} ({coinUpbitPct.toFixed(0)}%)
           </span>
           <span className="text-sky-300">
-            Binance ${binanceValue.toFixed(2)} ({(100 - upbitPct).toFixed(0)}%)
+            Binance {coinBinance.toFixed(6)} ({(100 - coinUpbitPct).toFixed(0)}%)
+          </span>
+        </div>
+      </div>
+
+      {/* USDT 거래소간 분포 */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground">USDT 거래소간 분포</span>
+          <span className="font-mono tabular-nums text-muted-foreground">
+            총 ${totalUsdt.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex h-2 overflow-hidden rounded-full bg-muted/40">
+          <div className="bg-amber-400" style={{ width: `${usdtUpbitPct}%` }} />
+          <div className="bg-sky-400" style={{ width: `${100 - usdtUpbitPct}%` }} />
+        </div>
+        <div className="flex justify-between text-[10px] font-mono tabular-nums">
+          <span className="text-amber-400">
+            Upbit ${usdtUpbit.toFixed(2)} ({usdtUpbitPct.toFixed(0)}%)
+          </span>
+          <span className="text-sky-300">
+            Binance ${usdtBinance.toFixed(2)} ({(100 - usdtUpbitPct).toFixed(0)}%)
           </span>
         </div>
       </div>

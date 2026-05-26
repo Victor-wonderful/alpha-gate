@@ -135,6 +135,7 @@ export function AnalysisResult({
   accountSize,
   riskPct,
   currency,
+  historicalStats,
 }: {
   snapshot: AnalysisSnapshot;
   strategy: StrategyResult;
@@ -142,6 +143,7 @@ export function AnalysisResult({
   accountSize: number;
   riskPct: number;
   currency: "USD" | "KRW";
+  historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
 }) {
   const [activeScenario, setActiveScenario] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -237,7 +239,7 @@ export function AnalysisResult({
       {report.marketTrend ? <MarketTrendCard trend={report.marketTrend} metrics={snapshot.trendMetrics} dominance={snapshot.macro.dominanceRegime ?? null} /> : null}
 
       {/* Big AI recommendation card — what to do now */}
-      <SimpleRecommendation strategy={strategy} report={report} />
+      <SimpleRecommendation strategy={strategy} report={report} historicalStats={historicalStats} />
 
       {/* Special strategy signal evidence (rendered for any special strategy active across scenarios) */}
       <SpecialSignalCard
@@ -648,9 +650,11 @@ function TrendIndicator({
 function SimpleRecommendation({
   strategy,
   report,
+  historicalStats,
 }: {
   strategy: StrategyResult;
   report: AnalysisReport;
+  historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
 }) {
   const isWait = strategy.primary === "wait";
   const accentClass = isWait
@@ -692,6 +696,34 @@ function SimpleRecommendation({
           <span className="text-muted-foreground">
             AI 자신감 <span className="font-mono">{Math.round(strategy.confidence * 100)}%</span>
           </span>
+          {historicalStats && historicalStats.target + historicalStats.stop >= 3 ? (
+            <span className="text-muted-foreground border-l border-border/40 pl-3 ml-1">
+              과거 적중률{" "}
+              <span
+                className={cn(
+                  "font-mono font-semibold",
+                  historicalStats.winRate >= 0.6
+                    ? "text-grade-a"
+                    : historicalStats.winRate >= 0.4
+                      ? "text-grade-b"
+                      : "text-grade-d",
+                )}
+              >
+                {Math.round(historicalStats.winRate * 100)}%
+              </span>
+              <span className="text-[10px] ml-1">
+                ({historicalStats.target}승 {historicalStats.stop}패
+                {historicalStats.avgR !== 0
+                  ? `, ${historicalStats.avgR >= 0 ? "+" : ""}${historicalStats.avgR.toFixed(2)}R`
+                  : ""}
+                )
+              </span>
+            </span>
+          ) : historicalStats && historicalStats.total > 0 ? (
+            <span className="text-[10px] text-muted-foreground border-l border-border/40 pl-3 ml-1">
+              과거 표본 {historicalStats.total}개 (결정 {historicalStats.target + historicalStats.stop}개, 부족)
+            </span>
+          ) : null}
         </div>
       </CardContent>
     </Card>

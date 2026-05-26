@@ -6,6 +6,7 @@ import { synthesizeAnalysis, type AnalysisReport } from "@/lib/analysis/synthesi
 import { classifyStrategy, type StrategyResult } from "@/lib/analysis/strategy";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { saveAnalysis, loadAnalysis } from "@/lib/analysis/persist";
+import { fetchScenarioStats, type ScenarioStats } from "@/lib/analysis/scenario-stats";
 import { revalidatePath } from "next/cache";
 import { getAiCredits, spendAiCredit } from "@/lib/paper-wallet";
 
@@ -116,4 +117,27 @@ export async function deleteAnalysisAction(id: string): Promise<{ error?: string
   revalidatePath("/app/analyze");
   revalidatePath("/app/analyze/history");
   return {};
+}
+
+/**
+ * 특정 (symbol, strategy)의 시나리오 적중률 통계.
+ * 분석 결과 페이지에서 "이 전략의 과거 성과" 표시용.
+ */
+export async function loadScenarioStatsAction(args: {
+  symbol: string;
+  strategyPrimary: string;
+  days?: number;
+}): Promise<{ stats?: ScenarioStats; error?: string }> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  try {
+    const stats = await fetchScenarioStats(args);
+    return { stats };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "통계 조회 실패" };
+  }
 }

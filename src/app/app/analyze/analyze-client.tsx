@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { runAnalysisAction, loadAnalysisAction } from "./_actions";
+import { runAnalysisAction, loadAnalysisAction, loadScenarioStatsAction } from "./_actions";
+import type { ScenarioStats } from "@/lib/analysis/scenario-stats";
 import { AnalysisResult } from "./analysis-result";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
@@ -89,6 +90,26 @@ function AnalyzeClientInner({
   useEffect(() => {
     setHydrated(true);
   }, []);
+
+  // 시나리오 적중률 통계 — result 바뀔 때마다 fetch
+  const [stats, setStats] = useState<ScenarioStats | null>(null);
+  useEffect(() => {
+    if (!result) {
+      setStats(null);
+      return;
+    }
+    let cancelled = false;
+    loadScenarioStatsAction({
+      symbol: result.snapshot.symbol,
+      strategyPrimary: result.strategy.primary,
+      days: 30,
+    }).then((r) => {
+      if (!cancelled && r.stats) setStats(r.stats);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [result]);
 
   // Prefill symbol from ?symbol=<pair> (e.g. coming from Snapshot · Today)
   useEffect(() => {
@@ -282,6 +303,7 @@ function AnalyzeClientInner({
             accountSize={accountSize}
             riskPct={riskPct}
             currency={currency}
+            historicalStats={stats}
           />
         </>
       ) : null}

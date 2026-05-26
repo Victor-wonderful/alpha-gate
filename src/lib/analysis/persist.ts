@@ -4,6 +4,25 @@ import type { AnalysisSnapshot } from "./analyze";
 import type { AnalysisReport } from "./synthesize";
 import type { StrategyResult } from "./strategy";
 
+// timeframe별 시나리오 만료 시간 (ms)
+const SCENARIO_TIMEOUT_MS: Record<string, number> = {
+  "5m": 12 * 60 * 60_000,       // 12시간
+  "15m": 2 * 24 * 60 * 60_000,  // 2일
+  "1h": 7 * 24 * 60 * 60_000,   // 7일
+  "4h": 14 * 24 * 60 * 60_000,  // 14일
+  "1D": 30 * 24 * 60 * 60_000,  // 30일
+  "1d": 30 * 24 * 60 * 60_000,
+};
+
+function inferTimeframe(style: string): string {
+  // 스타일별 기준 타임프레임 (entry trigger TF)
+  if (style === "scalp") return "15m";
+  if (style === "day") return "1h";
+  if (style === "swing") return "4h";
+  if (style === "position") return "1D";
+  return "4h";
+}
+
 export async function saveAnalysis(args: {
   snapshot: AnalysisSnapshot;
   strategy: StrategyResult;
@@ -36,6 +55,58 @@ export async function saveAnalysis(args: {
     .single();
 
   if (error) return { error: error.message };
+
+  // 시나리오 자동 추적 등록 — wait 전략은 시나리오 0개라 skip
+  if (report.scenarios.length > 0 && strategy.primary !== "wait") {
+    const timeframe = inferTimeframe(snapshot.style);
+    const timeoutMs = SCENARIO_TIMEOUT_MS[timeframe] ?? 7 * 24 * 60 * 60_000;
+    const expiresAt = new Date(Date.now() + timeoutMs).toISOString();
+
+    const outcomeRows = report.scenarios
+      .map((s, idx) => {
+        // entryZone 중간값을 entry로 사용
+        const entryPrice = (s.entryZone.low + s.entryZone.high) / 2;
+        const stopPrice = s.invalidation;
+        const targetPrice = s.target;
+        // 유효성 검사 — 가격이 0이거나 NaN이면 skip
+        if (
+          !Number.isFinite(entryPrice) ||
+          !Number.isFinite(stopPrice) ||
+          !Number.isFinite(targetPrice) ||
+          entryPrice <= 0 ||
+          stopPrice <= 0 ||
+          targetPrice <= 0
+        )
+          return null;
+        return {
+          analysis_id: data.id,
+          user_id: user.id,
+          scenario_index: idx,
+          symbol: snapshot.symbol,
+          timeframe,
+          style: snapshot.style,
+          strategy_primary: strategy.primary,
+          direction: s.direction,
+          entry_price: entryPrice,
+          stop_price: stopPrice,
+          target_price: targetPrice,
+          status: "pending",
+          expires_at: expiresAt,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    if (outcomeRows.length > 0) {
+      const { error: outcomeErr } = await supabase
+        .from("scenario_outcomes")
+        .insert(outcomeRows);
+      if (outcomeErr) {
+        // 시나리오 추적 실패해도 분석 자체는 성공 처리 — 로그만
+        console.error("[saveAnalysis] scenario_outcomes insert failed:", outcomeErr.message);
+      }
+    }
+  }
+
   return { id: data.id };
 }
 

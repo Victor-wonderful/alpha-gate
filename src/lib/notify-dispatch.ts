@@ -2,13 +2,20 @@ import "server-only";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { sendDiscord, sendTelegram } from "@/lib/notify";
 
-export type NotifyEvent = "d_grade_warn" | "losing_streak" | "ai_coach_done" | "daily_digest" | "test";
+export type NotifyEvent =
+  | "d_grade_warn"
+  | "losing_streak"
+  | "ai_coach_done"
+  | "daily_digest"
+  | "scenario_alert"
+  | "test";
 
 const EVENT_TOGGLES: Record<NotifyEvent, keyof Channels | null> = {
   d_grade_warn: "enable_d_grade_warn",
   losing_streak: "enable_losing_streak",
   ai_coach_done: "enable_ai_coach_done",
   daily_digest: "enable_daily_digest",
+  scenario_alert: null, // 시나리오 알림은 사용자가 명시적으로 watch=true 등록한 것만 → 토글 없이 항상 발송
   test: null,
 };
 

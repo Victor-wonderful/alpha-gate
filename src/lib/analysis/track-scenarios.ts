@@ -1,8 +1,10 @@
 import "server-only";
 import { getSupabaseService } from "@/lib/supabase/service";
+import { dispatch } from "@/lib/notify-dispatch";
 
 interface ScenarioRow {
   id: string;
+  user_id: string;
   symbol: string;
   direction: "long" | "short";
   entry_price: number;
@@ -11,11 +13,71 @@ interface ScenarioRow {
   status: "pending" | "triggered" | "target" | "stop" | "expired";
   triggered_at: string | null;
   expires_at: string;
+  watch: boolean;
+  last_notified_status: string | null;
+  strategy_primary: string;
 }
 
 interface BinancePriceRow {
   symbol: string;
   price: string;
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  triggered: "진입 가격 도달 🔔",
+  target: "목표가 도달 ✅",
+  stop: "손절가 도달 ❌",
+  expired: "시나리오 만료 ⏱️",
+};
+
+const STRATEGY_LABEL: Record<string, string> = {
+  trend_pullback: "추세 눌림",
+  breakout: "돌파",
+  range_fade: "박스권 매매",
+  reversal: "반전",
+  wait: "대기",
+};
+
+async function maybeNotify(
+  supabase: ReturnType<typeof getSupabaseService>,
+  r: ScenarioRow,
+  newStatus: "triggered" | "target" | "stop" | "expired",
+  currentPrice: number | null,
+) {
+  if (!r.watch) return;
+  if (r.last_notified_status === newStatus) return;
+  // expired 는 entry 도달 전이면 알림 안 보냄 (사용자에게 정보 가치 없음)
+  if (newStatus === "expired" && r.status === "pending") {
+    await supabase
+      .from("scenario_outcomes")
+      .update({ last_notified_status: newStatus })
+      .eq("id", r.id);
+    return;
+  }
+
+  const dirLabel = r.direction === "long" ? "롱" : "숏";
+  const strategyLabel = STRATEGY_LABEL[r.strategy_primary] ?? r.strategy_primary;
+  const title = `${r.symbol} · ${strategyLabel} ${dirLabel} — ${STATUS_LABEL[newStatus]}`;
+  const priceTxt = currentPrice != null ? `현재가: $${currentPrice.toLocaleString("en-US", { maximumFractionDigits: 6 })}` : "";
+  const refTxt =
+    newStatus === "triggered"
+      ? `진입 ${r.entry_price} · 손절 ${r.stop_price} · 목표 ${r.target_price}`
+      : newStatus === "target"
+        ? `목표 ${r.target_price} 도달 — 진입 ${r.entry_price}`
+        : newStatus === "stop"
+          ? `손절 ${r.stop_price} 도달 — 진입 ${r.entry_price}`
+          : `만료됨 — 진입 ${r.entry_price} · 손절 ${r.stop_price} · 목표 ${r.target_price}`;
+  const body = `${priceTxt}\n${refTxt}`;
+
+  try {
+    await dispatch(r.user_id, "scenario_alert", { title, body });
+    await supabase
+      .from("scenario_outcomes")
+      .update({ last_notified_status: newStatus })
+      .eq("id", r.id);
+  } catch (e) {
+    console.error("[track-scenarios] notify failed", r.id, e);
+  }
 }
 
 /**
@@ -43,7 +105,7 @@ export async function runTrackScenarios(): Promise<{
   const { data: rows, error } = await supabase
     .from("scenario_outcomes")
     .select(
-      "id, symbol, direction, entry_price, stop_price, target_price, status, triggered_at, expires_at",
+      "id, user_id, symbol, direction, entry_price, stop_price, target_price, status, triggered_at, expires_at, watch, last_notified_status, strategy_primary",
     )
     .in("status", ["pending", "triggered"])
     .limit(2000);
@@ -90,7 +152,10 @@ export async function runTrackScenarios(): Promise<{
         })
         .eq("id", r.id);
       if (e) errors++;
-      else expired++;
+      else {
+        expired++;
+        await maybeNotify(supabase, r, "expired", currentPrice ?? null);
+      }
       continue;
     }
 
@@ -108,7 +173,10 @@ export async function runTrackScenarios(): Promise<{
           .update({ status: "triggered", triggered_at: nowIso })
           .eq("id", r.id);
         if (e) errors++;
-        else triggered++;
+        else {
+          triggered++;
+          await maybeNotify(supabase, r, "triggered", currentPrice);
+        }
       }
       continue;
     }
@@ -124,7 +192,7 @@ export async function runTrackScenarios(): Promise<{
         else if (currentPrice >= r.stop_price) outcome = "stop";
       }
       if (outcome) {
-        const triggeredPrice = r.entry_price; // 단순화 — 실제 trigger 시점 가격은 추적 안 함
+        const triggeredPrice = r.entry_price; // 단순화
         const risk = Math.abs(triggeredPrice - r.stop_price);
         const reward = currentPrice - triggeredPrice;
         const resultR =
@@ -141,7 +209,10 @@ export async function runTrackScenarios(): Promise<{
           })
           .eq("id", r.id);
         if (e) errors++;
-        else resolved++;
+        else {
+          resolved++;
+          await maybeNotify(supabase, r, outcome, currentPrice);
+        }
       }
     }
   }

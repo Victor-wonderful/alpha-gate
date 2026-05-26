@@ -17,6 +17,7 @@ export async function runAnalysisAction(
   snapshot?: AnalysisSnapshot;
   strategy?: StrategyResult;
   report?: AnalysisReport;
+  analysisId?: string;
   error?: string;
 }> {
   const supabase = await getSupabaseServer();
@@ -75,8 +76,10 @@ export async function runAnalysisAction(
   }
 
   // Persist (best-effort — do not fail analysis if this fails)
+  let analysisId: string | undefined;
   try {
-    await saveAnalysis({ snapshot, strategy, report });
+    const saved = await saveAnalysis({ snapshot, strategy, report });
+    analysisId = saved.id;
     revalidatePath("/app/dashboard");
     revalidatePath("/app");
   } catch (e) {
@@ -90,7 +93,7 @@ export async function runAnalysisAction(
     console.error("AI 크레딧 차감 실패 (분석은 완료됨):", e);
   }
 
-  return { snapshot, strategy, report };
+  return { snapshot, strategy, report, analysisId };
 }
 
 export async function loadAnalysisAction(id: string): Promise<
@@ -117,6 +120,61 @@ export async function deleteAnalysisAction(id: string): Promise<{ error?: string
   revalidatePath("/app/analyze");
   revalidatePath("/app/analyze/history");
   return {};
+}
+
+/**
+ * 분석 결과의 시나리오 알림 등록 상태 조회.
+ * scenario_outcomes 테이블에서 (analysis_id, scenario_index) → watch 값을 맵으로 반환.
+ */
+export async function loadScenarioWatchStatesAction(
+  analysisId: string,
+): Promise<{ states?: Record<number, { id: string; watch: boolean; status: string }>; error?: string }> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { data, error } = await supabase
+    .from("scenario_outcomes")
+    .select("id, scenario_index, watch, status")
+    .eq("analysis_id", analysisId)
+    .eq("user_id", user.id);
+
+  if (error) return { error: error.message };
+
+  const states: Record<number, { id: string; watch: boolean; status: string }> = {};
+  for (const row of data ?? []) {
+    states[row.scenario_index] = {
+      id: row.id,
+      watch: Boolean(row.watch),
+      status: row.status,
+    };
+  }
+  return { states };
+}
+
+/**
+ * 시나리오 알림 등록 토글.
+ */
+export async function toggleScenarioWatchAction(args: {
+  scenarioId: string;
+  watch: boolean;
+}): Promise<{ ok?: boolean; error?: string }> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { error } = await supabase
+    .from("scenario_outcomes")
+    .update({ watch: args.watch })
+    .eq("id", args.scenarioId)
+    .eq("user_id", user.id);
+
+  if (error) return { error: error.message };
+  return { ok: true };
 }
 
 /**

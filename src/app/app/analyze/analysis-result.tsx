@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   ArrowRight,
   TrendingDown,
@@ -136,6 +137,7 @@ export function AnalysisResult({
   riskPct,
   currency,
   historicalStats,
+  analysisId,
 }: {
   snapshot: AnalysisSnapshot;
   strategy: StrategyResult;
@@ -144,9 +146,46 @@ export function AnalysisResult({
   riskPct: number;
   currency: "USD" | "KRW";
   historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
+  analysisId?: string;
 }) {
   const [activeScenario, setActiveScenario] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [watchStates, setWatchStates] = useState<Record<number, { id: string; watch: boolean; status: string }>>({});
+
+  // 시나리오 알림 등록 상태 조회
+  useEffect(() => {
+    if (!analysisId) return;
+    let cancelled = false;
+    import("./_actions").then(({ loadScenarioWatchStatesAction }) => {
+      loadScenarioWatchStatesAction(analysisId).then((r) => {
+        if (!cancelled && r.states) setWatchStates(r.states);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [analysisId]);
+
+  async function toggleWatch(scenarioIndex: number) {
+    const entry = watchStates[scenarioIndex];
+    if (!entry) {
+      // 아직 scenario_outcomes 에 등록 안 됨 (저장 직후 race) — 잠시 후 다시 시도
+      toast.info("시나리오가 아직 등록 중입니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    const newWatch = !entry.watch;
+    const optimisticStates = { ...watchStates, [scenarioIndex]: { ...entry, watch: newWatch } };
+    setWatchStates(optimisticStates);
+    const { toggleScenarioWatchAction } = await import("./_actions");
+    const r = await toggleScenarioWatchAction({ scenarioId: entry.id, watch: newWatch });
+    if (r.error) {
+      // rollback
+      setWatchStates(watchStates);
+      toast.error(r.error);
+    } else {
+      toast.success(newWatch ? "🔔 알림 등록됨 — 가격 도달 시 Telegram/Discord 발송" : "알림 해제됨");
+    }
+  }
   const captureRef = useRef<HTMLDivElement>(null);
   const [elapsedSec, setElapsedSec] = useState(() =>
     Math.floor((Date.now() - new Date(snapshot.generatedAt).getTime()) / 1000),
@@ -339,6 +378,8 @@ export function AnalysisResult({
                 currency={currency}
                 isActive={activeScenario === i}
                 onHover={() => setActiveScenario(i)}
+                watchState={watchStates[i] ?? null}
+                onToggleWatch={() => toggleWatch(i)}
               />
             );
           })}
@@ -747,6 +788,8 @@ function SimpleScenarioCard({
   currency,
   isActive,
   onHover,
+  watchState,
+  onToggleWatch,
 }: {
   index: number;
   symbol: string;
@@ -763,6 +806,8 @@ function SimpleScenarioCard({
   currency: "USD" | "KRW";
   isActive: boolean;
   onHover: () => void;
+  watchState?: { id: string; watch: boolean; status: string } | null;
+  onToggleWatch?: () => void;
 }) {
   const isLong = scenario.direction === "long";
   const stopPct = (Math.abs(entry - scenario.invalidation) / entry) * 100;
@@ -880,6 +925,28 @@ function SimpleScenarioCard({
               <div className="text-xs text-muted-foreground">매매 등급</div>
               <div className="text-sm font-semibold">{GRADE_TEXT[grade.grade]}</div>
             </div>
+            {onToggleWatch && watchState !== undefined ? (
+              <button
+                type="button"
+                onClick={onToggleWatch}
+                disabled={!watchState}
+                title={
+                  watchState?.watch
+                    ? "알림 해제 (가격 도달 알림 받지 않음)"
+                    : "알림 등록 (entry/target/stop 도달 시 Telegram/Discord 발송)"
+                }
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs transition-colors",
+                  watchState?.watch
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  !watchState && "opacity-50 cursor-not-allowed",
+                )}
+              >
+                <span>{watchState?.watch ? "🔔" : "🔕"}</span>
+                <span>{watchState?.watch ? "알림 등록됨" : "알림 등록"}</span>
+              </button>
+            ) : null}
           </div>
         </div>
 

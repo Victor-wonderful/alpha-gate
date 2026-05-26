@@ -11,6 +11,7 @@ interface AnalysisResult {
   snapshot: AnalysisSnapshot;
   strategy: StrategyResult;
   report: AnalysisReport;
+  analysisId?: string;
 }
 
 interface AnalysisStore {

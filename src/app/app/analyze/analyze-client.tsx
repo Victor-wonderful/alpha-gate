@@ -131,7 +131,7 @@ function AnalyzeClientInner({
       if ("error" in r) {
         toast.error(r.error);
       } else {
-        setResult({ snapshot: r.snapshot, strategy: r.strategy, report: r.report });
+        setResult({ snapshot: r.snapshot, strategy: r.strategy, report: r.report, analysisId: loadId });
         toast.success("저장된 분석을 불러왔습니다.");
       }
       setLoadingFromHistory(false);
@@ -161,7 +161,7 @@ function AnalyzeClientInner({
       setResult(null);
       const r = await runAnalysisAction(target, style);
       if (r.snapshot && r.strategy && r.report) {
-        setResult({ snapshot: r.snapshot, strategy: r.strategy, report: r.report });
+        setResult({ snapshot: r.snapshot, strategy: r.strategy, report: r.report, analysisId: r.analysisId });
       }
       if (r.error) toast.error(r.error);
       else toast.success("분석 완료");
@@ -304,6 +304,7 @@ function AnalyzeClientInner({
             riskPct={riskPct}
             currency={currency}
             historicalStats={stats}
+            analysisId={result.analysisId}
           />
         </>
       ) : null}

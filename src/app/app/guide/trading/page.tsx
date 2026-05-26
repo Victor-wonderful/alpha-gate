@@ -1,15 +1,15 @@
 import { GuideSubpageLayout, GuideSection, GuideFaq } from "@/components/guide/guide-layout";
 import { AlertTriangle, Lightbulb } from "lucide-react";
 
-export const metadata = { title: "가상 트레이딩 사용법" };
+export const metadata = { title: "트레이딩 터미널 사용법" };
 
 export default function GuideTradingPage() {
   return (
     <GuideSubpageLayout
-      category="가상 트레이딩"
-      title="가상 트레이딩 사용법"
-      description="vUSDT로 거래소처럼 매매하면서 진입·청산 흐름을 익힙니다. 실제 자금 없이 실제와 똑같은 체결가·슬리피지·수수료를 경험합니다."
-      next={{ href: "/app/guide/game", label: "가격 예측 게임 사용법 →" }}
+      category="트레이딩 터미널"
+      title="트레이딩 터미널 사용법"
+      description="vUSDT로 거래소처럼 매매하면서 진입·청산 흐름을 익힙니다. 실제 자금 없이 실제와 똑같은 체결가·슬리피지·수수료를 경험합니다. 거래 평가는 자금 관리·시장 컨텍스트를 자동 집계해 등급에 반영합니다."
+      next={{ href: "/app/guide/arbitrage", label: "차익거래 사용법 →" }}
     >
       {/* 시장가 vs 지정가 */}
       <GuideSection eyebrow="01" title="시장가와 지정가의 차이">
@@ -54,8 +54,48 @@ export default function GuideTradingPage() {
         </div>
       </GuideSection>
 
+      {/* 자금 관리 자동 집계 (NEW) */}
+      <GuideSection eyebrow="03" title="거래 평가 — 자금 관리 자동 집계">
+        <p className="text-sm leading-relaxed text-muted-foreground max-w-2xl">
+          주문 검토 페이지(거래 평가)에 진입 시 사용자가 입력할 필요 없이 자동으로 표시됩니다.
+          심리 체크리스트 같은 양심 체크는 모두 폐지하고 객관적 자동 집계로 대체했습니다.
+        </p>
+        <ul className="space-y-2 max-w-2xl text-sm text-muted-foreground mt-3">
+          <li>· <span className="font-medium text-foreground">오늘 거래 N건</span> + 누적 R — 저널 DB 자동 집계</li>
+          <li>· <span className="font-medium text-foreground">진행 중 포지션 리스트</span> — 같은 코인이 이미 있으면 ⚠️ 중복 노출 경고</li>
+          <li>· <span className="font-medium text-foreground">진행 중 노출 %</span> — 80% 초과 시 등급 -2점 자동 차감</li>
+          <li>· <span className="font-medium text-foreground">일일 손실 한도 -2R</span> — 근접 시 등급 -2점 자동 차감</li>
+        </ul>
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm mt-3">
+          <div className="mb-1 flex items-center gap-1.5 font-semibold text-primary">
+            <Lightbulb className="h-4 w-4" />
+            등급 자동 차감 규칙
+          </div>
+          <ul className="space-y-0.5 text-muted-foreground">
+            <li>· 오늘 -1.5R 손실 + 추가 진입 시도 → -2점</li>
+            <li>· 동일 코인 진행 중 또 진입 → -1점</li>
+            <li>· 노출 80% 초과 → -2점</li>
+            <li>· 펀딩 정산 ≤ 10분 → -1점</li>
+            <li>· 펀딩비 극단치 + 같은 방향 군집 → -1점</li>
+          </ul>
+        </div>
+      </GuideSection>
+
+      {/* 시장 컨텍스트 (NEW 강조) */}
+      <GuideSection eyebrow="04" title="시장 컨텍스트 — BTC · 펀딩비 자동 표시">
+        <p className="text-sm leading-relaxed text-muted-foreground max-w-2xl">
+          Binance API에서 자동으로 가져와 거래 평가 화면에 표시. 등급에도 자동 반영.
+        </p>
+        <ul className="space-y-2 max-w-2xl text-sm text-muted-foreground mt-3">
+          <li>· <span className="font-medium text-foreground">BTC 현재가 + 24h 변동</span></li>
+          <li>· <span className="font-medium text-foreground">해당 코인 펀딩비</span> + 다음 정산까지 분</li>
+          <li>· 정산 ±10분 전 자동 경고 표시</li>
+          <li>· 펀딩비 ±0.05% 이상 극단치 + 본인 방향 같으면 "군집" 경고</li>
+        </ul>
+      </GuideSection>
+
       {/* 미실현 PnL */}
-      <GuideSection eyebrow="03" title="미실현 PnL 위젯 읽는 법">
+      <GuideSection eyebrow="05" title="미실현 PnL 위젯 읽는 법">
         <ul className="space-y-2 max-w-2xl text-sm text-muted-foreground">
           <li>· <span className="font-medium text-foreground">미실현 R</span> — 수수료 차감 후 net R. 0.84R 이상이면 수수료 부담 해소.</li>
           <li>· <span className="font-medium text-foreground">현재가</span> — 10초마다 자동 갱신 (CORS 우회 Binance ticker API).</li>

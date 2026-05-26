@@ -23,7 +23,7 @@ export default function GuideAnalyzePage() {
       category="AI 분석"
       title="AI 분석 사용법"
       description="언제 분석하면 좋은지, 결과를 어떻게 읽어야 하는지. 트레이딩 스타일과 시장 시간대에 따라 다릅니다."
-      next={{ href: "/app/guide/trading", label: "가상 트레이딩 사용법 →" }}
+      next={{ href: "/app/guide/trading", label: "트레이딩 터미널 사용법 →" }}
     >
       {/* 1. 언제 분석하나 */}
       <GuideSection eyebrow="01" title="언제 분석하면 좋은가">
@@ -152,8 +152,37 @@ export default function GuideAnalyzePage() {
         </div>
       </GuideSection>
 
-      {/* 3. 흔한 오해 */}
-      <GuideSection eyebrow="03" title="자주 하는 오해">
+      {/* 시나리오 자동 추적 (NEW) */}
+      <GuideSection eyebrow="03" title="시나리오 결과 자동 추적 — 과거 적중률">
+        <p className="text-sm leading-relaxed text-muted-foreground max-w-2xl">
+          분석을 저장하면 시나리오들이 자동으로 트래킹 시스템에 등록됩니다. 사용자가 실제 진입했는지 여부와
+          무관하게 시스템이 5분마다 가격 도달을 추적해 적중률 데이터를 누적합니다.
+        </p>
+        <div className="grid gap-3 lg:grid-cols-2 mt-4">
+          <div className="rounded-xl border border-border/60 bg-card/30 p-5">
+            <div className="text-sm font-semibold mb-2">자동 라벨링</div>
+            <ul className="space-y-1 text-sm text-muted-foreground">
+              <li>· pending → triggered: entry 가격 터치</li>
+              <li>· triggered → target: 목표가 도달 (승)</li>
+              <li>· triggered → stop: 손절가 도달 (패)</li>
+              <li>· 만료 시: expired (timeframe 별 timeout)</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-card/30 p-5">
+            <div className="text-sm font-semibold mb-2">적중률 표시</div>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              분석 결과의 AI 자신감 옆에 "과거 적중률 X% (Y승 Z패, +N.NR avg)" 자동 표시. 색상은 등급에 따라
+              녹/노/빨. (symbol × strategy) 조합별 최근 30일 표본 합산.
+            </p>
+            <div className="mt-2 text-[11px] text-muted-foreground">
+              표본 3개 미만이면 "표본 부족" 표시
+            </div>
+          </div>
+        </div>
+      </GuideSection>
+
+      {/* 4. 흔한 오해 */}
+      <GuideSection eyebrow="04" title="자주 하는 오해">
         <ul className="space-y-3 max-w-2xl">
           <Misconception
             wrong="AI가 추천한 거니까 사면 됨"

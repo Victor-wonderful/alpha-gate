@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { gradeTrade, calcRR } from "@/lib/grading";
 import type { TradeInput } from "@/types/trade";
 
+// BTCUSDT는 isBtcPair 분기로 btc_aligned 보너스 +1을 못 받아 max +7 → A 불가능.
+// A 그레이드 테스트를 위해 알트(ETHUSDT) 기준 base로.
 const base: TradeInput = {
-  symbol: "BTCUSDT",
+  symbol: "ETHUSDT",
   direction: "long",
   timeframe: "1h",
   entry: 100,

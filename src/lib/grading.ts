@@ -17,6 +17,8 @@ export function gradeTrade(input: TradeInput): GradeResult {
   // ─── R:R ──────────────────────────────────────────────
   if (rr >= 3) reasons.push({ code: "rr_great", label: `손익비 ${rr.toFixed(2)}R로 우수`, points: 3 });
   else if (rr >= 2) reasons.push({ code: "rr_good", label: `손익비 ${rr.toFixed(2)}R로 양호함`, points: 2 });
+  // R:R 1.5~2.0 = 손익분기 + 마진 — 정당한 +1점 (수수료 차감해도 양수 기대값)
+  else if (rr >= 1.5) reasons.push({ code: "rr_fair", label: `손익비 ${rr.toFixed(2)}R로 보통`, points: 1 });
   else if (rr > 0) reasons.push({ code: "rr_low", label: `손익비 ${rr.toFixed(2)}R로 낮음`, points: 0 });
   else reasons.push({ code: "rr_invalid", label: "진입/손절/목표 구조가 잘못됨", points: -2 });
 
@@ -50,11 +52,20 @@ export function gradeTrade(input: TradeInput): GradeResult {
 
   // ─── 자금 관리 자동 감지 ──────────────────────────────
   const { todayCumulativeR, openPositions, openExposurePct } = input.money;
-  if (todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5) {
+  // 일일 손실 한도 — 2단계:
+  // - 한도 도달(≤ -2R): -2점 (강한 자제 신호)
+  // - 한도 근접(≤ -1.5R, 한도 0.5R 이내): -1점 (경고)
+  if (todayCumulativeR <= DAILY_LOSS_LIMIT_R) {
     reasons.push({
       code: "daily_loss_limit",
-      label: `오늘 누적 ${todayCumulativeR.toFixed(2)}R — 일일 손실 한도 근접`,
+      label: `오늘 누적 ${todayCumulativeR.toFixed(2)}R — 일일 손실 한도(${DAILY_LOSS_LIMIT_R}R) 도달`,
       points: -2,
+    });
+  } else if (todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5) {
+    reasons.push({
+      code: "daily_loss_near",
+      label: `오늘 누적 ${todayCumulativeR.toFixed(2)}R — 일일 손실 한도(${DAILY_LOSS_LIMIT_R}R) 근접`,
+      points: -1,
     });
   }
   const duplicateSymbol = openPositions.some((p) => p.symbol === input.symbol);

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { STRATEGY_LABELS, type StrategyId } from "@/lib/analysis/strategy";
+import { DeleteAnalysisButton } from "@/app/app/analyze/history/delete-analysis-button";
 
 interface AnalysisRow {
   id: string;
@@ -16,6 +17,8 @@ interface AnalysisRow {
   scenarios_count: number;
   current_price: number | null;
   created_at: string;
+  mode: "live" | "backtest" | null;
+  historical_at: string | null;
 }
 
 const STYLE_LABEL_SHORT: Record<string, string> = {
@@ -30,7 +33,7 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
   const { data: analyses } = await supabase
     .from("analyses")
     .select(
-      "id, symbol, style, primary_strategy, strategy_direction, strategy_confidence, scenarios_count, current_price, created_at",
+      "id, symbol, style, primary_strategy, strategy_direction, strategy_confidence, scenarios_count, current_price, created_at, mode, historical_at",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -59,45 +62,71 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
           <ul className="divide-y divide-border/60">
             {analysisRows.map((a) => {
               const isWait = a.primary_strategy === "wait";
+              const isBacktest = a.mode === "backtest";
               const dirLabel =
                 a.strategy_direction === "long" ? "롱" : a.strategy_direction === "short" ? "숏" : null;
               return (
-                <li key={a.id}>
+                <li
+                  key={a.id}
+                  className="group relative flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 text-sm transition-colors hover:bg-muted/30"
+                >
                   <Link
                     href={`/app/analyze?load=${a.id}`}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 text-sm transition-colors hover:bg-muted/30"
-                  >
-                    <span className="font-mono font-medium">{a.symbol}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {STYLE_LABEL_SHORT[a.style] ?? a.style}
-                    </span>
+                    className="absolute inset-0 z-0"
+                    aria-label={`${a.symbol} 분석 불러오기`}
+                  />
+                  <span className="relative font-mono font-medium">{a.symbol}</span>
+                  <span className="relative text-xs text-muted-foreground">
+                    {STYLE_LABEL_SHORT[a.style] ?? a.style}
+                  </span>
+                  {isBacktest ? (
                     <Badge
-                      className={cn(
-                        "border",
-                        isWait
-                          ? "border-grade-c/40 bg-grade-c/10 text-grade-c"
-                          : a.strategy_direction === "short"
-                            ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
-                            : "border-primary/40 bg-primary/10 text-primary",
-                      )}
+                      className="relative border border-amber-500/40 bg-amber-500/10 text-amber-300"
+                      title={
+                        a.historical_at
+                          ? `백테스트 — ${new Date(a.historical_at).toLocaleString("ko-KR", {
+                              timeZone: "Asia/Seoul",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })} KST 시점`
+                          : "백테스트"
+                      }
                     >
-                      {STRATEGY_LABELS[a.primary_strategy]}
-                      {dirLabel ? ` · ${dirLabel}` : ""}
+                      ⏮ BT
                     </Badge>
-                    <span className="text-xs text-muted-foreground">시나리오 {a.scenarios_count}개</span>
-                    <span className="text-xs text-muted-foreground">
-                      자신감 {Math.round(a.strategy_confidence * 100)}%
-                    </span>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {new Date(a.created_at).toLocaleString("ko-KR", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        hour12: false,
-                      })}
-                    </span>
-                  </Link>
+                  ) : null}
+                  <Badge
+                    className={cn(
+                      "relative border",
+                      isWait
+                        ? "border-grade-c/40 bg-grade-c/10 text-grade-c"
+                        : a.strategy_direction === "short"
+                          ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
+                          : "border-primary/40 bg-primary/10 text-primary",
+                    )}
+                  >
+                    {STRATEGY_LABELS[a.primary_strategy]}
+                    {dirLabel ? ` · ${dirLabel}` : ""}
+                  </Badge>
+                  <span className="relative text-xs text-muted-foreground">시나리오 {a.scenarios_count}개</span>
+                  <span className="relative text-xs text-muted-foreground">
+                    자신감 {Math.round(a.strategy_confidence * 100)}%
+                  </span>
+                  <span className="relative ml-auto text-xs text-muted-foreground">
+                    {new Date(a.created_at).toLocaleString("ko-KR", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                    })}
+                  </span>
+                  {/* 삭제 버튼 — Link 위에 z-10으로 띄워서 클릭 분리 */}
+                  <div className="relative z-10 opacity-0 transition-opacity group-hover:opacity-100">
+                    <DeleteAnalysisButton id={a.id} label={a.symbol} />
+                  </div>
                 </li>
               );
             })}

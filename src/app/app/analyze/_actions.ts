@@ -92,6 +92,16 @@ export async function runAnalysisAction(
     };
   }
 
+  // range_fade 양방향 전략 — Stage 2의 direction은 null (강제). Stage 3 시나리오의 majority로 결정.
+  // 시나리오 long/short 카운트가 같으면 null로 유지 ("양방향" 배지 표시용).
+  if (strategy.primary === "range_fade" && report.scenarios.length > 0) {
+    const longs = report.scenarios.filter((s) => s.direction === "long").length;
+    const shorts = report.scenarios.filter((s) => s.direction === "short").length;
+    if (longs > shorts) strategy = { ...strategy, direction: "long" };
+    else if (shorts > longs) strategy = { ...strategy, direction: "short" };
+    else strategy = { ...strategy, direction: null }; // 동률 = 양방향 유지
+  }
+
   // Stage 4: 백테스트 모드면 시나리오마다 walk-forward 시뮬 자동 실행
   if (isBacktest && atDate && report.scenarios.length > 0) {
     const sims = await Promise.allSettled(

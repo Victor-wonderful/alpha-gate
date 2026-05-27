@@ -27,11 +27,12 @@ export type KimchiVolatility = {
   priceMaxRunupPct: number;    // 7일 내 최대 상승 (%, 양수)
 };
 
+import { slippageRateFor } from "./slippage";
+
 const DEFAULT_THRESHOLD = 0.5;
 const DEFAULT_NOTIONAL = 1000;
 const FRACTION = 0.25;
 const FEE_RATE = 0.0004;
-const SLIPPAGE_RATE = 0.0002;
 
 /**
  * 임계값 threshold 가정 하의 단순 tick 카운트 (실제 cron 동작과 일치).
@@ -57,6 +58,7 @@ function backtestProfit(
   series: Array<{ premium: number; upbitUsd: number; binanceUsd: number }>,
   threshold: number,
   notional: number,
+  symbol: string,
 ): {
   profit: number;
   effectiveCycles: number;
@@ -84,6 +86,8 @@ function backtestProfit(
 
   let positiveCycles = 0;
   let negativeCycles = 0;
+  let cumulativeCosts = 0;
+  const slipRate = slippageRateFor(symbol);
 
   for (const tick of series) {
     const { premium, upbitUsd, binanceUsd } = tick;
@@ -99,6 +103,9 @@ function backtestProfit(
       usdtUpbit += coinMoved * upbitUsd;
       coinBinance += coinMoved;
       usdtBinance -= coinMoved * binanceUsd;
+      // 사이클당 fees + slippage (resolve.ts와 동일 공식)
+      const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
+      cumulativeCosts += tradeNotional * (FEE_RATE + slipRate);
       positiveCycles++;
     } else if (premium <= -threshold) {
       const maxToUpbit = usdtUpbit / upbitUsd;
@@ -110,6 +117,8 @@ function backtestProfit(
       usdtUpbit -= coinMoved * upbitUsd;
       coinBinance -= coinMoved;
       usdtBinance += coinMoved * binanceUsd;
+      const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
+      cumulativeCosts += tradeNotional * (FEE_RATE + slipRate);
       negativeCycles++;
     }
   }
@@ -120,7 +129,7 @@ function backtestProfit(
     coinBinance * last.binanceUsd +
     usdtUpbit +
     usdtBinance;
-  const profit = finalValue - 2 * notional;
+  const profit = finalValue - 2 * notional - cumulativeCosts;
 
   const totalCoin = coinUpbit + coinBinance;
   const totalUsdt = usdtUpbit + usdtBinance;
@@ -194,7 +203,7 @@ export async function fetchKimchiVolatility(
     const cyclesTotal = simulateCycles(values, threshold);
     const cyclesPerDay = spanHours > 0 ? (cyclesTotal / spanHours) * 24 : 0;
 
-    const bt = backtestProfit(series, threshold, DEFAULT_NOTIONAL);
+    const bt = backtestProfit(series, threshold, DEFAULT_NOTIONAL, symbol);
     const simProfitPerDay = spanHours > 0 ? (bt.profit / spanHours) * 24 : 0;
 
     // 코인 가격 변동 추적 (양쪽 거래소 평균가)

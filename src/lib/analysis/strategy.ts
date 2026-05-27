@@ -203,5 +203,8 @@ export async function classifyStrategy(snapshot: AnalysisSnapshot): Promise<Stra
   parsed.confidence = Math.max(0, Math.min(1, parsed.confidence ?? 0.5));
   parsed.rejected = parsed.rejected ?? [];
   if (parsed.primary === "wait") parsed.direction = null;
+  // range_fade는 본질적으로 양방향 전략 — direction은 후속 단계(Scenario Generator)의 시나리오 majority로 결정.
+  // LLM이 한쪽 방향을 골랐어도 강제로 null 처리해서 Stage 2/3 모순을 사전 차단.
+  if (parsed.primary === "range_fade") parsed.direction = null;
   return parsed;
 }

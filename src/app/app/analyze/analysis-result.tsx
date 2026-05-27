@@ -839,7 +839,9 @@ function RecommendationBody({
           {STRATEGY_LABELS[strategy.primary]}
           {strategy.direction
             ? ` · ${strategy.direction === "long" ? "롱" : "숏"}`
-            : ""}
+            : strategy.primary === "range_fade"
+              ? " · 양방향"
+              : ""}
         </Badge>
         <span className="text-muted-foreground">
           AI 자신감 <span className="font-mono">{Math.round(strategy.confidence * 100)}%</span>
@@ -1307,7 +1309,13 @@ function StrategyBanner({ strategy }: { strategy: StrategyResult }) {
   const isWait = strategy.primary === "wait";
   const confPct = Math.round(strategy.confidence * 100);
   const directionLabel =
-    strategy.direction === "long" ? "롱" : strategy.direction === "short" ? "숏" : null;
+    strategy.direction === "long"
+      ? "롱"
+      : strategy.direction === "short"
+        ? "숏"
+        : strategy.primary === "range_fade"
+          ? "양방향"
+          : null;
 
   return (
     <Card className={cn("overflow-hidden", isWait && "border-grade-c/40")}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,34 @@ export function NotifyForm({ initial }: { initial: Initial }) {
   const [eL, setEL] = useState(initial?.enable_losing_streak ?? true);
   const [eA, setEA] = useState(initial?.enable_ai_coach_done ?? true);
   const [eDig, setEDig] = useState(initial?.enable_daily_digest ?? false);
+  // Telegram 자동 폴링 — 링크 생성 시 활성화, chat_id 잡히면 자동 종료
+  const [polling, setPolling] = useState(false);
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!polling) return;
+    const startedAt = Date.now();
+    const MAX_MS = 90_000; // 최대 90초
+    const tick = async () => {
+      if (Date.now() - startedAt > MAX_MS) {
+        setPolling(false);
+        toast.info("자동 확인 시간 초과. Telegram 에서 START 눌렀다면 \"연결 후 새로고침\" 버튼으로 확인하세요.");
+        return;
+      }
+      const r = await getCurrentChatIdAction();
+      if (r.chatId) {
+        setTg(r.chatId);
+        setPolling(false);
+        toast.success("🎉 텔레그램 연결 완료!");
+        return;
+      }
+      pollTimerRef.current = setTimeout(tick, 3000);
+    };
+    tick();
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, [polling]);
 
   function save() {
     startTransition(async () => {
@@ -87,7 +115,7 @@ export function NotifyForm({ initial }: { initial: Initial }) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={pending}
+                disabled={pending || polling}
                 onClick={() => {
                   startTransition(async () => {
                     const r = await createTelegramLinkAction();
@@ -98,13 +126,22 @@ export function NotifyForm({ initial }: { initial: Initial }) {
                     // 새 창에서 Telegram 열기 (앱 또는 웹)
                     window.open(r.url, "_blank", "noopener,noreferrer");
                     toast.info(
-                      "Telegram 에서 START 누르세요. 봇이 \"연결 완료\" 메시지 보내면 아래 새로고침 버튼.",
-                      { duration: 8000 },
+                      "Telegram 에서 START 누르세요. 연결되면 자동으로 ✓ 연결됨 표시 (최대 90초).",
+                      { duration: 6000 },
                     );
+                    // 자동 폴링 시작 — chat_id 등록 감지 시 즉시 UI 갱신
+                    setPolling(true);
                   });
                 }}
               >
-                🤖 텔레그램 연결
+                {polling ? (
+                  <>
+                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+                    Telegram 에서 START 대기 중...
+                  </>
+                ) : (
+                  "🤖 텔레그램 연결"
+                )}
               </Button>
               <button
                 type="button"

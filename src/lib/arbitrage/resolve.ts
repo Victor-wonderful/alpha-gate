@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { settleMargin } from "@/lib/paper-wallet";
 import { fetchKimchiPremium } from "@/lib/market-widgets/kimchi";
+import { slippageRateFor } from "./slippage";
 
 interface OpenKimchiPosition {
   id: string;
@@ -242,7 +243,7 @@ function runRebalanceCycle(args: {
     const gross = coinMoved * (upbitUsd - binanceUsd);
     const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
     const fees = tradeNotional * 0.0004;
-    const slippage = tradeNotional * 0.0002;
+    const slippage = tradeNotional * slippageRateFor(p.symbol);
     profitUsdt = gross - fees - slippage;
   } else {
     const maxToUpbit = upbitUsd > 0 ? usdtUpbit / upbitUsd : 0;
@@ -263,7 +264,7 @@ function runRebalanceCycle(args: {
     const gross = coinMoved * (binanceUsd - upbitUsd);
     const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
     const fees = tradeNotional * 0.0004;
-    const slippage = tradeNotional * 0.0002;
+    const slippage = tradeNotional * slippageRateFor(p.symbol);
     profitUsdt = gross - fees - slippage;
   }
 

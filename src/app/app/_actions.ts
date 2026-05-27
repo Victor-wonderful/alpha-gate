@@ -5,7 +5,10 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { dispatch } from "@/lib/notify-dispatch";
 import { fetchKlines, fetchTicker24h } from "@/lib/analysis/binance";
 import { canAffordMargin, lockMargin, requiredMargin, settleMargin } from "@/lib/paper-wallet";
+import { simulateTrade } from "@/lib/backtest/simulator";
+import type { TradingStyle } from "@/lib/analysis/style";
 import type { GradeResult, SizingResult, TradeInput } from "@/types/trade";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Simulated market-order slippage in % for paper trading.
  *  Direction-aware: long fills slightly higher, short slightly lower (unfavorable side). */
@@ -38,6 +41,129 @@ async function simulateMarketFill(
   }
 }
 
+/**
+ * 백테스트 거래 저장 — 라이브 가드 스킵, simulator 자동 실행, 결과 즉시 채워서 closed 상태로 insert.
+ * - paper wallet 무관 (마진 lock 없음)
+ * - 알림 없음
+ * - mode='backtest', simulated_at=백테스트 시점, simulation_meta=시뮬 결과 메타
+ */
+async function saveBacktestTrade(args: {
+  user_id: string;
+  supabase: SupabaseClient;
+  input: TradeInput;
+  grade: GradeResult;
+  sizing: SizingResult;
+  leverage: number;
+  gradeOverride: boolean;
+  backtestAt: string; // ISO
+  forecast?: unknown;
+}): Promise<{ id?: string; error?: string; orderType?: "market" | "limit"; status?: "closed" }> {
+  const { user_id, supabase, input, grade, sizing, leverage, gradeOverride, backtestAt } = args;
+  const atDate = new Date(backtestAt);
+  if (isNaN(atDate.getTime())) return { error: "백테스트 시각 형식이 올바르지 않습니다." };
+
+  // 스타일은 timeframe에서 역추정 (정확치 않을 수 있으나 sim 시간 한도용으로 충분).
+  // analyze-store의 style이 trade-form까지 전달되진 않아서 timeframe 기반으로 매핑.
+  const styleFromTf: Record<string, TradingStyle> = {
+    "15m": "scalp",
+    "1h": "day",
+    "4h": "swing",
+    "1D": "position",
+    "1d": "position",
+  };
+  const style = styleFromTf[input.timeframe] ?? "swing";
+
+  // walk-forward 시뮬
+  let sim;
+  try {
+    sim = await simulateTrade({
+      symbol: input.symbol,
+      direction: input.direction,
+      entry: input.entry,
+      stop: input.stop,
+      target: input.target,
+      simulatedAt: atDate,
+      style,
+    });
+  } catch (e) {
+    return { error: `백테스트 시뮬 실패: ${e instanceof Error ? e.message : "unknown"}` };
+  }
+
+  // 결과 정리
+  const isNoEntry = sim.exitReason === "no_entry";
+  const entryActual = isNoEntry ? null : sim.entryFillPrice;
+  const exitPrice = isNoEntry ? null : sim.exitPrice;
+  const resultR = isNoEntry ? 0 : sim.resultR;
+  const closedAt = sim.closedAt;
+  const note = isNoEntry
+    ? "백테스트: 진입가 미체결 (트리거 발생 안 함)"
+    : `백테스트 자동 정산: ${
+        sim.exitReason === "target" ? "목표 도달" : sim.exitReason === "stop" ? "손절" : "시간 만료"
+      } (${sim.resultR.toFixed(2)}R, ${sim.meta.barsHeld}봉 보유)`;
+
+  // pre_rr from intent (백테스트는 entry_actual이 시뮬 결과라 의미 동일)
+  const rrFromIntent = Math.abs((input.target - input.entry) / (input.entry - input.stop));
+
+  const { data, error } = await supabase
+    .from("trades")
+    .insert({
+      user_id,
+      symbol: input.symbol,
+      direction: input.direction,
+      timeframe: input.timeframe,
+      entry: input.entry,
+      stop: input.stop,
+      target: input.target,
+      account_size: input.accountSize,
+      allowed_loss_pct: input.allowedLossPct,
+      position_quantity: sizing.quantity,
+      market_checks: input.market,
+      psych_checks: {},
+      context_flags: {
+        leverage,
+        trigger: input.trigger,
+        backtest: true,
+      },
+      pre_grade: grade.grade,
+      pre_score: grade.score,
+      pre_score_breakdown: grade.reasons,
+      pre_actions: grade.actions,
+      pre_rr: rrFromIntent,
+      // 결과 즉시 채움 (closed)
+      entry_actual: entryActual,
+      entry_slippage_pct: 0, // 시뮬엔 슬리피지 없음
+      fees_pct: PAPER_FEES_PCT,
+      exit_price: exitPrice,
+      exit_reason: isNoEntry ? "manual" : sim.exitReason === "time" ? "manual" : sim.exitReason,
+      result_r: resultR,
+      closed_at: closedAt,
+      note,
+      // 백테스트 메타
+      mode: "backtest",
+      simulated_at: backtestAt,
+      simulation_meta: {
+        kind: "backtest_walk_forward",
+        at: backtestAt,
+        ...sim.meta,
+        exitReason: sim.exitReason,
+      },
+      // paper wallet 무관
+      is_paper: true,
+      paper_margin: null,
+      order_type: "market",
+      order_status: "filled",
+      grade_override: gradeOverride,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) return { error: error?.message ?? "백테스트 거래 저장 실패" };
+
+  revalidatePath("/app/journal");
+  revalidatePath("/app/dashboard");
+  return { id: data.id, orderType: "market", status: "closed" };
+}
+
 /** Threshold: market price drift from user-intended entry, expressed as a
  *  fraction of the planned stop distance. If the market has moved more than
  *  this much from the entry the user typed, we reject the order to prevent
@@ -56,7 +182,9 @@ export async function saveTradeAction(args: {
   orderType?: "market" | "limit";
   /** D 등급 거래를 사용자가 확인 모달로 override 한 경우 true. */
   gradeOverride?: boolean;
-}): Promise<{ id?: string; error?: string; orderType?: "market" | "limit"; status?: "filled" | "pending" }> {
+  /** 백테스트 모드 — ISO 시각. 있으면 라이브 가드 스킵 + simulator 자동 실행 후 결과 즉시 채움. */
+  backtestAt?: string;
+}): Promise<{ id?: string; error?: string; orderType?: "market" | "limit"; status?: "filled" | "pending" | "closed" }> {
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -78,6 +206,23 @@ export async function saveTradeAction(args: {
   const stopDist = Math.abs(input.entry - input.stop);
   if (stopDist <= 0) {
     return { error: "진입가와 손절가가 같습니다. 손절 위치를 확인하세요." };
+  }
+
+  // ── 백테스트 모드 분기 ─────────────────────────────────────────────────
+  // 라이브 가드(drift / pending limit / 마진 lock / 알림)는 모두 스킵.
+  // simulator로 walk-forward 시뮬 → 결과(R, exit_price, exit_reason)를 즉시 채워서 closed 상태로 저장.
+  if (args.backtestAt) {
+    return await saveBacktestTrade({
+      user_id: user.id,
+      supabase,
+      input,
+      grade,
+      sizing,
+      leverage: lev,
+      gradeOverride: !!args.gradeOverride,
+      backtestAt: args.backtestAt,
+      forecast,
+    });
   }
 
   // 3차 가드: 손절폭이 수수료 대비 너무 좁으면 진입 거부.

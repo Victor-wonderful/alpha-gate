@@ -12,6 +12,7 @@ import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
 import { ViewTabs, parseView, type View } from "@/components/app/view-tabs";
+import { ModeFilter, parseMode, type TradeMode } from "@/components/app/mode-filter";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
 import { Suspense } from "react";
 import { ClosedTradesTable, type ClosedTradeRow } from "./closed-trades-table";
@@ -59,6 +60,7 @@ interface TradeRow {
   paper_realized_pnl: number | null;
   exit_price: number | null;
   exit_actual: number | null;
+  mode: "live" | "backtest" | null;
 }
 
 interface ArbitrageRow {
@@ -79,10 +81,11 @@ interface ArbitrageRow {
 export default async function JournalListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; mode?: string }>;
 }) {
   const sp = await searchParams;
   const view: View = parseView(sp.view);
+  const tradeMode: TradeMode = parseMode(sp.mode);
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -92,7 +95,7 @@ export default async function JournalListPage({
     supabase
       .from("trades")
       .select(
-        "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual",
+        "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual, mode",
       )
       .order("created_at", { ascending: false })
       .limit(100),
@@ -141,7 +144,15 @@ export default async function JournalListPage({
   const open = trades.filter(
     (t) => !t.closed_at && t.order_status !== "pending" && t.order_status !== "canceled" && t.order_status !== "expired",
   );
-  const closed = trades.filter((t) => t.closed_at);
+  const closedAll = trades.filter((t) => t.closed_at);
+  // 모드 필터 (?mode=live|backtest|all). 모든 KPI/통계/리스트는 이 필터를 거친 데이터 사용.
+  const closed = closedAll.filter((t) => {
+    if (tradeMode === "all") return true;
+    const m = t.mode === "backtest" ? "backtest" : "live"; // legacy null → live
+    return m === tradeMode;
+  });
+  const liveCount = closedAll.filter((t) => t.mode !== "backtest").length;
+  const backtestCount = closedAll.filter((t) => t.mode === "backtest").length;
 
   // Pre-compute pnl + roi for closed trades (used by ClosedTradesTable)
   const closedRows: ClosedTradeRow[] = closed.map((t) => {
@@ -179,6 +190,7 @@ export default async function JournalListPage({
       leverage: t.context_flags?.leverage ?? null,
       order_type: t.order_type,
       exit_reason: t.exit_reason,
+      mode: (t.mode === "backtest" ? "backtest" : "live") as "live" | "backtest",
       pnl,
       roiPct,
     };
@@ -322,17 +334,31 @@ export default async function JournalListPage({
         rightSlot={cluster.rightSlot}
       />
 
-      {/* View sub-tabs: 전체 / 거래 / 게임 / 차익 */}
-      <ViewTabs
-        basePath="/app/journal"
-        current={view}
-        counts={{
-          all: closed.length + games.length + arbitrageClosed.length,
-          trades: closed.length,
-          games: games.length,
-          arbitrage: arbitrageClosed.length,
-        }}
-      />
+      {/* View sub-tabs + 거래 모드 필터 */}
+      <div className="flex flex-wrap items-center gap-3">
+        <ViewTabs
+          basePath="/app/journal"
+          current={view}
+          counts={{
+            all: closedAll.length + games.length + arbitrageClosed.length,
+            trades: closedAll.length,
+            games: games.length,
+            arbitrage: arbitrageClosed.length,
+          }}
+        />
+        {view === "trades" || view === "all" ? (
+          <ModeFilter
+            basePath="/app/journal"
+            view={view}
+            current={tradeMode}
+            counts={{
+              all: closedAll.length,
+              live: liveCount,
+              backtest: backtestCount,
+            }}
+          />
+        ) : null}
+      </div>
 
       {/* KPI cards — content depends on view */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

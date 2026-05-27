@@ -212,6 +212,22 @@ function TradeFormInner({
   // AI mode: came from analysis page with a scenario. Simplify the form.
   const aiMode = activeScenario !== null;
 
+  // Backtest mode: came from a backtest analysis. saveTradeAction will auto-simulate.
+  const isBacktestMode =
+    aiMode &&
+    analysisResult?.snapshot.mode === "backtest" &&
+    !!analysisResult.snapshot.historicalAt;
+  const backtestAtKst = isBacktestMode && analysisResult?.snapshot.historicalAt
+    ? new Date(analysisResult.snapshot.historicalAt).toLocaleString("ko-KR", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
   // In AI mode the trigger checks are implicitly confirmed (user clicked through
   // an AI scenario after reviewing the trigger). Auto-flip them on entry.
   useEffect(() => {
@@ -371,18 +387,40 @@ function TradeFormInner({
       setShowDOverride(true);
       return;
     }
+    if (isBacktestMode && mode === "live") {
+      toast.error("백테스트 거래는 실거래 모드로 저장할 수 없습니다. 가상 모드로 전환되어 자동 시뮬됩니다.");
+      return;
+    }
     if (mode === "live") {
       // Two-step: first click opens the confirm panel (handled in JSX).
       setShowLiveConfirm(true);
       return;
     }
+    // 백테스트 분석에서 넘어왔으면 자동 시뮬 → DB 즉시 결과 저장
+    const backtestAt =
+      analysisResult?.snapshot.mode === "backtest" && analysisResult.snapshot.historicalAt
+        ? analysisResult.snapshot.historicalAt
+        : undefined;
+
     startTransition(async () => {
-      const res = await saveTradeAction({ input, grade, sizing, leverage, forecast: mcResult ?? undefined, orderType, gradeOverride });
+      const res = await saveTradeAction({
+        input,
+        grade,
+        sizing,
+        leverage,
+        forecast: mcResult ?? undefined,
+        orderType,
+        gradeOverride,
+        backtestAt,
+      });
       if (res.error) {
         toast.error(res.error, { duration: 8000 });
         return;
       }
-      if (res.orderType === "limit") {
+      if (backtestAt) {
+        toast.success("백테스트 거래 저장 — 자동 시뮬 결과가 저널에 기록됐습니다.", { duration: 6000 });
+        router.push(`/app/journal?view=trades`);
+      } else if (res.orderType === "limit") {
         toast.success("지정가 주문이 등록됐습니다. 가격 도달 시 자동 체결됩니다.", { duration: 6000 });
         router.push(`/app/journal`);
       } else {
@@ -562,6 +600,19 @@ function TradeFormInner({
 
   return (
     <div className="space-y-6">
+      {/* 백테스트 모드 배너 — 라이브 거래 차단 + 자동 시뮬 안내 */}
+      {isBacktestMode ? (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base">⏮</span>
+            <span className="font-semibold text-amber-300">백테스트 거래</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">
+              기준 시각 <span className="font-mono text-foreground">{backtestAtKst} KST</span> · 저장 시 walk-forward 시뮬 자동 실행 → 결과가 저널에 백테스트 거래로 기록됩니다 (실거래·가상지갑 미차감).
+            </span>
+          </div>
+        </div>
+      ) : null}
       {/* 모드 배너 + 동적 헤더 */}
       <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm">
         <div className="flex flex-wrap items-center gap-2">

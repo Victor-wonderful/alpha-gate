@@ -28,6 +28,7 @@ export interface ClosedTradeRow {
   leverage: number | null;
   order_type: string | null;
   exit_reason: "target" | "stop" | "manual" | null;
+  mode?: "live" | "backtest";
   pnl: number | null;
   roiPct: number | null;
 }
@@ -252,7 +253,19 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                           </div>
                         </Link>
                       </td>
-                      <td className="px-2 py-1.5 font-mono">{t.symbol}</td>
+                      <td className="px-2 py-1.5 font-mono">
+                        <div className="flex items-center gap-1">
+                          <span>{t.symbol}</span>
+                          {t.mode === "backtest" ? (
+                            <span
+                              className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-semibold text-amber-300"
+                              title="백테스트 거래 (walk-forward 자동 시뮬)"
+                            >
+                              ⏮ BT
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="px-2 py-1.5">{t.direction === "long" ? "롱" : "숏"}</td>
                       <td className="px-2 py-1.5">
                         {t.order_type === "limit" ? (

@@ -12,6 +12,7 @@ import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
 import { ViewTabs, parseView, type View } from "@/components/app/view-tabs";
+import { ModeFilter, parseMode, type TradeMode } from "@/components/app/mode-filter";
 
 interface ClosedRow {
   pre_grade: Grade;
@@ -20,6 +21,7 @@ interface ClosedRow {
   symbol: string;
   direction: "long" | "short";
   exit_reason: "target" | "stop" | "manual" | null;
+  mode: "live" | "backtest" | null;
   paper_realized_pnl: number | null;
   entry: number | null;
   entry_actual: number | null;
@@ -45,24 +47,29 @@ function realizedPnlOrFallback(r: ClosedRow): number {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; mode?: string }>;
 }) {
   const sp = await searchParams;
   const view: View = parseView(sp.view);
+  const tradeMode: TradeMode = parseMode(sp.mode);
   const supabase = await getSupabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const [tradesRes, gamesRes, arbitrageRes, wallet] = await Promise.all([
-    supabase
-      .from("trades")
-      .select(
-        "pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
-      )
-      .not("closed_at", "is", null)
-      .neq("mode", "backtest")
-      .order("closed_at", { ascending: true }),
+    (() => {
+      let q = supabase
+        .from("trades")
+        .select(
+          "pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
+        )
+        .not("closed_at", "is", null);
+      // ?mode= 필터 — backtest/live 명시면 그것만, all이면 전체
+      if (tradeMode === "live") q = q.or("mode.eq.live,mode.is.null");
+      else if (tradeMode === "backtest") q = q.eq("mode", "backtest");
+      return q.order("closed_at", { ascending: true });
+    })(),
     user
       ? supabase
           .from("binary_games")
@@ -221,16 +228,21 @@ export default async function DashboardPage({
         rightSlot={cluster.rightSlot}
       />
 
-      <ViewTabs
-        basePath="/app/dashboard"
-        current={view}
-        counts={{
-          all: n + totalGames + arbitrageRows.length,
-          trades: n,
-          games: totalGames,
-          arbitrage: arbitrageRows.length,
-        }}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <ViewTabs
+          basePath="/app/dashboard"
+          current={view}
+          counts={{
+            all: n + totalGames + arbitrageRows.length,
+            trades: n,
+            games: totalGames,
+            arbitrage: arbitrageRows.length,
+          }}
+        />
+        {view === "trades" || view === "all" ? (
+          <ModeFilter basePath="/app/dashboard" view={view} current={tradeMode} />
+        ) : null}
+      </div>
 
       {!hasData ? (
         <Card>

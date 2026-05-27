@@ -47,6 +47,10 @@ export interface AnalysisSnapshot {
   generatedAt: string;
   style: TradingStyle;
   styleLabel: string;
+  /** 'live' = 실시간 분석, 'backtest' = 과거 시점 분석. 기존 저장본 호환을 위해 옵셔널. */
+  mode?: "live" | "backtest";
+  /** 백테스트 모드일 때 분석 기준 시각 (ISO). live는 null/undefined. */
+  historicalAt?: string | null;
   ticker: {
     last: number;
     change24hPct: number;
@@ -73,6 +77,8 @@ export interface AnalysisSnapshot {
       MTF: { tf: Interval; candles: { time: number; open: number; high: number; low: number; close: number }[] };
       LTF: { tf: Interval; candles: { time: number; open: number; high: number; low: number; close: number }[] };
     };
+    /** 백테스트 모드에서 분석 ↔ forward 봉 경계 시각 (Unix 초). 차트에 수직선으로 표시. */
+    boundaryTime?: number;
   };
   volumeProfile: { tf: Interval; poc: number; vah: number; val: number };
   flow1m: {
@@ -153,7 +159,16 @@ export interface AnalysisSnapshot {
   };
 }
 
-export async function buildSnapshot(symbol: string, style: TradingStyle = "swing"): Promise<AnalysisSnapshot> {
+export interface BuildSnapshotOptions {
+  /** 백테스트 모드 — 이 시점까지의 데이터로만 분석. 미지정 시 현재(라이브). */
+  at?: Date;
+}
+
+export async function buildSnapshot(
+  symbol: string,
+  style: TradingStyle = "swing",
+  options: BuildSnapshotOptions = {},
+): Promise<AnalysisSnapshot> {
   const sym = symbol.toUpperCase();
   const preset = STYLE_PRESETS[style];
   const tfs = tfsForStyle(style); // HTF, MTF, LTF
@@ -161,6 +176,15 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
 
   // Make sure we also fetch the volume-profile TF if it's different
   const allTfs = Array.from(new Set([...tfs, preset.volumeProfileTf])) as Interval[];
+
+  const isBacktest = !!options.at;
+  const endTime = options.at?.getTime();
+  // kline fetch 옵션 — 백테스트면 endTime으로 historical 캔들만
+  const klineRange = endTime ? { endTime } : undefined;
+
+  // 라이브 전용 데이터 — 백테스트 시 과거 시점 복원 불가하므로 fallback (null/zero).
+  const liveOrNull = <T>(fn: () => Promise<T>): Promise<T | null> =>
+    isBacktest ? Promise.resolve(null) : fn().catch(() => null);
 
   const [
     ticker,
@@ -178,18 +202,18 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     ...klineSets
   ] = await Promise.all([
     fetchTicker24h(sym),
-    fetchDepth(sym, 100),
-    fetchAggTrades(sym, 500),
-    fetchFundingRate(sym),
-    fetchOpenInterest(sym),
-    fetchMarketDominance(),
-    fetchTopTraderRatio(sym, "15m"),
-    fetchFearGreed(),
-    fetchDXY(),
-    fetchOIDelta(sym),
-    fetchFundingHistory(sym),
-    fetchKlines(sym, "1d", 200), // for weekly volume profile (200 daily ≈ 28 weeks)
-    ...allTfs.map((tf) => fetchKlines(sym, tf, 300)),
+    liveOrNull(() => fetchDepth(sym, 100)),
+    liveOrNull(() => fetchAggTrades(sym, 500)),
+    liveOrNull(() => fetchFundingRate(sym)),
+    liveOrNull(() => fetchOpenInterest(sym)),
+    liveOrNull(() => fetchMarketDominance()),
+    liveOrNull(() => fetchTopTraderRatio(sym, "15m")),
+    liveOrNull(() => fetchFearGreed()),
+    liveOrNull(() => fetchDXY()),
+    liveOrNull(() => fetchOIDelta(sym)),
+    fetchFundingHistory(sym).catch(() => null), // 펀딩 히스토리는 과거값이라 백테스트도 사용 가능
+    fetchKlines(sym, "1d", 200, klineRange), // for weekly volume profile (200 daily ≈ 28 weeks)
+    ...allTfs.map((tf) => fetchKlines(sym, tf, 300, klineRange)),
   ]);
 
   const tfData: Record<string, ReturnType<typeof Object> | (typeof klineSets)[number]> = {};
@@ -232,6 +256,8 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     }));
   };
   const mtfTf = preset.mtf;
+  // 백테스트 모드에선 분석 시점(historical) 경계를 차트에 표시 (수직선)
+  const boundaryTime = endTime ? Math.floor(endTime / 1000) : undefined;
   const mtfChart = {
     tf: mtfTf,
     candles: buildChartCandles(mtfTf),
@@ -240,10 +266,16 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
       MTF: { tf: preset.mtf, candles: buildChartCandles(preset.mtf) },
       LTF: { tf: preset.ltf, candles: buildChartCandles(preset.ltf) },
     },
+    ...(boundaryTime ? { boundaryTime } : {}),
   };
-  const flow = summarizeFlow(trades);
-  const depthSum = summarizeDepth(depth);
-  const fundBias = classifyFunding(funding.rate);
+  // 백테스트 모드: live 전용 데이터 fallback
+  const flow = trades ? summarizeFlow(trades) : {
+    buyVolume: 0, sellVolume: 0, buyRatio: 0.5, largeBuys: 0, largeSells: 0, largestTradeUsd: 0,
+  };
+  const depthSum = depth ? summarizeDepth(depth) : {
+    bestBid: 0, bestAsk: 0, spreadBps: 0, bidWalls: [], askWalls: [], imbalance: 0,
+  };
+  const fundBias = funding ? classifyFunding(funding.rate) : { label: "데이터 없음", direction: "neutral" as const };
 
   // ATR per TF
   const atr = tfs.map((tf, i) => {
@@ -256,8 +288,8 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
   const mtfCandles = (tfData as Record<string, (typeof klineSets)[number]>)[preset.mtf];
   const vwap = computeSessionVWAP(mtfCandles);
 
-  // Spot-Perp basis (depends on ticker.lastPrice)
-  const basis = await fetchSpotPerpBasis(sym, ticker.lastPrice);
+  // Spot-Perp basis (depends on ticker.lastPrice) — 백테스트에선 과거 spot-perp 비교 불가, 스킵
+  const basis = isBacktest ? null : await fetchSpotPerpBasis(sym, ticker.lastPrice).catch(() => null);
 
   // Trading session
   const session = detectSession();
@@ -274,7 +306,7 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
   const liquiditySweeps = detectLiquiditySweeps(ltfCandles, ltfSwings).slice(0, 4);
 
   const fundingSqueeze = detectFundingSqueeze({
-    fundingRate: funding.rate,
+    fundingRate: funding?.rate ?? 0,
     fundingHistory: fundingHistory
       ? { avg24h: fundingHistory.avg24h, trend: fundingHistory.trend }
       : null,
@@ -292,18 +324,39 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
     style,
   });
 
-  return {
-    symbol: sym,
-    generatedAt: new Date().toISOString(),
-    style,
-    styleLabel: preset.label,
-    ticker: {
+  // 백테스트 모드면 ticker를 historical 캔들에서 재구성 (live ticker는 현재값이라 부정확)
+  let tickerSnap: AnalysisSnapshot["ticker"];
+  if (isBacktest) {
+    const mtfCandlesForTicker = (tfData as Record<string, (typeof klineSets)[number]>)[preset.mtf];
+    const last = mtfCandlesForTicker[mtfCandlesForTicker.length - 1];
+    const first = mtfCandlesForTicker[Math.max(0, mtfCandlesForTicker.length - 24)] ?? last;
+    const change = first && last && first.close > 0 ? ((last.close - first.close) / first.close) * 100 : 0;
+    const recent = mtfCandlesForTicker.slice(-24);
+    tickerSnap = {
+      last: last.close,
+      change24hPct: change,
+      high24h: recent.length ? Math.max(...recent.map((c) => c.high)) : last.high,
+      low24h: recent.length ? Math.min(...recent.map((c) => c.low)) : last.low,
+      volume24h: recent.reduce((a, c) => a + c.volume, 0),
+    };
+  } else {
+    tickerSnap = {
       last: ticker.lastPrice,
       change24hPct: ticker.priceChangePercent,
       high24h: ticker.highPrice,
       low24h: ticker.lowPrice,
       volume24h: ticker.volume,
-    },
+    };
+  }
+
+  return {
+    symbol: sym,
+    generatedAt: isBacktest && options.at ? options.at.toISOString() : new Date().toISOString(),
+    style,
+    styleLabel: preset.label,
+    mode: isBacktest ? "backtest" : "live",
+    historicalAt: isBacktest && options.at ? options.at.toISOString() : null,
+    ticker: tickerSnap,
     multiTf,
     mtfChart,
     volumeProfile: { tf: preset.volumeProfileTf, poc: vp.poc, vah: vp.vah, val: vp.val },
@@ -316,9 +369,13 @@ export async function buildSnapshot(symbol: string, style: TradingStyle = "swing
       largestTradeUsd: flow.largestTradeUsd,
     },
     depth: depthSum,
-    funding: { rate: funding.rate, nextFundingTime: funding.nextFundingTime, bias: fundBias.label },
+    funding: {
+      rate: funding?.rate ?? 0,
+      nextFundingTime: funding?.nextFundingTime ?? 0,
+      bias: fundBias.label,
+    },
     fundingHistory,
-    openInterest: oi,
+    openInterest: oi ?? 0,
     oiDelta,
     macro: {
       btcDominance: dominance?.btc ?? null,

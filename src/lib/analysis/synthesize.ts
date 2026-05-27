@@ -406,6 +406,24 @@ export interface AnalysisReport {
       volume_confirm: boolean;
       aligned_with_btc: boolean;
     };
+    /** 백테스트 모드에서 walk-forward 시뮬 결과 (런타임 필드, persist는 별도 컬럼 사용) */
+    simulation?: {
+      entryFillPrice: number;
+      exitPrice: number;
+      resultR: number;
+      exitReason: "target" | "stop" | "time" | "no_entry";
+      closedAt: string;
+      meta: {
+        entryCandleTime: string | null;
+        exitCandleTime: string | null;
+        barsHeld: number;
+        mfePct: number;
+        maePct: number;
+        interval: string;
+        candleCount: number;
+        barsToEntry: number;
+      };
+    };
   }[];
   actionNow: string;
   warnings: string[];

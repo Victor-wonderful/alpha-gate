@@ -36,6 +36,7 @@ export async function saveAnalysis(args: {
 
   const { snapshot, strategy, report } = args;
 
+  const isBacktest = snapshot.mode === "backtest";
   const { data, error } = await supabase
     .from("analyses")
     .insert({
@@ -47,6 +48,8 @@ export async function saveAnalysis(args: {
       strategy_confidence: strategy.confidence,
       scenarios_count: report.scenarios.length,
       current_price: snapshot.ticker.last,
+      mode: isBacktest ? "backtest" : "live",
+      historical_at: snapshot.historicalAt ?? null,
       snapshot,
       strategy,
       report,
@@ -57,7 +60,8 @@ export async function saveAnalysis(args: {
   if (error) return { error: error.message };
 
   // 시나리오 자동 추적 등록 — wait 전략은 시나리오 0개라 skip
-  if (report.scenarios.length > 0 && strategy.primary !== "wait") {
+  // 백테스트는 과거 시점 시뮬이므로 라이브 가격 추적 대상이 아님 → skip
+  if (!isBacktest && report.scenarios.length > 0 && strategy.primary !== "wait") {
     const timeframe = inferTimeframe(snapshot.style);
     const timeoutMs = SCENARIO_TIMEOUT_MS[timeframe] ?? 7 * 24 * 60 * 60_000;
     const expiresAt = new Date(Date.now() + timeoutMs).toISOString();

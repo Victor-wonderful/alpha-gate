@@ -7,12 +7,15 @@ import { classifyStrategy, type StrategyResult } from "@/lib/analysis/strategy";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { saveAnalysis, loadAnalysis } from "@/lib/analysis/persist";
 import { fetchScenarioStats, type ScenarioStats } from "@/lib/analysis/scenario-stats";
+import { simulateTrade } from "@/lib/backtest/simulator";
 import { revalidatePath } from "next/cache";
 import { getAiCredits, spendAiCredit } from "@/lib/paper-wallet";
 
 export async function runAnalysisAction(
   symbol: string,
   style: TradingStyle = "swing",
+  /** 백테스트 모드 — ISO 문자열. undefined면 라이브. */
+  atIso?: string,
 ): Promise<{
   snapshot?: AnalysisSnapshot;
   strategy?: StrategyResult;
@@ -41,10 +44,24 @@ export async function runAnalysisAction(
     // 크레딧 조회 실패 시 분석은 계속 진행 (best-effort)
   }
 
+  // Backtest 시점 파싱 & 가드
+  let atDate: Date | undefined;
+  if (atIso) {
+    atDate = new Date(atIso);
+    if (isNaN(atDate.getTime())) return { error: "백테스트 시점 형식이 올바르지 않습니다." };
+    if (atDate.getTime() > Date.now() - 60 * 60 * 1000) {
+      return { error: "백테스트 시점은 최소 1시간 전이어야 합니다." };
+    }
+    if (atDate.getTime() < Date.now() - 200 * 24 * 60 * 60 * 1000) {
+      return { error: "백테스트 시점은 최근 6개월 이내여야 합니다 (Binance 데이터 한계)." };
+    }
+  }
+  const isBacktest = !!atDate;
+
   // Stage 1: Market Data (deterministic)
   let snapshot: AnalysisSnapshot;
   try {
-    snapshot = await buildSnapshot(symbol, style);
+    snapshot = await buildSnapshot(symbol, style, atDate ? { at: atDate } : undefined);
   } catch (e) {
     return { error: `시장 데이터 수집 실패: ${e instanceof Error ? e.message : "unknown"}` };
   }
@@ -73,6 +90,38 @@ export async function runAnalysisAction(
       strategy,
       error: `시나리오 생성 실패: ${e instanceof Error ? e.message : "unknown"}`,
     };
+  }
+
+  // Stage 4: 백테스트 모드면 시나리오마다 walk-forward 시뮬 자동 실행
+  if (isBacktest && atDate && report.scenarios.length > 0) {
+    const sims = await Promise.allSettled(
+      report.scenarios.map((s) => {
+        const entryPrice = s.entries && s.entries.length > 0
+          ? (() => {
+              const wSum = s.entries.reduce((a, e) => a + (e.weight || 0), 0);
+              return wSum > 0
+                ? s.entries.reduce((a, e) => a + e.price * (e.weight / wSum), 0)
+                : s.entries.reduce((a, e) => a + e.price, 0) / s.entries.length;
+            })()
+          : (s.entryZone.low + s.entryZone.high) / 2;
+        return simulateTrade({
+          symbol,
+          direction: s.direction,
+          entry: entryPrice,
+          stop: s.invalidation,
+          target: s.target,
+          simulatedAt: atDate,
+          style,
+        });
+      }),
+    );
+    report.scenarios = report.scenarios.map((s, i) => {
+      const r = sims[i];
+      if (r.status === "fulfilled") {
+        return { ...s, simulation: r.value };
+      }
+      return s;
+    });
   }
 
   // Persist (best-effort — do not fail analysis if this fails)

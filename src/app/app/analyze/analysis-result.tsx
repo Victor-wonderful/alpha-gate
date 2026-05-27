@@ -1167,6 +1167,10 @@ function SimpleScenarioCard({
 
         {/* ===== RIGHT — 사이즈 + CTA ===== */}
         <div className="flex h-full flex-col gap-4">
+        {/* Backtest simulation result — only in backtest mode */}
+        {scenario.simulation ? (
+          <BacktestSimulationInline sim={scenario.simulation} direction={scenario.direction} />
+        ) : null}
         {/* Position sizing — risk-based */}
         {sizing.valid ? (
           <div className="space-y-2">
@@ -1422,6 +1426,92 @@ function Cell({
         {value}
       </div>
       {sub ? <div className="text-[10px] text-muted-foreground/80">{sub}</div> : null}
+    </div>
+  );
+}
+
+/** 백테스트 모드 시뮬 결과 inline 표시 — 시나리오 카드 우측 상단에. */
+function BacktestSimulationInline({
+  sim,
+  direction,
+}: {
+  sim: NonNullable<AnalysisReport["scenarios"][number]["simulation"]>;
+  direction: "long" | "short";
+}) {
+  const reasonLabel = {
+    target: { text: "🎯 목표 도달", tone: "border-grade-a/40 bg-grade-a/10 text-grade-a" },
+    stop: { text: "🛑 손절", tone: "border-grade-d/40 bg-grade-d/10 text-grade-d" },
+    time: { text: "⏰ 시간 만료", tone: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
+    no_entry: { text: "❌ 미체결", tone: "border-muted-foreground/40 bg-muted/30 text-muted-foreground" },
+  }[sim.exitReason];
+  const rPos = sim.resultR >= 0;
+  const formatTime = (iso: string | null) =>
+    iso
+      ? new Date(iso).toLocaleString("ko-KR", {
+          timeZone: "Asia/Seoul",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "—";
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-amber-300">
+          ⏮ 백테스트 결과
+        </span>
+        <Badge className={cn("border text-[10px]", reasonLabel.tone)}>{reasonLabel.text}</Badge>
+      </div>
+      {sim.exitReason !== "no_entry" ? (
+        <>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[10px] uppercase text-muted-foreground">실현 R</span>
+            <span
+              className={cn(
+                "font-mono text-lg font-bold tabular-nums",
+                rPos ? "text-grade-a" : "text-grade-d",
+              )}
+            >
+              {rPos ? "+" : ""}
+              {sim.resultR.toFixed(2)}R
+            </span>
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              {sim.meta.barsHeld}봉 보유 ({sim.meta.interval})
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">진입</span>
+              <span className="font-mono">${formatNumber(sim.entryFillPrice)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">청산</span>
+              <span className="font-mono">${formatNumber(sim.exitPrice)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">최대 유리</span>
+              <span className="font-mono text-grade-a">+{sim.meta.mfePct.toFixed(2)}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">최대 불리</span>
+              <span className="font-mono text-grade-d">-{sim.meta.maePct.toFixed(2)}%</span>
+            </div>
+          </div>
+          <div className="border-t border-amber-500/20 pt-1.5 text-[10px] text-muted-foreground">
+            진입봉 {formatTime(sim.meta.entryCandleTime)} · 청산봉 {formatTime(sim.meta.exitCandleTime)}
+          </div>
+        </>
+      ) : (
+        <div className="text-[11px] text-muted-foreground">
+          진입가 도달 없이 시간 만료 — 트리거 미발생 시나리오.
+        </div>
+      )}
+      <div className="text-[10px] text-muted-foreground/70">
+        ※ 실제 체결과 다를 수 있음 (슬리피지·수수료 미반영, 같은 봉 손절·목표 동시 터치 시 보수적 손절)
+      </div>
+      {/* direction은 향후 long/short 별도 표기에 사용 — 현재 reason 라벨로 충분 */}
+      <span className="sr-only">{direction}</span>
     </div>
   );
 }

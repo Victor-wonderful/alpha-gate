@@ -14,6 +14,7 @@ import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { AnalysisTimingHint } from "@/components/analyze/analysis-timing-hint";
 import { AnalysisInfo } from "@/components/analyze/analysis-info";
+import { kstStringAgo, kstStringToDate, randomKstStringWithin6Months } from "@/lib/analysis/kst";
 
 // Top Binance USDT-Perp by recent volume — wide enough for most use cases.
 const PRESETS = [
@@ -84,6 +85,8 @@ function AnalyzeClientInner({
   const style = useAnalysisStore((s) => s.style);
   const accountSizeOverride = useAnalysisStore((s) => s.accountSizeOverride);
   const riskPctOverride = useAnalysisStore((s) => s.riskPctOverride);
+  const mode = useAnalysisStore((s) => s.mode);
+  const historicalAtKst = useAnalysisStore((s) => s.historicalAtKst);
   const setForm = useAnalysisStore((s) => s.setForm);
   const clearStore = useAnalysisStore((s) => s.clear);
 
@@ -163,14 +166,37 @@ function AnalyzeClientInner({
       toast.error("심볼을 입력하세요.");
       return;
     }
+    // 백테스트 모드 검증
+    let atIso: string | undefined;
+    if (mode === "backtest") {
+      if (!historicalAtKst) {
+        toast.error("백테스트 시점을 선택하세요.");
+        return;
+      }
+      const d = kstStringToDate(historicalAtKst);
+      if (isNaN(d.getTime())) {
+        toast.error("백테스트 시점 형식이 올바르지 않습니다.");
+        return;
+      }
+      if (d.getTime() > Date.now() - 60 * 60 * 1000) {
+        toast.error("백테스트 시점은 최소 1시간 전이어야 합니다.");
+        return;
+      }
+      // Binance 무료 API는 6개월 한도
+      if (d.getTime() < Date.now() - 200 * 24 * 60 * 60 * 1000) {
+        toast.error("백테스트 시점은 최근 6개월 이내여야 합니다 (Binance 데이터 한계).");
+        return;
+      }
+      atIso = d.toISOString();
+    }
     startTransition(async () => {
       setResult(null);
-      const r = await runAnalysisAction(target, style);
+      const r = await runAnalysisAction(target, style, atIso);
       if (r.snapshot && r.strategy && r.report) {
         setResult({ snapshot: r.snapshot, strategy: r.strategy, report: r.report, analysisId: r.analysisId });
       }
       if (r.error) toast.error(r.error);
-      else toast.success("분석 완료");
+      else toast.success(mode === "backtest" ? "백테스트 분석 완료" : "분석 완료");
     });
   }
 
@@ -187,6 +213,13 @@ function AnalyzeClientInner({
           <CardTitle>분석 대상</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          {/* 모드 토글: 라이브 vs 백테스트 */}
+          <ModeToggle
+            mode={mode}
+            historicalAtKst={historicalAtKst}
+            onModeChange={(m) => setForm({ mode: m, historicalAtKst: m === "live" ? null : (historicalAtKst ?? kstStringAgo({ days: 7 })) })}
+            onHistoricalChange={(v) => setForm({ historicalAtKst: v })}
+          />
           <div className="grid gap-5 lg:grid-cols-2">
             {/* LEFT — 트레이딩 스타일 + 분석 가능 여부 */}
             <section className="flex h-full flex-col gap-3">
@@ -350,6 +383,107 @@ function AnalyzeClientInner({
             analysisId={result.analysisId}
           />
         </>
+      ) : null}
+    </div>
+  );
+}
+
+/** 라이브 / 백테스트 모드 토글 + KST datetime 피커 + 빠른 선택 */
+function ModeToggle({
+  mode,
+  historicalAtKst,
+  onModeChange,
+  onHistoricalChange,
+}: {
+  mode: "live" | "backtest";
+  historicalAtKst: string | null;
+  onModeChange: (m: "live" | "backtest") => void;
+  onHistoricalChange: (v: string) => void;
+}) {
+  const isBacktest = mode === "backtest";
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onModeChange("live")}
+          className={
+            "rounded-md border p-3 text-left transition-colors " +
+            (!isBacktest
+              ? "border-primary bg-primary/10"
+              : "border-border bg-background/40 hover:bg-accent/40")
+          }
+        >
+          <div className="text-sm font-medium">🟢 라이브</div>
+          <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
+            현재 시점 데이터로 분석
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => onModeChange("backtest")}
+          className={
+            "rounded-md border p-3 text-left transition-colors " +
+            (isBacktest
+              ? "border-primary bg-primary/10"
+              : "border-border bg-background/40 hover:bg-accent/40")
+          }
+        >
+          <div className="text-sm font-medium">⏮ 백테스트</div>
+          <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
+            과거 시점 시뮬 (호가/체결흐름 제외)
+          </div>
+        </button>
+      </div>
+
+      {isBacktest ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-xs font-medium text-amber-300">
+              ⏰ 분석 기준 시각 (KST)
+            </label>
+            <span className="text-[10px] text-muted-foreground">
+              Binance 무료 API 한계로 최근 6개월까지
+            </span>
+          </div>
+          <Input
+            type="datetime-local"
+            value={historicalAtKst ?? ""}
+            onChange={(e) => onHistoricalChange(e.target.value)}
+            className="font-mono"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: "1일 전", v: kstStringAgo({ days: 1 }) },
+              { label: "3일 전", v: kstStringAgo({ days: 3 }) },
+              { label: "1주일 전", v: kstStringAgo({ days: 7 }) },
+              { label: "1달 전", v: kstStringAgo({ days: 30 }) },
+              { label: "3달 전", v: kstStringAgo({ days: 90 }) },
+            ].map((opt) => (
+              <button
+                key={opt.label}
+                type="button"
+                onClick={() => onHistoricalChange(opt.v)}
+                className="rounded-md border border-border bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+              >
+                {opt.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => onHistoricalChange(randomKstStringWithin6Months())}
+              className="rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] text-primary transition-colors hover:bg-primary/10"
+              title="블라인드 백테스트 — 편향 제거"
+            >
+              🎲 무작위
+            </button>
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            백테스트 모드: <strong>kline(봉 데이터)만</strong> 과거 시점으로 fetch.
+            호가창 · 체결흐름 · 펀딩 · BTC 도미넌스 등 라이브 전용 데이터는 0/빈값.
+            AI 분석은 사용 가능한 데이터만으로 진행됩니다.
+          </div>
+        </div>
       ) : null}
     </div>
   );

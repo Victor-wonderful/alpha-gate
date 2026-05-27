@@ -49,6 +49,7 @@ import {
   MARKET_CHECK_LABELS,
   TRIGGER_CHECK_KEYS,
   type MarketCheckKey,
+  type MoneyContext,
   type TradeInput,
 } from "@/types/trade";
 
@@ -101,6 +102,8 @@ function evaluateScenario(
   style: TradingStyle,
   confidence: number,
   mtfTimeframe: TradeInput["timeframe"],
+  money: MoneyContext,
+  marketCtx: TradeInput["marketCtx"],
 ) {
   // Prefer weighted-average from tiered entries; fall back to entryZone midpoint.
   let entry: number;
@@ -114,8 +117,7 @@ function evaluateScenario(
   } else {
     entry = (scenario.entryZone.low + scenario.entryZone.high) / 2;
   }
-  // 분석 페이지의 빠른 등급 미리보기 — 트리거/자금/시장 컨텍스트는 낙관적 기본값으로 계산.
-  // 실제 등급은 거래 평가 페이지에서 사용자 입력 + 서버 fetch로 다시 계산됨.
+  // 트리거는 AI 시나리오 클릭 = 사용자가 진입 의사 있는 거니까 통과로 가정.
   const trigger = Object.fromEntries(TRIGGER_CHECK_KEYS.map((k) => [k, true])) as TradeInput["trigger"];
   // Grade 계산용 baseline risk (사용자 override가 있으면 그것, 아니면 프로필 기본)
   // grading.ts의 risk 체크는 >3% 일 때만 발동하므로 baseline 선택은 권장 산정 결과를 거의 안 바꿈.
@@ -131,8 +133,8 @@ function evaluateScenario(
     allowedLossPct: baselineRiskPct,
     market: scenario.marketAssessment,
     trigger,
-    money: { todayCumulativeR: 0, todayClosedCount: 0, openPositions: [], openExposurePct: 0 },
-    marketCtx: { btcPrice: null, btc24hChangePct: null, symbolPrice: null, fundingRate: null, minutesToFunding: null },
+    money,
+    marketCtx,
   };
   const grade = gradeTrade(input);
 
@@ -166,6 +168,7 @@ export function AnalysisResult({
   currency,
   historicalStats,
   analysisId,
+  money,
 }: {
   snapshot: AnalysisSnapshot;
   strategy: StrategyResult;
@@ -178,10 +181,40 @@ export function AnalysisResult({
   currency: "USD" | "KRW";
   historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
   analysisId?: string;
+  /** 서버에서 fetch한 실제 자금 관리 컨텍스트 (오늘 R, 진행 포지션 등) */
+  money: MoneyContext;
 }) {
   const [activeScenario, setActiveScenario] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [watchStates, setWatchStates] = useState<Record<number, { id: string; watch: boolean; status: string }>>({});
+
+  // 시장 컨텍스트 (펀딩비, 정산까지 분) — 심볼 단위로 1회 fetch.
+  // 백테스트 모드면 라이브 컨텍스트 무의미하니 fetch 안 함.
+  const isBacktest = snapshot.mode === "backtest";
+  const [marketCtx, setMarketCtx] = useState<TradeInput["marketCtx"]>({
+    btcPrice: null,
+    btc24hChangePct: null,
+    symbolPrice: null,
+    fundingRate: null,
+    minutesToFunding: null,
+  });
+  useEffect(() => {
+    if (isBacktest) return;
+    let alive = true;
+    fetch(`/api/market-context?symbol=${snapshot.symbol}`)
+      .then((r) => r.json())
+      .then((d) => alive && setMarketCtx(d))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [snapshot.symbol, isBacktest]);
+
+  // 백테스트 모드면 자금 관리 감점 무시 (가상 시뮬이라 실제 잔액·노출과 무관).
+  // → 라이브 손실이 과거 분석 등급에 영향 주지 않게.
+  const effectiveMoney: MoneyContext = isBacktest
+    ? { todayCumulativeR: 0, todayClosedCount: 0, openPositions: [], openExposurePct: 0 }
+    : money;
 
   // 시나리오 알림 등록 상태 조회
   useEffect(() => {
@@ -419,6 +452,8 @@ export function AnalysisResult({
               snapshot.style,
               strategy.confidence,
               scTimeframe,
+              effectiveMoney,
+              marketCtx,
             );
             return (
               <SimpleScenarioCard
@@ -559,6 +594,8 @@ export function AnalysisResult({
                       snapshot.style,
                       strategy.confidence,
                       scTimeframe,
+                      effectiveMoney,
+                      marketCtx,
                     );
                     return (
                       <div key={i} className="space-y-2 rounded-md border border-border bg-background/30 p-3 text-xs">

@@ -280,6 +280,15 @@ function TradeFormInner({
   const entryBandLow = entryNum * (1 - ENTRY_BAND_PCT / 100);
   const entryBandHigh = entryNum * (1 + ENTRY_BAND_PCT / 100);
 
+  // 백테스트 거래는 가상 시뮬이라 실제 자금 관리·라이브 시장 컨텍스트와 무관.
+  // 분석 페이지와 동일한 등급이 나오도록 빈 컨텍스트로 산정.
+  const effectiveMoney = isBacktestMode
+    ? { todayCumulativeR: 0, todayClosedCount: 0, openPositions: [], openExposurePct: 0 }
+    : money;
+  const effectiveMarketCtx = isBacktestMode
+    ? { btcPrice: null, btc24hChangePct: null, symbolPrice: null, fundingRate: null, minutesToFunding: null }
+    : marketCtx;
+
   const input: TradeInput = useMemo(
     () => ({
       symbol,
@@ -292,10 +301,10 @@ function TradeFormInner({
       allowedLossPct: Number(riskPct) || 0,
       market,
       trigger,
-      money,
-      marketCtx,
+      money: effectiveMoney,
+      marketCtx: effectiveMarketCtx,
     }),
-    [symbol, direction, timeframe, entry, stop, target, accountSize, riskPct, market, trigger, money, marketCtx],
+    [symbol, direction, timeframe, entry, stop, target, accountSize, riskPct, market, trigger, effectiveMoney, effectiveMarketCtx],
   );
 
   const grade = useMemo(() => gradeTrade(input), [input]);

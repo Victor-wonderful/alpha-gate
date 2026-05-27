@@ -3,6 +3,8 @@ import { AnalyzeClient } from "./analyze-client";
 import { AnalysisHistory } from "@/components/analyze/analysis-history";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { HelpLink } from "@/components/app/help-link";
+import { getMoneyContext } from "@/lib/money-management";
+import type { MoneyContext } from "@/types/trade";
 
 export const maxDuration = 60;
 
@@ -18,6 +20,25 @@ export default async function AnalyzePage() {
         .eq("id", user.id)
         .maybeSingle()
     : { data: null };
+
+  const accountSize = Number(profile?.default_account_size) || 10000;
+
+  // grade 산정에 쓸 실제 자금 관리 컨텍스트 (오늘 누적 R, 진행 중 포지션, 노출 등).
+  // 분석 페이지에서 미리 보여서 거래 평가 페이지와 등급이 일치하게 함.
+  // 로그인 안 됐으면 empty context.
+  const money: MoneyContext = user
+    ? await getMoneyContext(accountSize).catch(() => ({
+        todayCumulativeR: 0,
+        todayClosedCount: 0,
+        openPositions: [],
+        openExposurePct: 0,
+      }))
+    : {
+        todayCumulativeR: 0,
+        todayClosedCount: 0,
+        openPositions: [],
+        openExposurePct: 0,
+      };
 
   return (
     <div className="space-y-6">
@@ -35,9 +56,10 @@ export default async function AnalyzePage() {
         </div>
       </div>
       <AnalyzeClient
-        accountSize={Number(profile?.default_account_size) || 10000}
+        accountSize={accountSize}
         riskPct={Number(profile?.default_risk_pct) || 1}
         currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
+        money={money}
       />
       <AnalysisHistory />
     </div>

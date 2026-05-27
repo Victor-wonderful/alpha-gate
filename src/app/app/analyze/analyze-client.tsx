@@ -54,6 +54,7 @@ export function AnalyzeClient(props: {
   accountSize: number;
   riskPct: number;
   currency: "USD" | "KRW";
+  money: import("@/types/trade").MoneyContext;
 }) {
   return (
     <Suspense fallback={null}>
@@ -66,10 +67,12 @@ function AnalyzeClientInner({
   accountSize,
   riskPct,
   currency,
+  money,
 }: {
   accountSize: number;
   riskPct: number;
   currency: "USD" | "KRW";
+  money: import("@/types/trade").MoneyContext;
 }) {
   const [pending, startTransition] = useTransition();
   const [loadingFromHistory, setLoadingFromHistory] = useState(false);
@@ -381,6 +384,7 @@ function AnalyzeClientInner({
             currency={currency}
             historicalStats={stats}
             analysisId={result.analysisId}
+            money={money}
           />
         </>
       ) : null}

@@ -7,7 +7,7 @@ import { getMoneyContext } from "@/lib/money-management";
 export default async function TradePage({
   searchParams,
 }: {
-  searchParams: Promise<{ symbol?: string }>;
+  searchParams: Promise<{ symbol?: string; accountSize?: string; riskPct?: string }>;
 }) {
   const supabase = await getSupabaseServer();
   const {
@@ -21,8 +21,18 @@ export default async function TradePage({
         .maybeSingle()
     : { data: null };
 
-  const accountSize = Number(profile?.default_account_size) || 10000;
   const sp = await searchParams;
+  // URL override > profile default. Guards against junk input.
+  const urlAccountSize = sp.accountSize ? Number(sp.accountSize) : NaN;
+  const urlRiskPct = sp.riskPct ? Number(sp.riskPct) : NaN;
+  const accountSize =
+    Number.isFinite(urlAccountSize) && urlAccountSize > 0
+      ? urlAccountSize
+      : Number(profile?.default_account_size) || 10000;
+  const riskPct =
+    Number.isFinite(urlRiskPct) && urlRiskPct > 0 && urlRiskPct <= 10
+      ? urlRiskPct
+      : Number(profile?.default_risk_pct) || 1;
   const symbol = (sp.symbol && /^[A-Z0-9]{2,15}USDT$/i.test(sp.symbol)
     ? sp.symbol.toUpperCase()
     : "BTCUSDT");
@@ -55,7 +65,7 @@ export default async function TradePage({
       <FlowStepper current="trade" />
       <TradeForm
         initialAccountSize={accountSize}
-        initialRiskPct={Number(profile?.default_risk_pct) || 1}
+        initialRiskPct={riskPct}
         currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
         initialSymbol={symbol}
         money={money}

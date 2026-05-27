@@ -23,6 +23,7 @@ import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import { gradeTrade } from "@/lib/grading";
 import { sizePosition } from "@/lib/sizing";
 import { GradeBadge } from "@/components/trade/grade-badge";
+import { recommendTradeParams } from "@/lib/recommend";
 import { ScenarioChart } from "@/components/analyze/scenario-chart";
 import { ChartErrorBoundary } from "@/components/analyze/chart-error-boundary";
 import { DownloadButtons } from "@/components/analyze/download-buttons";
@@ -58,7 +59,13 @@ const GRADE_TEXT: Record<"A" | "B" | "C" | "D", string> = {
   D: "거래 금지",
 };
 
-function tradeFormHref(symbol: string, scenario: AnalysisReport["scenarios"][number], scenarioIdx?: number) {
+function tradeFormHref(
+  symbol: string,
+  scenario: AnalysisReport["scenarios"][number],
+  scenarioIdx?: number,
+  accountSize?: number,
+  riskPct?: number,
+) {
   let entry: number;
   if (scenario.entries && scenario.entries.length > 0) {
     const wSum = scenario.entries.reduce((acc, e) => acc + (e.weight || 0), 0);
@@ -77,6 +84,8 @@ function tradeFormHref(symbol: string, scenario: AnalysisReport["scenarios"][num
     trigger: scenario.trigger,
   });
   if (scenarioIdx !== undefined) p.set("scenario", String(scenarioIdx));
+  if (accountSize !== undefined && accountSize > 0) p.set("accountSize", String(accountSize));
+  if (riskPct !== undefined && riskPct > 0) p.set("riskPct", String(riskPct));
   for (const key of MARKET_CHECK_KEYS) {
     if (scenario.marketAssessment[key]) p.set(`m_${key}`, "1");
   }
@@ -87,7 +96,10 @@ function evaluateScenario(
   symbol: string,
   scenario: AnalysisReport["scenarios"][number],
   accountSize: number,
-  riskPct: number,
+  riskPctOverride: number | null,
+  userPreferredRiskPct: number,
+  style: TradingStyle,
+  confidence: number,
   mtfTimeframe: TradeInput["timeframe"],
 ) {
   // Prefer weighted-average from tiered entries; fall back to entryZone midpoint.
@@ -105,6 +117,9 @@ function evaluateScenario(
   // 분석 페이지의 빠른 등급 미리보기 — 트리거/자금/시장 컨텍스트는 낙관적 기본값으로 계산.
   // 실제 등급은 거래 평가 페이지에서 사용자 입력 + 서버 fetch로 다시 계산됨.
   const trigger = Object.fromEntries(TRIGGER_CHECK_KEYS.map((k) => [k, true])) as TradeInput["trigger"];
+  // Grade 계산용 baseline risk (사용자 override가 있으면 그것, 아니면 프로필 기본)
+  // grading.ts의 risk 체크는 >3% 일 때만 발동하므로 baseline 선택은 권장 산정 결과를 거의 안 바꿈.
+  const baselineRiskPct = riskPctOverride ?? userPreferredRiskPct;
   const input: TradeInput = {
     symbol,
     direction: scenario.direction,
@@ -113,20 +128,32 @@ function evaluateScenario(
     stop: scenario.invalidation,
     target: scenario.target,
     accountSize,
-    allowedLossPct: riskPct,
+    allowedLossPct: baselineRiskPct,
     market: scenario.marketAssessment,
     trigger,
     money: { todayCumulativeR: 0, todayClosedCount: 0, openPositions: [], openExposurePct: 0 },
     marketCtx: { btcPrice: null, btc24hChangePct: null, symbolPrice: null, fundingRate: null, minutesToFunding: null },
   };
   const grade = gradeTrade(input);
+
+  // AI 권장 리스크 산정: override 없으면 등급/신뢰도/손절폭 기반.
+  const stopPct = (Math.abs(entry - scenario.invalidation) / entry) * 100;
+  const recommended = recommendTradeParams({
+    style,
+    grade: grade.grade,
+    confidence,
+    stopPct,
+    userPreferredRiskPct,
+  });
+  const effectiveRiskPct = riskPctOverride !== null ? riskPctOverride : recommended.riskPct;
+
   const sizing = sizePosition({
     accountSize,
-    allowedLossPct: riskPct,
+    allowedLossPct: effectiveRiskPct,
     entry,
     stop: scenario.invalidation,
   });
-  return { entry, grade, sizing };
+  return { entry, grade, sizing, recommended, effectiveRiskPct, isAiRisk: riskPctOverride === null };
 }
 
 export function AnalysisResult({
@@ -134,7 +161,8 @@ export function AnalysisResult({
   strategy,
   report,
   accountSize,
-  riskPct,
+  riskPctOverride,
+  userPreferredRiskPct,
   currency,
   historicalStats,
   analysisId,
@@ -143,7 +171,10 @@ export function AnalysisResult({
   strategy: StrategyResult;
   report: AnalysisReport;
   accountSize: number;
-  riskPct: number;
+  /** 사용자가 분석 폼에서 수동 입력한 리스크 % — null이면 AI 자동 산정 */
+  riskPctOverride: number | null;
+  /** 프로필 기본 리스크 % (자동 산정 상한 cap에 사용) */
+  userPreferredRiskPct: number;
   currency: "USD" | "KRW";
   historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
   analysisId?: string;
@@ -270,15 +301,41 @@ export function AnalysisResult({
                 Binance에서 확인 →
               </a>
             </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <span className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
+                스타일 <span className="font-mono text-foreground">{snapshot.style}</span>
+              </span>
+              <span className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
+                자금 <span className="font-mono text-foreground">{formatCurrency(accountSize, currency)}</span>
+              </span>
+              {riskPctOverride !== null ? (
+                <>
+                  <span className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
+                    리스크 <span className="font-mono text-foreground">{riskPctOverride}%</span> (고정)
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/70">
+                    = 거래당 <span className="font-mono">{formatCurrency(accountSize * riskPctOverride / 100, currency)}</span> 손실
+                  </span>
+                </>
+              ) : (
+                <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary">
+                  리스크 <span className="font-mono">AI 자동</span> (시나리오마다 다름)
+                </span>
+              )}
+            </div>
           </div>
         </CardHeader>
       </Card>
 
-      {/* Market trend snapshot */}
-      {report.marketTrend ? <MarketTrendCard trend={report.marketTrend} metrics={snapshot.trendMetrics} dominance={snapshot.macro.dominanceRegime ?? null} /> : null}
-
-      {/* Big AI recommendation card — what to do now */}
-      <SimpleRecommendation strategy={strategy} report={report} historicalStats={historicalStats} />
+      {/* Trend + AI recommendation — combined 2-col card */}
+      <TrendRecommendationCard
+        trend={report.marketTrend ?? null}
+        metrics={snapshot.trendMetrics}
+        dominance={snapshot.macro.dominanceRegime ?? null}
+        strategy={strategy}
+        report={report}
+        historicalStats={historicalStats}
+      />
 
       {/* Special strategy signal evidence (rendered for any special strategy active across scenarios) */}
       <SpecialSignalCard
@@ -353,11 +410,14 @@ export function AnalysisResult({
       ) : (
         <div className="space-y-3">
           {report.scenarios.map((s, i) => {
-            const { entry, grade, sizing } = evaluateScenario(
+            const { entry, grade, sizing, recommended, effectiveRiskPct, isAiRisk } = evaluateScenario(
               snapshot.symbol,
               s,
               accountSize,
-              riskPct,
+              riskPctOverride,
+              userPreferredRiskPct,
+              snapshot.style,
+              strategy.confidence,
               scTimeframe,
             );
             return (
@@ -374,7 +434,9 @@ export function AnalysisResult({
                 grade={grade}
                 sizing={sizing}
                 accountSize={accountSize}
-                riskPct={riskPct}
+                riskPct={effectiveRiskPct}
+                isAiRisk={isAiRisk}
+                recommended={recommended}
                 currency={currency}
                 isActive={activeScenario === i}
                 onHover={() => setActiveScenario(i)}
@@ -492,7 +554,10 @@ export function AnalysisResult({
                       snapshot.symbol,
                       s,
                       accountSize,
-                      riskPct,
+                      riskPctOverride,
+                      userPreferredRiskPct,
+                      snapshot.style,
+                      strategy.confidence,
                       scTimeframe,
                     );
                     return (
@@ -554,7 +619,42 @@ export function AnalysisResult({
 }
 
 /** Market trend snapshot card — direction + strength */
-function MarketTrendCard({
+function TrendRecommendationCard({
+  trend,
+  metrics,
+  dominance,
+  strategy,
+  report,
+  historicalStats,
+}: {
+  trend: AnalysisReport["marketTrend"] | null;
+  metrics?: AnalysisSnapshot["trendMetrics"];
+  dominance?: NonNullable<AnalysisSnapshot["macro"]>["dominanceRegime"];
+  strategy: StrategyResult;
+  report: AnalysisReport;
+  historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="grid lg:grid-cols-2 lg:divide-x divide-border">
+        <div className="flex flex-col p-5">
+          {trend ? (
+            <MarketTrendBody trend={trend} metrics={metrics} dominance={dominance} />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              추세 데이터 없음
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col border-t lg:border-t-0 border-border p-5">
+          <RecommendationBody strategy={strategy} report={report} historicalStats={historicalStats} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function MarketTrendBody({
   trend,
   metrics,
   dominance,
@@ -572,71 +672,67 @@ function MarketTrendCard({
   const d = dirMap[trend.direction] ?? dirMap.range;
   const Icon = d.icon;
   return (
-    <Card className={cn("border", d.border, d.bg)}>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div className={cn("flex h-10 w-10 flex-none items-center justify-center rounded-md", d.bg, d.color)}>
-            <Icon className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">현재 추세</span>
-              <span className={cn("text-base font-semibold", d.color)}>{d.label}</span>
-              <Badge className={cn("border", d.border, d.color, d.bg)}>강도 {strengthMap[trend.strength] ?? trend.strength}</Badge>
-            </div>
-            <p className="mt-1 text-sm text-foreground/80">{trend.note}</p>
-            {metrics ? (
-              <div className="mt-3 space-y-2">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <TrendIndicator
-                    name="ADX"
-                    citation="Wilder 1978"
-                    value={metrics.adx ? metrics.adx.value.toFixed(1) : "—"}
-                    verdict={metrics.adx?.verdict}
-                    thresholdLabel="≥25 추세 / <20 횡보"
-                    extra={metrics.adx ? `+DI ${metrics.adx.plusDI.toFixed(1)} / −DI ${metrics.adx.minusDI.toFixed(1)}` : undefined}
-                  />
-                  <TrendIndicator
-                    name="KER"
-                    citation="Kaufman 1995"
-                    value={metrics.ker ? metrics.ker.value.toFixed(2) : "—"}
-                    verdict={metrics.ker?.verdict}
-                    thresholdLabel="≥0.6 추세 / <0.3 노이즈"
-                  />
-                  <TrendIndicator
-                    name="Choppiness"
-                    citation="Dreiss"
-                    value={metrics.choppiness ? metrics.choppiness.value.toFixed(1) : "—"}
-                    verdict={metrics.choppiness?.verdict}
-                    thresholdLabel="<38.2 추세 / >61.8 혼조"
-                  />
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  3개 지표 다수결 → 추세 {metrics.trendVotes}표 · 횡보 {metrics.rangeVotes}표
-                  {" · "}기준 TF {metrics.refTf}
-                </div>
-              </div>
-            ) : null}
-            {dominance ? (
-              <div className="mt-3 rounded border border-border/60 bg-background/40 p-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">시장 국면</span>
-                  <Badge className={cn(
-                    "border",
-                    dominance.regime === "alt_season" || dominance.regime === "risk_on" ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
-                    : dominance.regime === "alt_panic" || dominance.regime === "risk_off" ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
-                    : "border-amber-500/40 bg-amber-500/10 text-amber-400",
-                  )}>
-                    {dominance.label}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">{dominance.note}</p>
-              </div>
-            ) : null}
-          </div>
+    <div className="flex h-full items-start gap-3">
+      <div className={cn("flex h-10 w-10 flex-none items-center justify-center rounded-md", d.bg, d.color)}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">현재 추세</span>
+          <span className={cn("text-base font-semibold", d.color)}>{d.label}</span>
+          <Badge className={cn("border", d.border, d.color, d.bg)}>강도 {strengthMap[trend.strength] ?? trend.strength}</Badge>
         </div>
-      </CardContent>
-    </Card>
+        <p className="mt-1 text-sm text-foreground/80">{trend.note}</p>
+        {metrics ? (
+          <div className="mt-3 space-y-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <TrendIndicator
+                name="ADX"
+                citation="Wilder 1978"
+                value={metrics.adx ? metrics.adx.value.toFixed(1) : "—"}
+                verdict={metrics.adx?.verdict}
+                thresholdLabel="≥25 추세 / <20 횡보"
+                extra={metrics.adx ? `+DI ${metrics.adx.plusDI.toFixed(1)} / −DI ${metrics.adx.minusDI.toFixed(1)}` : undefined}
+              />
+              <TrendIndicator
+                name="KER"
+                citation="Kaufman 1995"
+                value={metrics.ker ? metrics.ker.value.toFixed(2) : "—"}
+                verdict={metrics.ker?.verdict}
+                thresholdLabel="≥0.6 추세 / <0.3 노이즈"
+              />
+              <TrendIndicator
+                name="Choppiness"
+                citation="Dreiss"
+                value={metrics.choppiness ? metrics.choppiness.value.toFixed(1) : "—"}
+                verdict={metrics.choppiness?.verdict}
+                thresholdLabel="<38.2 추세 / >61.8 혼조"
+              />
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              3개 지표 다수결 → 추세 {metrics.trendVotes}표 · 횡보 {metrics.rangeVotes}표
+              {" · "}기준 TF {metrics.refTf}
+            </div>
+          </div>
+        ) : null}
+        {dominance ? (
+          <div className="mt-3 rounded border border-border/60 bg-background/40 p-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">시장 국면</span>
+              <Badge className={cn(
+                "border",
+                dominance.regime === "alt_season" || dominance.regime === "risk_on" ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
+                : dominance.regime === "alt_panic" || dominance.regime === "risk_off" ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
+                : "border-amber-500/40 bg-amber-500/10 text-amber-400",
+              )}>
+                {dominance.label}
+              </Badge>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">{dominance.note}</p>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -687,8 +783,8 @@ function TrendIndicator({
   );
 }
 
-/** Big plain-language recommendation card at the top */
-function SimpleRecommendation({
+/** Recommendation body (no Card wrapper) — rendered inside combined trend card */
+function RecommendationBody({
   strategy,
   report,
   historicalStats,
@@ -698,76 +794,86 @@ function SimpleRecommendation({
   historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
 }) {
   const isWait = strategy.primary === "wait";
-  const accentClass = isWait
-    ? "from-grade-c/15 to-card"
-    : strategy.direction === "short"
-      ? "from-grade-d/10 to-card"
-      : "from-primary/10 to-card";
   const dotClass = isWait
     ? "bg-grade-c"
     : strategy.direction === "short"
       ? "bg-grade-d"
       : "bg-primary";
 
+  // 긴 한 문단을 문장 단위로 쪼개서 각각 별도 줄로 렌더링 (가독성).
+  // ". " 또는 한국어 마침표 "다." "음." 패턴을 부드럽게 끊고 빈 항목은 제거.
+  const sentences = report.summary
+    .split(/(?<=[.。!?])\s+/u)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
   return (
-    <Card className={cn("overflow-hidden bg-gradient-to-br", accentClass)}>
-      <CardContent className="p-6">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          <span className={cn("inline-block h-1.5 w-1.5 animate-pulse rounded-full", dotClass)} />
-          AI 추천
-        </div>
-        <h2 className="mt-3 text-xl font-bold leading-snug sm:text-2xl">{report.actionNow}</h2>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{report.summary}</p>
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-          <Badge
-            className={cn(
-              "border",
-              isWait
-                ? "border-grade-c/40 bg-grade-c/10 text-grade-c"
-                : strategy.direction === "short"
-                  ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
-                  : "border-primary/40 bg-primary/10 text-primary",
-            )}
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <span className={cn("inline-block h-1.5 w-1.5 animate-pulse rounded-full", dotClass)} />
+        AI 추천
+      </div>
+      <h2 className="mt-3 text-xl font-bold leading-snug sm:text-2xl">{report.actionNow}</h2>
+      <ul className="mt-4 space-y-2">
+        {sentences.map((s, i) => (
+          <li
+            key={i}
+            className="flex gap-2 text-sm leading-relaxed text-muted-foreground"
           >
-            {STRATEGY_LABELS[strategy.primary]}
-            {strategy.direction
-              ? ` · ${strategy.direction === "long" ? "롱" : "숏"}`
-              : ""}
-          </Badge>
-          <span className="text-muted-foreground">
-            AI 자신감 <span className="font-mono">{Math.round(strategy.confidence * 100)}%</span>
+            <span className="mt-2 inline-block h-1 w-1 flex-none rounded-full bg-muted-foreground/60" />
+            <span>{s}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-auto pt-4 flex flex-wrap items-center gap-2 text-xs">
+        <Badge
+          className={cn(
+            "border",
+            isWait
+              ? "border-grade-c/40 bg-grade-c/10 text-grade-c"
+              : strategy.direction === "short"
+                ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
+                : "border-primary/40 bg-primary/10 text-primary",
+          )}
+        >
+          {STRATEGY_LABELS[strategy.primary]}
+          {strategy.direction
+            ? ` · ${strategy.direction === "long" ? "롱" : "숏"}`
+            : ""}
+        </Badge>
+        <span className="text-muted-foreground">
+          AI 자신감 <span className="font-mono">{Math.round(strategy.confidence * 100)}%</span>
+        </span>
+        {historicalStats && historicalStats.target + historicalStats.stop >= 3 ? (
+          <span className="text-muted-foreground border-l border-border/40 pl-3 ml-1">
+            과거 적중률{" "}
+            <span
+              className={cn(
+                "font-mono font-semibold",
+                historicalStats.winRate >= 0.6
+                  ? "text-grade-a"
+                  : historicalStats.winRate >= 0.4
+                    ? "text-grade-b"
+                    : "text-grade-d",
+              )}
+            >
+              {Math.round(historicalStats.winRate * 100)}%
+            </span>
+            <span className="text-[10px] ml-1">
+              ({historicalStats.target}승 {historicalStats.stop}패
+              {historicalStats.avgR !== 0
+                ? `, ${historicalStats.avgR >= 0 ? "+" : ""}${historicalStats.avgR.toFixed(2)}R`
+                : ""}
+              )
+            </span>
           </span>
-          {historicalStats && historicalStats.target + historicalStats.stop >= 3 ? (
-            <span className="text-muted-foreground border-l border-border/40 pl-3 ml-1">
-              과거 적중률{" "}
-              <span
-                className={cn(
-                  "font-mono font-semibold",
-                  historicalStats.winRate >= 0.6
-                    ? "text-grade-a"
-                    : historicalStats.winRate >= 0.4
-                      ? "text-grade-b"
-                      : "text-grade-d",
-                )}
-              >
-                {Math.round(historicalStats.winRate * 100)}%
-              </span>
-              <span className="text-[10px] ml-1">
-                ({historicalStats.target}승 {historicalStats.stop}패
-                {historicalStats.avgR !== 0
-                  ? `, ${historicalStats.avgR >= 0 ? "+" : ""}${historicalStats.avgR.toFixed(2)}R`
-                  : ""}
-                )
-              </span>
-            </span>
-          ) : historicalStats && historicalStats.total > 0 ? (
-            <span className="text-[10px] text-muted-foreground border-l border-border/40 pl-3 ml-1">
-              과거 표본 {historicalStats.total}개 (결정 {historicalStats.target + historicalStats.stop}개, 부족)
-            </span>
-          ) : null}
-        </div>
-      </CardContent>
-    </Card>
+        ) : historicalStats && historicalStats.total > 0 ? (
+          <span className="text-[10px] text-muted-foreground border-l border-border/40 pl-3 ml-1">
+            과거 표본 {historicalStats.total}개 (결정 {historicalStats.target + historicalStats.stop}개, 부족)
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -785,6 +891,8 @@ function SimpleScenarioCard({
   sizing,
   accountSize,
   riskPct,
+  isAiRisk,
+  recommended,
   currency,
   isActive,
   onHover,
@@ -802,7 +910,12 @@ function SimpleScenarioCard({
   grade: ReturnType<typeof gradeTrade>;
   sizing: ReturnType<typeof sizePosition>;
   accountSize: number;
+  /** Effective risk % used for sizing (either user override or AI-recommended) */
   riskPct: number;
+  /** True when riskPct comes from AI recommendation (no user override) */
+  isAiRisk: boolean;
+  /** AI-recommended params (always computed; shown alongside override) */
+  recommended: import("@/lib/recommend").RecommendedTradeParams;
   currency: "USD" | "KRW";
   isActive: boolean;
   onHover: () => void;
@@ -950,6 +1063,9 @@ function SimpleScenarioCard({
           </div>
         </div>
 
+        <div className="grid gap-5 lg:grid-cols-2">
+        {/* ===== LEFT — 진입 조건/가격 ===== */}
+        <div className="space-y-4">
         {/* When to enter */}
         <div className="rounded-lg border border-border bg-background/40 p-4">
           <div className="flex items-start gap-2">
@@ -1046,22 +1162,48 @@ function SimpleScenarioCard({
         <div className="-mt-1 text-[10px] text-muted-foreground">
           ※ "실현"은 왕복 수수료 0.08% (Binance Taker × 2) 차감 + 슬리피지는 체결가에 별도 반영
         </div>
+        </div>
+        {/* ===== END LEFT ===== */}
 
+        {/* ===== RIGHT — 사이즈 + CTA ===== */}
+        <div className="flex h-full flex-col gap-4">
         {/* Position sizing — risk-based */}
         {sizing.valid ? (
           <div className="space-y-2">
+            {isAiRisk ? (
+              <div
+                className="rounded-md border border-primary/30 bg-primary/5 p-2.5 text-[11px] leading-relaxed text-foreground/85"
+                title={recommended.reasoning}
+              >
+                <span className="font-medium text-primary">🤖 AI 권장:</span>{" "}
+                리스크 <span className="font-mono font-semibold">{recommended.riskPct.toFixed(2)}%</span>,
+                레버리지 <span className="font-mono font-semibold">{recommended.leverage}x</span>{" "}
+                <span className="text-muted-foreground">— {recommended.reasoning}</span>
+              </div>
+            ) : null}
             <div className="rounded-lg border border-border bg-card-2/40 p-3 space-y-2.5">
-              <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <Cell
                   label="잃을 한도"
-                  value={`${riskPct.toFixed(2)}%`}
+                  value={`${riskPct.toFixed(2)}%${isAiRisk ? " 🤖" : ""}`}
                   sub={`${formatCurrency(sizing.maxLoss, currency)} (계좌의)`}
                   tone="bad"
                 />
                 <Cell
-                  label="노출 금액"
+                  label={`레버리지${isAiRisk ? " 🤖" : ""}`}
+                  value={`${recommended.leverage}x`}
+                  sub={isAiRisk ? "AI 권장" : "주문 검토에서 조정"}
+                />
+                <Cell
+                  label="노출 금액 (Notional)"
                   value={`${positionPctOfAccount.toFixed(1)}%`}
                   sub={`${formatCurrency(sizing.positionSize, currency)} (계좌의)`}
+                />
+                <Cell
+                  label="필요 마진"
+                  value={`${(positionPctOfAccount / recommended.leverage).toFixed(2)}%`}
+                  sub={`${formatCurrency(sizing.positionSize / recommended.leverage, currency)} (실제 묶임)`}
+                  tone="good"
                 />
                 <Cell
                   label="매수 수량"
@@ -1076,7 +1218,7 @@ function SimpleScenarioCard({
                 />
               </div>
               <div className="text-[10px] text-muted-foreground">
-                계좌 {formatCurrency(accountSize, currency)} 기준. <strong>노출 금액</strong>은 진입가 × 수량 (레버리지 무관, 시장에 노출되는 총 금액). 레버리지는 주문 검토 화면에서 선택하면 필요 마진이 나옵니다.
+                계좌 {formatCurrency(accountSize, currency)} 기준. <strong>노출 금액</strong>은 진입가 × 수량 (총 노출), <strong>필요 마진</strong>은 노출 ÷ 레버리지 (실제 묶이는 증거금). 손실은 레버리지와 무관하게 "잃을 한도"만큼만 — 손절이 잘 작동했을 때.
               </div>
             </div>
 
@@ -1109,13 +1251,19 @@ function SimpleScenarioCard({
           </div>
         ) : null}
 
-        {/* CTA */}
-        <Link href={tradeFormHref(symbol, scenario, index)}>
+        {/* CTA — push to bottom so right column matches left height */}
+        <Link
+          href={tradeFormHref(symbol, scenario, index, accountSize, riskPct)}
+          className="mt-auto block"
+        >
           <Button className="w-full" size="lg">
             이 시나리오로 주문 검토
             <ArrowRight className="h-4 w-4" />
           </Button>
         </Link>
+        </div>
+        {/* ===== END RIGHT ===== */}
+        </div>
       </div>
     </Card>
   );

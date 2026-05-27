@@ -82,8 +82,14 @@ function AnalyzeClientInner({
   const setResult = useAnalysisStore((s) => s.setResult);
   const symbol = useAnalysisStore((s) => s.symbol);
   const style = useAnalysisStore((s) => s.style);
+  const accountSizeOverride = useAnalysisStore((s) => s.accountSizeOverride);
+  const riskPctOverride = useAnalysisStore((s) => s.riskPctOverride);
   const setForm = useAnalysisStore((s) => s.setForm);
   const clearStore = useAnalysisStore((s) => s.clear);
+
+  // Effective values — override if set, else profile default from props.
+  const effectiveAccountSize = accountSizeOverride ?? accountSize;
+  const effectiveRiskPct = riskPctOverride ?? riskPct;
 
   // Hydration: zustand persist may not have hydrated on first render
   const [hydrated, setHydrated] = useState(false);
@@ -180,72 +186,108 @@ function AnalyzeClientInner({
         <CardHeader>
           <CardTitle>분석 대상</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label
-              htmlFor="symbol-input"
-              className="text-xs text-muted-foreground"
-            >
-              분석할 심볼
-            </label>
-            <SymbolCombobox value={symbol} onChange={setSymbol} />
-            <div className="pt-1">
-              <div className="mb-1.5 text-[11px] text-muted-foreground">
-                자주 쓰는 코인:
-              </div>
-              <div
-                className="flex items-center gap-1.5 overflow-x-auto pb-1.5"
-                style={{ scrollbarWidth: "thin" }}
-              >
-                {PRESETS.map((s) => {
-                  const active = symbol.toUpperCase() === s;
+        <CardContent className="space-y-5">
+          <div className="grid gap-5 lg:grid-cols-2">
+            {/* LEFT — 트레이딩 스타일 + 분석 가능 여부 */}
+            <section className="flex h-full flex-col gap-3">
+              <label className="text-xs font-medium text-muted-foreground">트레이딩 스타일</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(Object.keys(STYLE_PRESETS) as TradingStyle[]).map((s) => {
+                  const p = STYLE_PRESETS[s];
+                  const active = style === s;
                   return (
                     <button
                       key={s}
                       type="button"
-                      onClick={() => setSymbol(s)}
+                      onClick={() => setStyle(s)}
                       className={
-                        "shrink-0 rounded-md border px-2.5 py-1 font-mono text-[11px] transition-colors " +
+                        "rounded-md border p-3 text-left transition-colors " +
                         (active
-                          ? "border-primary bg-primary/10 text-foreground"
-                          : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40")
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-background/40 hover:bg-accent/40")
                       }
                     >
-                      {s.replace("USDT", "")}
+                      <div className="text-sm font-medium">{p.label}</div>
+                      <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{p.description}</div>
                     </button>
                   );
                 })}
               </div>
-            </div>
-          </div>
+              <div className="mt-auto">
+                <AnalysisTimingHint style={style} />
+              </div>
+            </section>
 
-          <div>
-            <label className="text-xs text-muted-foreground">트레이딩 스타일</label>
-            <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {(Object.keys(STYLE_PRESETS) as TradingStyle[]).map((s) => {
-                const p = STYLE_PRESETS[s];
-                const active = style === s;
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setStyle(s)}
-                    className={
-                      "rounded-md border p-3 text-left transition-colors " +
-                      (active
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-background/40 hover:bg-accent/40")
-                    }
-                  >
-                    <div className="text-sm font-medium">{p.label}</div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">{p.description}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            {/* RIGHT — 운영 자금/리스크 + 분석할 심볼 */}
+            <section className="flex h-full flex-col gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    💰 운영 자금 · 리스크
+                  </label>
+                  {(accountSizeOverride !== null || riskPctOverride !== null) ? (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ accountSizeOverride: null, riskPctOverride: null })}
+                      className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      초기화
+                    </button>
+                  ) : null}
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <Input
+                    id="account-size-input"
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={accountSizeOverride !== null ? String(accountSizeOverride) : ""}
+                    onChange={(e) => {
+                      const v = e.target.value.trim();
+                      setForm({ accountSizeOverride: v === "" ? null : Number(v) });
+                    }}
+                    placeholder={`운영 자금 (USD) — 기본 ${accountSize.toLocaleString()}`}
+                    className="font-mono"
+                  />
+                  <Input
+                    id="risk-pct-input"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.1}
+                    value={riskPctOverride !== null ? String(riskPctOverride) : ""}
+                    onChange={(e) => {
+                      const v = e.target.value.trim();
+                      setForm({ riskPctOverride: v === "" ? null : Number(v) });
+                    }}
+                    placeholder="거래당 리스크 (%) — 비워두면 AI 자동"
+                    className="font-mono"
+                  />
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {riskPctOverride !== null ? (
+                    <>
+                      적용: <span className="font-mono text-foreground">${effectiveAccountSize.toLocaleString()}</span> × <span className="font-mono text-foreground">{riskPctOverride}%</span> = 거래당 <span className="font-mono text-foreground">${(effectiveAccountSize * riskPctOverride / 100).toLocaleString()}</span> 손실 한도 (고정)
+                    </>
+                  ) : (
+                    <>
+                      적용: <span className="font-mono text-foreground">${effectiveAccountSize.toLocaleString()}</span> · 리스크는 <span className="text-primary font-medium">시나리오마다 AI 권장값</span>으로 자동 산정
+                    </>
+                  )}
+                </div>
+              </div>
 
-          <AnalysisTimingHint style={style} />
+              <div className="mt-auto space-y-2">
+                <label
+                  htmlFor="symbol-input"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  분석할 심볼
+                </label>
+                <SymbolCombobox value={symbol} onChange={setSymbol} />
+              </div>
+            </section>
+          </div>
 
           <div className="flex justify-end">
             <Button onClick={run} disabled={pending} size="lg">
@@ -300,8 +342,9 @@ function AnalyzeClientInner({
             snapshot={result.snapshot}
             strategy={result.strategy}
             report={result.report}
-            accountSize={accountSize}
-            riskPct={riskPct}
+            accountSize={effectiveAccountSize}
+            riskPctOverride={riskPctOverride}
+            userPreferredRiskPct={riskPct}
             currency={currency}
             historicalStats={stats}
             analysisId={result.analysisId}

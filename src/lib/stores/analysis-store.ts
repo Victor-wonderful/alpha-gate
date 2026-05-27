@@ -23,7 +23,18 @@ interface AnalysisStore {
   symbol: string;
   custom: string;
   style: TradingStyle;
-  setForm: (form: Partial<{ symbol: string; custom: string; style: TradingStyle }>) => void;
+  // Per-analysis overrides for account size / risk %. null = use profile default.
+  accountSizeOverride: number | null;
+  riskPctOverride: number | null;
+  setForm: (
+    form: Partial<{
+      symbol: string;
+      custom: string;
+      style: TradingStyle;
+      accountSizeOverride: number | null;
+      riskPctOverride: number | null;
+    }>,
+  ) => void;
 
   clear: () => void;
 }
@@ -37,6 +48,8 @@ export const useAnalysisStore = create<AnalysisStore>()(
       symbol: "BTCUSDT",
       custom: "",
       style: "swing",
+      accountSizeOverride: null,
+      riskPctOverride: null,
       setForm: (form) => set(form),
 
       clear: () => set({ result: null }),
@@ -52,6 +65,8 @@ export const useAnalysisStore = create<AnalysisStore>()(
         symbol: state.symbol,
         custom: state.custom,
         style: state.style,
+        accountSizeOverride: state.accountSizeOverride,
+        riskPctOverride: state.riskPctOverride,
       }),
     },
   ),

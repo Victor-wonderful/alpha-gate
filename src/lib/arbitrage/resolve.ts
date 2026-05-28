@@ -9,10 +9,10 @@ interface OpenKimchiPosition {
   user_id: string;
   symbol: string;
   notional_usd: number;
-  inventory_coin_upbit: number;
-  inventory_coin_binance: number;
+  inventory_coin_upbit: number; // Upbit 현물 롱 수량
+  inventory_short_binance: number; // Binance 선물 숏 수량
   inventory_usdt_upbit: number;
-  inventory_usdt_binance: number;
+  inventory_usdt_binance: number; // 증거금 + 공매도 대금 (현금흐름 회계)
   target_threshold_pct: number;
   cycles_count: number;
   accrued_cycle_pnl: number;
@@ -49,7 +49,7 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
   const { data: positions, error } = await svc
     .from("arbitrage_positions")
     .select(
-      "id, user_id, symbol, notional_usd, inventory_coin_upbit, inventory_coin_binance, inventory_usdt_upbit, inventory_usdt_binance, target_threshold_pct, cycles_count, accrued_cycle_pnl, expires_at",
+      "id, user_id, symbol, notional_usd, inventory_coin_upbit, inventory_short_binance, inventory_usdt_upbit, inventory_usdt_binance, target_threshold_pct, cycles_count, accrued_cycle_pnl, expires_at",
     )
     .eq("kind", "kimchi")
     .eq("status", "open")
@@ -85,11 +85,8 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
 
     if (expired) {
       if (!snap) {
-        const finalUsd =
-          Number(p.inventory_usdt_upbit) +
-          Number(p.inventory_usdt_binance) +
-          Number(p.notional_usd);
-        const realizedPnl = finalUsd - 2 * Number(p.notional_usd);
+        // 시세 없음 — 델타 중립이라 미실현은 ~0, 누적 사이클 수익만 정산.
+        const realizedPnl = Number(p.accrued_cycle_pnl);
         await closePosition(svc, p, 0, 0, realizedPnl, "expired");
         closed++;
         results.push({ id: p.id, symbol: p.symbol, action: "expired" });
@@ -97,12 +94,14 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
       }
       const upbitUsd = snap.upbitKrw / snap.usdKrwRate;
       const binanceUsd = snap.binanceUsd;
+      // Upbit 현물 매도 + Binance 숏 커버. 현물 롱과 숏이 상쇄(델타 중립).
       const finalUsd =
         Number(p.inventory_coin_upbit) * upbitUsd +
-        Number(p.inventory_coin_binance) * binanceUsd +
         Number(p.inventory_usdt_upbit) +
-        Number(p.inventory_usdt_binance);
-      const fees = 2 * Number(p.notional_usd) * 0.0008;
+        Number(p.inventory_usdt_binance) -
+        Number(p.inventory_short_binance) * binanceUsd;
+      // 진입+청산 4 fills (각 halfUsd) ≈ notional × 0.08%. 사이클 비용은 이미 인벤토리 반영.
+      const fees = Number(p.notional_usd) * 0.0008;
       const realizedPnl = finalUsd - 2 * Number(p.notional_usd) - fees;
       await closePosition(svc, p, upbitUsd, binanceUsd, realizedPnl, "expired");
       closed++;
@@ -150,7 +149,7 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
       .from("arbitrage_positions")
       .update({
         inventory_coin_upbit: cycleResult.newInventory.coinUpbit,
-        inventory_coin_binance: cycleResult.newInventory.coinBinance,
+        inventory_short_binance: cycleResult.newInventory.shortBinance,
         inventory_usdt_upbit: cycleResult.newInventory.usdtUpbit,
         inventory_usdt_binance: cycleResult.newInventory.usdtBinance,
         cycles_count: Number(p.cycles_count) + 1,
@@ -177,7 +176,7 @@ export async function runArbitrageResolve(): Promise<ResolveResult> {
       profit_usdt: cycleResult.profitUsdt,
       upbit_coin_after: cycleResult.newInventory.coinUpbit,
       upbit_usdt_after: cycleResult.newInventory.usdtUpbit,
-      binance_coin_after: cycleResult.newInventory.coinBinance,
+      binance_short_after: cycleResult.newInventory.shortBinance,
       binance_usdt_after: cycleResult.newInventory.usdtBinance,
     });
     if (logErr)
@@ -209,15 +208,15 @@ function runRebalanceCycle(args: {
   profitUsdt: number;
   newInventory: {
     coinUpbit: number;
-    coinBinance: number;
+    shortBinance: number;
     usdtUpbit: number;
     usdtBinance: number;
   };
 } {
   const { position: p, direction, upbitUsd, binanceUsd, fraction } = args;
 
-  let coinUpbit = Number(p.inventory_coin_upbit);
-  let coinBinance = Number(p.inventory_coin_binance);
+  let coinUpbit = Number(p.inventory_coin_upbit); // Upbit 현물 롱
+  let shortBinance = Number(p.inventory_short_binance); // Binance 선물 숏
   let usdtUpbit = Number(p.inventory_usdt_upbit);
   let usdtBinance = Number(p.inventory_usdt_binance);
 
@@ -225,53 +224,60 @@ function runRebalanceCycle(args: {
   let profitUsdt = 0;
 
   if (direction === "positive") {
-    const maxFromUpbit = coinUpbit;
-    const maxFromBinance = binanceUsd > 0 ? usdtBinance / binanceUsd : 0;
-    coinMoved = Math.min(maxFromUpbit, maxFromBinance) * fraction;
+    // 김프↑ (Upbit 비쌈): 비싼 Upbit 현물 매도 + 싼 Binance 숏 커버.
+    // 둘 다 노출 감소 → 델타(coinUpbit − shortBinance) 불변.
+    const maxFromUpbit = coinUpbit; // 팔 현물
+    const maxCoverShort = shortBinance; // 커버할 숏
+    const maxByBinanceCash = binanceUsd > 0 ? usdtBinance / binanceUsd : 0; // 커버 매수 현금
+    coinMoved = Math.min(maxFromUpbit, maxCoverShort, maxByBinanceCash) * fraction;
     if (coinMoved <= 0)
       return {
         coinMoved: 0,
         profitUsdt: 0,
-        newInventory: { coinUpbit, coinBinance, usdtUpbit, usdtBinance },
+        newInventory: { coinUpbit, shortBinance, usdtUpbit, usdtBinance },
       };
 
-    coinUpbit -= coinMoved;
+    coinUpbit -= coinMoved; // 현물 매도
     usdtUpbit += coinMoved * upbitUsd;
-    coinBinance += coinMoved;
+    shortBinance -= coinMoved; // 숏 커버 (매수)
     usdtBinance -= coinMoved * binanceUsd;
 
     const gross = coinMoved * (upbitUsd - binanceUsd);
     const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
     const fees = tradeNotional * 0.0004;
     const slippage = tradeNotional * slippageRateFor(p.symbol);
+    // 비용을 인벤토리 현금에서 차감 → 청산 손익 = 누적 사이클 수익 (회계 일치).
+    usdtBinance -= fees + slippage;
     profitUsdt = gross - fees - slippage;
   } else {
-    const maxToUpbit = upbitUsd > 0 ? usdtUpbit / upbitUsd : 0;
-    const maxFromBinance = coinBinance;
-    coinMoved = Math.min(maxToUpbit, maxFromBinance) * fraction;
+    // 김프↓ (Upbit 쌈): 싼 Upbit 현물 매수 + 비싼 Binance 숏 추가.
+    // 둘 다 노출 증가 → 델타 불변.
+    const maxByUpbitCash = upbitUsd > 0 ? usdtUpbit / upbitUsd : 0; // 살 현금 (주 제약)
+    coinMoved = maxByUpbitCash * fraction;
     if (coinMoved <= 0)
       return {
         coinMoved: 0,
         profitUsdt: 0,
-        newInventory: { coinUpbit, coinBinance, usdtUpbit, usdtBinance },
+        newInventory: { coinUpbit, shortBinance, usdtUpbit, usdtBinance },
       };
 
-    coinUpbit += coinMoved;
+    coinUpbit += coinMoved; // 현물 매수
     usdtUpbit -= coinMoved * upbitUsd;
-    coinBinance -= coinMoved;
+    shortBinance += coinMoved; // 숏 추가 (매도 → 대금 유입)
     usdtBinance += coinMoved * binanceUsd;
 
     const gross = coinMoved * (binanceUsd - upbitUsd);
     const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
     const fees = tradeNotional * 0.0004;
     const slippage = tradeNotional * slippageRateFor(p.symbol);
+    usdtBinance -= fees + slippage;
     profitUsdt = gross - fees - slippage;
   }
 
   return {
     coinMoved,
     profitUsdt,
-    newInventory: { coinUpbit, coinBinance, usdtUpbit, usdtBinance },
+    newInventory: { coinUpbit, shortBinance, usdtUpbit, usdtBinance },
   };
 }
 

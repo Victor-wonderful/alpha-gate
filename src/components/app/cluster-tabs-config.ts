@@ -28,7 +28,7 @@ export const clusters = {
     tabs: [
       { href: "/app/virtual-trade", label: "트레이딩 터미널", icon: "💼" },
       { href: "/app/game", label: "가격 예측 게임", icon: "🎮" },
-      { href: "/app/arbitrage", label: "차익거래", icon: "🔀" },
+      { href: "/app/arbitrage", label: "김프 리밸런싱", icon: "🔀" },
     ],
     rightSlot: opts?.rightSlot,
   }),

@@ -7,36 +7,37 @@ export default function GuideArbitragePage() {
   return (
     <GuideSubpageLayout
       category="차익거래"
-      title="김프 리밸런싱 차익거래"
-      description="Upbit · Binance 양쪽 거래소에 코인 + USDT 를 절반씩 보유하고, 김프가 ±임계값을 넘을 때마다 자동 리밸런싱으로 사이클별 수익을 누적합니다."
+      title="델타 중립 김프 차익거래"
+      description="Upbit 현물 롱 + Binance 선물 숏으로 코인 가격 노출을 0으로 헤지하고, 김프가 ±임계값을 넘을 때마다 자동 리밸런싱으로 김프 진동 수익만 누적합니다."
       next={{ href: "/app/guide/results", label: "내 결과 사용법 →" }}
     >
       {/* 1. 모델 개요 */}
       <GuideSection eyebrow="01" title="모델은 어떻게 동작하나">
         <p className="text-sm leading-relaxed text-muted-foreground max-w-2xl">
-          전통적인 김프 헤지(한쪽 매수, 한쪽 매도)는 김프가 좁아질 때만 수익. 알파게이트의{" "}
-          <span className="font-medium text-foreground">인벤토리 리밸런싱 모델</span>은 양쪽에 코인+USDT 를
-          보유해 김프가 어느 방향으로 움직여도 사이클로 수익이 발생합니다.
+          <span className="font-medium text-foreground">Upbit 현물 롱 + Binance 선물 숏</span>으로 시작합니다.
+          현물 롱과 선물 숏이 서로 상쇄되어 코인 절대가가 오르내려도 손익은 0(델타 중립). 수익은 오직{" "}
+          <span className="font-medium text-foreground">김프(두 거래소 가격 괴리)</span>의 진동에서만 발생하며,
+          김프가 어느 방향으로 벌어져도 사이클로 차익을 잡습니다.
         </p>
         <div className="grid gap-3 lg:grid-cols-2 mt-4">
           <div className="rounded-xl border border-border/60 bg-card/30 p-5">
             <div className="text-sm font-semibold mb-2 flex items-center gap-1.5">
               <Repeat className="h-4 w-4 text-primary" />
-              + 방향 사이클 (Upbit 매도)
+              + 방향 사이클 (김프↑)
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              김프 ≥ +임계값 도달 → Upbit 에서 코인을 비싸게 매도, Binance 에서 같은 양 매수.
-              인벤토리의 25%씩 이동. 가격 차이만큼 USDT 수익.
+              김프 ≥ +임계값 도달 → 비싼 Upbit 에서 현물 매도 + 싼 Binance 에서 숏 커버.
+              양쪽 노출이 같이 줄어 델타 중립 유지, 가격 차이만큼 USDT 수익. 인벤토리의 25%씩 이동.
             </p>
           </div>
           <div className="rounded-xl border border-border/60 bg-card/30 p-5">
             <div className="text-sm font-semibold mb-2 flex items-center gap-1.5">
               <Repeat className="h-4 w-4 text-primary" />
-              − 방향 사이클 (Upbit 매수)
+              − 방향 사이클 (김프↓)
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              김프 ≤ −임계값 도달 → Upbit 에서 코인을 싸게 매수, Binance 에서 매도.
-              반대 방향 리밸런싱. 같은 인벤토리로 양방향 모두 수익 가능.
+              김프 ≤ −임계값 도달 → 싼 Upbit 에서 현물 매수 + 비싼 Binance 에서 숏 추가.
+              양쪽 노출이 같이 늘어 델타 중립 유지. 같은 자본으로 양방향 모두 수익 가능.
             </p>
           </div>
         </div>
@@ -116,22 +117,21 @@ export default function GuideArbitragePage() {
       </GuideSection>
 
       {/* 4. 진입 모달 */}
-      <GuideSection eyebrow="04" title="진입 모달 — 가격 노출 위험 경고">
+      <GuideSection eyebrow="04" title="진입 모달 — 델타 중립 확인">
         <p className="text-sm leading-relaxed text-muted-foreground max-w-2xl">
-          진입 클릭 시 모달이 백테스트 요약 + 가격 노출 위험을 표시합니다.{" "}
-          <span className="font-medium text-foreground">차익거래 ≠ 시장중립</span> — 양쪽에 보유한 코인이
-          가격 떨어지면 사이클 수익과 무관하게 손실 발생합니다.
+          진입 클릭 시 모달이 백테스트 요약 + 델타 중립 안내를 표시합니다.{" "}
+          <span className="font-medium text-foreground">현물 롱 + 선물 숏</span>이 상쇄되어 코인 가격
+          노출은 0 — 가격이 떨어져도 사이클 수익은 그대로 유지됩니다.
         </p>
-        <div className="rounded-lg border border-grade-c/30 bg-grade-c/5 p-4 mt-4 text-sm">
-          <div className="flex items-center gap-1.5 font-semibold text-grade-c mb-2">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 mt-4 text-sm">
+          <div className="flex items-center gap-1.5 font-semibold text-emerald-400 mb-2">
             <TrendingUp className="h-4 w-4" />
-            진입 전 반드시 확인
+            델타 중립 — 헤지된 노출
           </div>
           <ul className="space-y-1 text-muted-foreground">
-            <li>· 최근 7일 가격 범위 (저점 ~ 고점)</li>
-            <li>· 최대 낙폭 / 최대 상승 (%)</li>
-            <li>· 5% / 10% / 최대 낙폭 시 예상 손실 ($)</li>
-            <li>· 손실 회복에 필요한 사이클 수</li>
+            <li>· Upbit 현물 롱 손익 ≈ Binance 숏 손익 반대 → 코인가 변동 상쇄</li>
+            <li>· 수익 원천은 김프(거래소간 가격 괴리)의 진동뿐</li>
+            <li>· 참고용 7일 가격 변동 폭 표시 (이 변동은 헤지로 상쇄)</li>
           </ul>
         </div>
       </GuideSection>
@@ -140,11 +140,12 @@ export default function GuideArbitragePage() {
       <GuideSection eyebrow="05" title="진행 중 포지션 — 인벤토리 시각화">
         <ul className="space-y-2 max-w-2xl text-sm text-muted-foreground">
           <li>
-            · <span className="font-medium text-foreground">코인/USDT 비율 바</span> — 양쪽 거래소 내 보유 비율
+            · <span className="font-medium text-foreground">Upbit 현물 롱 / Binance 선물 숏 박스</span> — 양쪽
+            다리의 수량·현금·순자산
           </li>
           <li>
-            · <span className="font-medium text-foreground">거래소간 분포 바</span> — 코인이 어느 쪽에 몰려있는지,
-            USDT가 어느 쪽에 몰려있는지 별도 표시 (보통 반대 방향으로 쏠림)
+            · <span className="font-medium text-foreground">롱/숏 균형 바</span> — Upbit 롱과 Binance 숏의 비율.
+            50/50 이면 델타 중립 유지, 순 노출이 0 근처여야 정상
           </li>
           <li>
             · <span className="font-medium text-foreground">다음 사이클 이동 가능량</span> — +/− 방향 각각 이동 가능한
@@ -163,9 +164,9 @@ export default function GuideArbitragePage() {
           주의사항
         </div>
         <ul className="space-y-1 text-sm text-muted-foreground">
-          <li>· 시장중립 아님 — 코인 큰 하락 시 사이클 수익보다 가격 손실이 큼</li>
-          <li>· 한 방향에만 사이클 발생하면 인벤토리 빨리 고갈 → 더 이상 수익 발생 안 함</li>
-          <li>· 만료 30 일 — 그 안에 청산 또는 자동 만료</li>
+          <li>· 코인 가격 노출은 헤지됨 — 단, 펀딩비(숏 보유 비용)는 잔여 리스크</li>
+          <li>· 김프가 한 방향으로만 장기 고착되면 인벤토리 고갈 → 더 이상 수익 발생 안 함</li>
+          <li>· 만료 시 자동 청산 또는 수동 청산</li>
           <li>· 현재 시뮬레이션만 가능 (한국 외환법으로 실제 김프 차익 불가)</li>
         </ul>
       </section>
@@ -181,8 +182,9 @@ export default function GuideArbitragePage() {
             한 방향만 반복되면 인벤토리가 한쪽에 쏠려서 더 이상 이동 가능량이 없어집니다.
             단순 사이클 vs 실효 사이클 차이로 고갈 정도를 확인할 수 있습니다.
           </GuideFaq>
-          <GuideFaq question="만료 30일 후 어떻게 되나요?">
-            cron이 자동으로 인벤토리를 시가 평가해 청산. 누적 사이클 수익 + 코인 가격 변동 손익이 합산되어 PnL로 결정.
+          <GuideFaq question="만료 후 어떻게 되나요?">
+            cron이 자동으로 Upbit 현물 매도 + Binance 숏 커버로 청산. 코인 가격 변동은 헤지로 상쇄되어,
+            누적 김프 사이클 수익이 최종 PnL로 결정됩니다.
           </GuideFaq>
           <GuideFaq question="여러 포지션 동시에 가질 수 있나요?">
             네. 다른 코인이면 동시 가능. 각 포지션은 2 × notional 만큼 마진을 사용합니다.

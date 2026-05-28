@@ -11,7 +11,7 @@ import { ArbitrageUI } from "./arbitrage-ui";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "차익거래 · Alpha Gate",
+  title: "김프 리밸런싱 · Alpha Gate",
 };
 
 export default async function ArbitragePage({
@@ -40,7 +40,7 @@ export default async function ArbitragePage({
     supabase
       .from("arbitrage_positions")
       .select(
-        "id, kind, symbol, notional_usd, long_entry_price, short_entry_price, entry_premium_pct, inventory_coin_upbit, inventory_coin_binance, inventory_usdt_upbit, inventory_usdt_binance, target_threshold_pct, cycles_count, accrued_cycle_pnl, coin_price_at_entry_usd, expires_at, created_at",
+        "id, kind, symbol, notional_usd, long_entry_price, short_entry_price, entry_premium_pct, inventory_coin_upbit, inventory_short_binance, inventory_usdt_upbit, inventory_usdt_binance, target_threshold_pct, cycles_count, accrued_cycle_pnl, coin_price_at_entry_usd, expires_at, created_at",
       )
       .eq("user_id", user.id)
       .eq("kind", "kimchi")
@@ -101,7 +101,7 @@ export default async function ArbitragePage({
     <div className="space-y-5">
       <ClusterTabs
         title={cluster.title}
-        description="김치 프리미엄 차익거래 — 김프 0 근처 진입, 목표값 도달 시 양쪽 청산."
+        description="델타 중립 김프 차익거래 — Upbit 현물 롱 + Binance 선물 숏. 코인 가격 노출 0, 김프 진동만 수익."
         tabs={cluster.tabs}
         rightSlot={cluster.rightSlot}
       />

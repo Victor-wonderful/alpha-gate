@@ -79,13 +79,16 @@ function backtestProfit(
 
   const first = series[0];
   if (first.upbitUsd <= 0 || first.binanceUsd <= 0) return empty;
-  let coinUpbit = notional / 2 / first.upbitUsd;
-  let coinBinance = notional / 2 / first.binanceUsd;
-  let usdtUpbit = notional / 2;
-  let usdtBinance = notional / 2;
+  // 델타 중립 모델: Upbit 현물 롱 + Binance 선물 숏 (resolve.ts 진입과 동일).
+  const halfUsd = notional / 2;
+  let coinUpbit = halfUsd / first.upbitUsd; // Upbit 현물 롱
+  let shortBinance = halfUsd / first.binanceUsd; // Binance 선물 숏
+  let usdtUpbit = notional - halfUsd; // = halfUsd
+  let usdtBinance = notional + halfUsd; // 증거금 + 공매도 대금
 
   let positiveCycles = 0;
   let negativeCycles = 0;
+  let cumulativeGross = 0; // 사이클이 잡은 김프 차익 합 (각 사이클 가격차)
   let cumulativeCosts = 0;
   const slipRate = slippageRateFor(symbol);
 
@@ -94,44 +97,48 @@ function backtestProfit(
     if (upbitUsd <= 0 || binanceUsd <= 0) continue;
 
     if (premium >= threshold) {
+      // 김프↑: Upbit 현물 매도 + Binance 숏 커버
       const maxFromUpbit = coinUpbit;
-      const maxFromBinance = usdtBinance / binanceUsd;
-      const coinMoved = Math.min(maxFromUpbit, maxFromBinance) * FRACTION;
+      const maxCoverShort = shortBinance;
+      const maxByBinanceCash = usdtBinance / binanceUsd;
+      const coinMoved =
+        Math.min(maxFromUpbit, maxCoverShort, maxByBinanceCash) * FRACTION;
       if (coinMoved <= 0) continue;
 
       coinUpbit -= coinMoved;
       usdtUpbit += coinMoved * upbitUsd;
-      coinBinance += coinMoved;
+      shortBinance -= coinMoved;
       usdtBinance -= coinMoved * binanceUsd;
+      // 이 사이클이 잡은 차익 = 비싼 Upbit 매도 − 싼 Binance 커버
+      cumulativeGross += coinMoved * (upbitUsd - binanceUsd);
       // 사이클당 fees + slippage (resolve.ts와 동일 공식)
       const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
       cumulativeCosts += tradeNotional * (FEE_RATE + slipRate);
       positiveCycles++;
     } else if (premium <= -threshold) {
-      const maxToUpbit = usdtUpbit / upbitUsd;
-      const maxFromBinance = coinBinance;
-      const coinMoved = Math.min(maxToUpbit, maxFromBinance) * FRACTION;
+      // 김프↓: Upbit 현물 매수 + Binance 숏 추가
+      const maxByUpbitCash = usdtUpbit / upbitUsd;
+      const coinMoved = maxByUpbitCash * FRACTION;
       if (coinMoved <= 0) continue;
 
       coinUpbit += coinMoved;
       usdtUpbit -= coinMoved * upbitUsd;
-      coinBinance -= coinMoved;
+      shortBinance += coinMoved;
       usdtBinance += coinMoved * binanceUsd;
+      cumulativeGross += coinMoved * (binanceUsd - upbitUsd);
       const tradeNotional = coinMoved * (upbitUsd + binanceUsd);
       cumulativeCosts += tradeNotional * (FEE_RATE + slipRate);
       negativeCycles++;
     }
   }
 
-  const last = series[series.length - 1];
-  const finalValue =
-    coinUpbit * last.upbitUsd +
-    coinBinance * last.binanceUsd +
-    usdtUpbit +
-    usdtBinance;
-  const profit = finalValue - 2 * notional - cumulativeCosts;
+  // 예상 수익 = 순수 리밸런싱 차익만 (사이클 gross − 비용).
+  // 진입 시점 김프와의 미실현 차이(가격/김프 변동분)는 제외 — 진입 타이밍 운이라
+  // 백테스트(미래 진입 가정)에 노이즈. 사이클 0 이면 profit = 0.
+  const profit = cumulativeGross - cumulativeCosts;
 
-  const totalCoin = coinUpbit + coinBinance;
+  // 롱/숏 균형 (50% = 델타 중립 유지, 0/100% = 한쪽 고갈)
+  const totalCoin = coinUpbit + shortBinance;
   const totalUsdt = usdtUpbit + usdtBinance;
   const finalCoinUpbitPct = totalCoin > 0 ? (coinUpbit / totalCoin) * 100 : 50;
   const finalUsdtUpbitPct = totalUsdt > 0 ? (usdtUpbit / totalUsdt) * 100 : 50;

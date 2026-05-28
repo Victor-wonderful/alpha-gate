@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { cn, formatNumber } from "@/lib/utils";
 import type { KimchiOpportunity } from "@/lib/arbitrage/constants";
 import type { KimchiVolatility } from "@/lib/arbitrage/volatility";
+import { slippageRateFor } from "@/lib/arbitrage/slippage";
 import {
   enterArbitrageAction,
   closeArbitrageAction,
@@ -32,7 +33,7 @@ interface OpenPosition {
   short_entry_price: number; // = binance USD 가격 (진입)
   entry_premium_pct: number | null;
   inventory_coin_upbit: number;
-  inventory_coin_binance: number;
+  inventory_short_binance: number;
   inventory_usdt_upbit: number;
   inventory_usdt_binance: number;
   target_threshold_pct: number;
@@ -108,9 +109,9 @@ export function ArbitrageUI({
       {/* 헤더 + 잔액 */}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold leading-[1.15]">차익거래</h1>
+          <h1 className="text-3xl font-bold leading-[1.15]">김프 리밸런싱</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            🇰🇷 김프 리밸런싱 — 양쪽 거래소에 진입 코인 + USDT 보유. 김프가 ±임계값 도달 시 자동 리밸런싱으로 사이클마다 수익 누적.
+            🇰🇷 델타 중립 김프 차익거래 — Upbit 현물 롱 + Binance 선물 숏. 코인 가격 노출 0, 김프 진동만 수익. 김프 ±임계값 도달 시 자동 리밸런싱.
           </p>
         </div>
         {wallet ? (
@@ -226,7 +227,7 @@ function VolatilitySection({
             {merged.length > 0 ? <span className="ml-2 text-muted-foreground">({merged.length}개)</span> : null}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            최근 7일 김프 시계열에 실제 cron 로직을 그대로 돌린 결과 — $1000 노출 + 임계값 ±{threshold}% 가정. 인벤토리 고갈/코인 가격 변동까지 반영됨.
+            최근 7일 김프 시계열에 실제 cron 로직을 그대로 돌린 결과 — $1000 노출 + 임계값 ±{threshold}% 가정. 인벤토리 고갈까지 반영됨 (코인 가격 변동은 현물 롱+선물 숏으로 헤지되어 상쇄).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -270,7 +271,7 @@ function VolatilitySection({
                   <th className="px-3 py-3 text-left">순위</th>
                   <th className="px-3 py-3 text-left">코인</th>
                   <th className="px-3 py-3 text-right">현재 김프</th>
-                  <th className="px-3 py-3 text-right" title="$1000 노출 가정, 7일 시뮬레이션 누적 PnL (인벤토리 고갈 + 코인가 변동 반영)">
+                  <th className="px-3 py-3 text-right" title="$1000 노출 가정, 7일 시뮬레이션 누적 PnL (인벤토리 고갈 반영, 코인가 변동은 헤지로 상쇄)">
                     예상 수익 ($)
                   </th>
                   <th className="px-3 py-3 text-right" title="실제 인벤토리가 이동한 사이클 수 (백테스트)">
@@ -557,110 +558,39 @@ function ThresholdControl({
 
 function PriceExposureWarning({
   symbol,
-  notional,
   volatility,
-  estPerCycle,
 }: {
   symbol: string;
-  notional: number;
   volatility: KimchiVolatility | null;
-  estPerCycle: number;
 }) {
-  // 데이터 없으면 일반 경고만
-  if (!volatility || volatility.priceCurrentUsd <= 0) {
-    return (
-      <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-[11px] space-y-1">
-        <div className="flex items-center gap-1.5 font-semibold text-amber-400">
-          ⚠️ 가격 노출 위험
-        </div>
-        <p className="text-muted-foreground">
-          이 포지션은 양쪽에 {symbol} 보유 → 시장중립 아닙니다. {symbol} 가격이 떨어지면 사이클 수익과 무관하게 손실 발생.
-          7일 가격 변동 데이터가 아직 부족합니다 — 신중히 결정하세요.
-        </p>
-      </div>
-    );
-  }
-
-  const { priceMaxDrawdownPct, priceMaxRunupPct, priceMinUsd, priceMaxUsd } = volatility;
-  // 시나리오 손실 예상 — 양쪽 합쳐 notional 만큼 코인 보유 가정
-  const totalCoinExposureUsd = notional; // (한쪽 notional/2 × 2거래소 = notional)
-  const lossAt5 = totalCoinExposureUsd * 0.05;
-  const lossAt10 = totalCoinExposureUsd * 0.1;
-  const lossAtMax = totalCoinExposureUsd * (priceMaxDrawdownPct / 100);
-
-  // 손실 회복 위해 필요한 사이클 수
-  const cyclesToRecover10 = estPerCycle > 0 ? Math.ceil(lossAt10 / estPerCycle) : Infinity;
-
-  const severity =
-    priceMaxDrawdownPct > 15 ? "critical" : priceMaxDrawdownPct > 7 ? "warning" : "info";
-
-  const tone =
-    severity === "critical"
-      ? "border-red-500/50 bg-red-500/10"
-      : severity === "warning"
-        ? "border-amber-500/40 bg-amber-500/5"
-        : "border-sky-500/30 bg-sky-500/5";
-  const iconColor =
-    severity === "critical"
-      ? "text-red-400"
-      : severity === "warning"
-        ? "text-amber-400"
-        : "text-sky-300";
-
+  // 델타 중립 모델 — 코인 가격 노출이 헤지되어 있음을 안내.
+  const { priceMaxDrawdownPct, priceMaxRunupPct } = volatility ?? {
+    priceMaxDrawdownPct: 0,
+    priceMaxRunupPct: 0,
+  };
   return (
-    <div className={cn("rounded-md border p-3 text-[11px] space-y-2", tone)}>
-      <div className={cn("flex items-center gap-1.5 font-semibold", iconColor)}>
-        ⚠️ {symbol} 가격 노출 위험
+    <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-[11px] space-y-2">
+      <div className="flex items-center gap-1.5 font-semibold text-emerald-400">
+        ✓ 델타 중립 — {symbol} 가격 노출 헤지됨
       </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-0.5">
-          <div className="text-[10px] uppercase text-muted-foreground">7일 가격 범위</div>
-          <div className="font-mono tabular-nums">
-            ${priceMinUsd.toFixed(priceMinUsd < 1 ? 6 : 2)} ~ ${priceMaxUsd.toFixed(priceMaxUsd < 1 ? 6 : 2)}
-          </div>
-        </div>
-        <div className="space-y-0.5">
-          <div className="text-[10px] uppercase text-muted-foreground">최대 낙폭 / 상승</div>
-          <div className="font-mono tabular-nums">
-            <span className="text-red-400">-{priceMaxDrawdownPct.toFixed(1)}%</span>
-            {" / "}
-            <span className="text-emerald-400">+{priceMaxRunupPct.toFixed(1)}%</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-border/40 pt-2 space-y-1 text-muted-foreground">
-        <div>
-          노출 ${notional} 진입 시 {symbol} 보유 가치 ≈ <span className="font-mono">${totalCoinExposureUsd.toFixed(0)}</span>
-        </div>
-        <div className="flex justify-between font-mono">
-          <span>{symbol} -5% 시 손실</span>
-          <span className="text-red-400">-${lossAt5.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between font-mono">
-          <span>{symbol} -10% 시 손실</span>
-          <span className="text-red-400">-${lossAt10.toFixed(2)}</span>
-        </div>
-        {priceMaxDrawdownPct > 5 ? (
-          <div className="flex justify-between font-mono">
-            <span>지난 7일 최대 낙폭 시</span>
-            <span className="text-red-400 font-semibold">-${lossAtMax.toFixed(2)}</span>
-          </div>
-        ) : null}
-        {Number.isFinite(cyclesToRecover10) && estPerCycle > 0 ? (
-          <div className="text-[10px] pt-1">
-            -10% 손실 회복하려면 사이클 <span className="font-mono font-semibold text-foreground">{cyclesToRecover10}회</span> 필요
-            (사이클당 ${estPerCycle.toFixed(2)})
-          </div>
-        ) : null}
-      </div>
-
-      {severity === "critical" ? (
-        <div className="border-t border-red-500/30 pt-2 text-red-400 font-semibold">
-          🚨 최근 7일간 -{priceMaxDrawdownPct.toFixed(1)}% 큰 낙폭 발생. 사이클 수익보다 가격 변동 손실 위험이 훨씬 큽니다.
+      <p className="text-muted-foreground">
+        Upbit 현물 <span className="text-amber-400">롱</span> + Binance 선물{" "}
+        <span className="text-sky-300">숏</span>이 서로 상쇄되어, {symbol} 절대가가 오르내려도
+        손익은 거의 0입니다. 수익은 오직 <span className="text-foreground">김프(두 거래소 가격 괴리)</span>의
+        진동에서만 발생합니다.
+      </p>
+      {volatility && (priceMaxDrawdownPct > 0 || priceMaxRunupPct > 0) ? (
+        <div className="border-t border-border/40 pt-2 text-muted-foreground">
+          참고 — 지난 7일 {symbol} 가격 변동 폭{" "}
+          <span className="font-mono text-red-400">-{priceMaxDrawdownPct.toFixed(1)}%</span>
+          {" / "}
+          <span className="font-mono text-emerald-400">+{priceMaxRunupPct.toFixed(1)}%</span>
+          {" "}— 이 변동은 헤지로 상쇄됩니다 (현물 롱 손익 ≈ 숏 손익 반대).
         </div>
       ) : null}
+      <div className="border-t border-border/40 pt-2 text-[10px] text-muted-foreground">
+        잔여 리스크: 펀딩비(숏 보유 비용), 거래소간 김프가 한 방향으로 장기 고착 시 인벤토리 고갈, 청산/슬리피지.
+      </div>
     </div>
   );
 }
@@ -768,8 +698,8 @@ function ActivePositionCard({
   const [closing, startClose] = useTransition();
 
   const notional = Number(pos.notional_usd);
-  const coinUpbit = Number(pos.inventory_coin_upbit);
-  const coinBinance = Number(pos.inventory_coin_binance);
+  const coinUpbit = Number(pos.inventory_coin_upbit); // Upbit 현물 롱
+  const shortBinance = Number(pos.inventory_short_binance); // Binance 선물 숏
   const usdtUpbit = Number(pos.inventory_usdt_upbit);
   const usdtBinance = Number(pos.inventory_usdt_binance);
   const cyclesCount = Number(pos.cycles_count);
@@ -778,16 +708,19 @@ function ActivePositionCard({
   const entryPct = pos.entry_premium_pct != null ? Number(pos.entry_premium_pct) : null;
   const entryCoinPrice = pos.coin_price_at_entry_usd != null ? Number(pos.coin_price_at_entry_usd) : null;
 
-  // 현재 자산 가치 계산
-  const upbitCoinValueUsd = currentPrices ? coinUpbit * currentPrices.upbitUsd : 0;
-  const binanceCoinValueUsd = currentPrices ? coinBinance * currentPrices.binanceUsd : 0;
-  const totalAssetUsd = currentPrices
-    ? upbitCoinValueUsd + binanceCoinValueUsd + usdtUpbit + usdtBinance
-    : null;
+  // 현재 자산 가치 — Upbit 현물 + 현금, Binance 현금 − 숏 부채
+  const upbitValueUsd = currentPrices
+    ? coinUpbit * currentPrices.upbitUsd + usdtUpbit
+    : 0;
+  const binanceValueUsd = currentPrices
+    ? usdtBinance - shortBinance * currentPrices.binanceUsd
+    : 0;
+  const totalAssetUsd = currentPrices ? upbitValueUsd + binanceValueUsd : null;
   const unrealizedPnl =
     totalAssetUsd != null ? totalAssetUsd - 2 * notional : null;
 
-  const totalCoin = coinUpbit + coinBinance;
+  // 순 코인 노출 (롱 − 숏). 델타 중립이면 ≈ 0.
+  const netCoinExposure = coinUpbit - shortBinance;
   const coinPriceDelta =
     entryCoinPrice && currentPrices
       ? (((currentPrices.upbitUsd + currentPrices.binanceUsd) / 2 - entryCoinPrice) /
@@ -897,7 +830,7 @@ function ActivePositionCard({
         {/* 인벤토리 양쪽 */}
         <div className="grid gap-3 sm:grid-cols-2">
           <InventoryBox
-            label="Upbit (KRW 환산)"
+            label="Upbit 현물 롱 (KRW 환산)"
             tone="upbit"
             symbol={pos.symbol}
             coin={coinUpbit}
@@ -905,12 +838,13 @@ function ActivePositionCard({
             currentCoinUsd={currentPrices?.upbitUsd}
           />
           <InventoryBox
-            label="Binance (USDT)"
+            label="Binance 선물 숏 (USDT)"
             tone="binance"
             symbol={pos.symbol}
-            coin={coinBinance}
+            coin={shortBinance}
             usdt={usdtBinance}
             currentCoinUsd={currentPrices?.binanceUsd}
+            isShort
           />
         </div>
 
@@ -919,7 +853,7 @@ function ActivePositionCard({
           <BalanceCapacityBar
             symbol={pos.symbol}
             coinUpbit={coinUpbit}
-            coinBinance={coinBinance}
+            shortBinance={shortBinance}
             usdtUpbit={usdtUpbit}
             usdtBinance={usdtBinance}
             upbitUsd={currentPrices.upbitUsd}
@@ -937,7 +871,7 @@ function ActivePositionCard({
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">미실현 손익 (사이클 + {pos.symbol} 가격)</span>
+            <span className="text-muted-foreground">미실현 손익 (김프 사이클 — 가격 노출 헤지됨)</span>
             {unrealizedPnl != null ? (
               <span
                 className={cn(
@@ -956,11 +890,12 @@ function ActivePositionCard({
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
-                진입 후 {pos.symbol} 평균가 변동
+                진입 후 {pos.symbol} 평균가 변동 (영향 헤지됨)
               </span>
               <span className="font-mono tabular-nums">
                 {coinPriceDelta >= 0 ? "+" : ""}
-                {coinPriceDelta.toFixed(2)}% · {totalCoin.toFixed(6)} {pos.symbol} 보유
+                {coinPriceDelta.toFixed(2)}% · 순 노출 {netCoinExposure >= 0 ? "+" : ""}
+                {netCoinExposure.toFixed(6)} {pos.symbol}
               </span>
             </div>
           ) : null}
@@ -1021,8 +956,8 @@ function ActivePositionCard({
                               )}
                               title={
                                 isPositive
-                                  ? "Upbit 매도 + Binance 매수"
-                                  : "Upbit 매수 + Binance 매도"
+                                  ? "Upbit 현물 매도 + Binance 숏 커버"
+                                  : "Upbit 현물 매수 + Binance 숏 추가"
                               }
                             >
                               {isPositive ? "↗ +" : "↘ -"}
@@ -1095,6 +1030,7 @@ function InventoryBox({
   coin,
   usdt,
   currentCoinUsd,
+  isShort = false,
 }: {
   label: string;
   tone: "upbit" | "binance";
@@ -1102,10 +1038,16 @@ function InventoryBox({
   coin: number;
   usdt: number;
   currentCoinUsd?: number;
+  isShort?: boolean;
 }) {
+  // 숏이면 코인 가치는 부채(−), 순자산 = usdt − coin×price.
   const coinUsd = currentCoinUsd ? coin * currentCoinUsd : null;
-  const total = coinUsd != null ? coinUsd + usdt : null;
-  const coinPct = total != null && total > 0 && coinUsd != null ? (coinUsd / total) * 100 : null;
+  const total =
+    coinUsd != null ? (isShort ? usdt - coinUsd : coinUsd + usdt) : null;
+  const coinPct =
+    total != null && total > 0 && coinUsd != null
+      ? ((isShort ? coinUsd : coinUsd) / (isShort ? usdt : total)) * 100
+      : null;
   return (
     <div
       className={cn(
@@ -1125,25 +1067,27 @@ function InventoryBox({
       </div>
       <div className="space-y-0.5 font-mono text-xs tabular-nums">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">{symbol}</span>
+          <span className="text-muted-foreground">{isShort ? `${symbol} 숏` : symbol}</span>
           <span>
-            {coin.toFixed(6)}{" "}
+            {isShort ? "−" : ""}{coin.toFixed(6)}{" "}
             {coinUsd != null ? (
-              <span className="text-muted-foreground">≈ ${coinUsd.toFixed(2)}</span>
+              <span className="text-muted-foreground">
+                ≈ {isShort ? "−" : ""}${coinUsd.toFixed(2)}
+              </span>
             ) : null}
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">USDT</span>
+          <span className="text-muted-foreground">{isShort ? "증거금+대금" : "USDT"}</span>
           <span>${usdt.toFixed(2)}</span>
         </div>
         {total != null ? (
           <>
             <div className="flex justify-between border-t border-border/40 pt-1 font-semibold">
-              <span className="text-muted-foreground">합계</span>
+              <span className="text-muted-foreground">{isShort ? "순자산" : "합계"}</span>
               <span>${total.toFixed(2)}</span>
             </div>
-            {coinPct != null ? (
+            {!isShort && coinPct != null ? (
               <div className="space-y-0.5 pt-1">
                 <div className="flex h-1.5 overflow-hidden rounded-full bg-muted/40">
                   <div
@@ -1171,7 +1115,7 @@ function InventoryBox({
 function BalanceCapacityBar({
   symbol,
   coinUpbit,
-  coinBinance,
+  shortBinance,
   usdtUpbit,
   usdtBinance,
   upbitUsd,
@@ -1179,27 +1123,28 @@ function BalanceCapacityBar({
 }: {
   symbol: string;
   coinUpbit: number;
-  coinBinance: number;
+  shortBinance: number;
   usdtUpbit: number;
   usdtBinance: number;
   upbitUsd: number;
   binanceUsd: number;
 }) {
-  // 코인의 거래소간 분포 (수량 기준)
-  const totalCoin = coinUpbit + coinBinance;
+  // 롱(Upbit 현물) / 숏(Binance 선물) 균형 — 50/50 = 델타 중립
+  const totalCoin = coinUpbit + shortBinance;
   const coinUpbitPct = totalCoin > 0 ? (coinUpbit / totalCoin) * 100 : 50;
   // USDT의 거래소간 분포
   const totalUsdt = usdtUpbit + usdtBinance;
   const usdtUpbitPct = totalUsdt > 0 ? (usdtUpbit / totalUsdt) * 100 : 50;
 
   // 다음 사이클 여력
-  // positive (+ direction): Upbit 매도 + Binance 매수 → limited by min(coinUpbit, usdtBinance/binanceUsd) × 25%
-  // negative (- direction): Upbit 매수 + Binance 매도 → limited by min(usdtUpbit/upbitUsd, coinBinance) × 25%
+  // positive (+): Upbit 현물 매도 + Binance 숏 커버 → min(coinUpbit, shortBinance, usdtBinance/binanceUsd) × 25%
+  // negative (-): Upbit 현물 매수 + Binance 숏 추가 → (usdtUpbit/upbitUsd) × 25%
   const FRACTION = 0.25;
   const positiveCapCoin =
-    binanceUsd > 0 ? Math.min(coinUpbit, usdtBinance / binanceUsd) * FRACTION : 0;
-  const negativeCapCoin =
-    upbitUsd > 0 ? Math.min(usdtUpbit / upbitUsd, coinBinance) * FRACTION : 0;
+    binanceUsd > 0
+      ? Math.min(coinUpbit, shortBinance, usdtBinance / binanceUsd) * FRACTION
+      : 0;
+  const negativeCapCoin = upbitUsd > 0 ? (usdtUpbit / upbitUsd) * FRACTION : 0;
   const positiveCapUsd = positiveCapCoin * ((upbitUsd + binanceUsd) / 2);
   const negativeCapUsd = negativeCapCoin * ((upbitUsd + binanceUsd) / 2);
 
@@ -1212,12 +1157,12 @@ function BalanceCapacityBar({
 
   return (
     <div className="rounded-md border border-border/60 bg-background/40 p-3 space-y-3">
-      {/* 코인 거래소간 분포 */}
+      {/* 롱/숏 균형 (델타 중립) */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">{symbol} 거래소간 분포</span>
+          <span className="text-muted-foreground">{symbol} 롱/숏 균형 (50/50 = 델타 중립)</span>
           <span className="font-mono tabular-nums text-muted-foreground">
-            총 {totalCoin.toFixed(6)} {symbol}
+            순 노출 {(coinUpbit - shortBinance >= 0 ? "+" : "")}{(coinUpbit - shortBinance).toFixed(6)} {symbol}
           </span>
         </div>
         <div className="flex h-2 overflow-hidden rounded-full bg-muted/40">
@@ -1226,10 +1171,10 @@ function BalanceCapacityBar({
         </div>
         <div className="flex justify-between text-[10px] font-mono tabular-nums">
           <span className="text-amber-400">
-            Upbit {coinUpbit.toFixed(6)} ({coinUpbitPct.toFixed(0)}%)
+            Upbit 롱 {coinUpbit.toFixed(6)} ({coinUpbitPct.toFixed(0)}%)
           </span>
           <span className="text-sky-300">
-            Binance {coinBinance.toFixed(6)} ({(100 - coinUpbitPct).toFixed(0)}%)
+            Binance 숏 {shortBinance.toFixed(6)} ({(100 - coinUpbitPct).toFixed(0)}%)
           </span>
         </div>
       </div>
@@ -1267,7 +1212,7 @@ function BalanceCapacityBar({
         <div className="grid grid-cols-2 gap-2 text-[11px]">
           <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2">
             <div className="text-[10px] uppercase text-amber-400 font-semibold">
-              ↗ + 방향 (Upbit 매도)
+              ↗ + 방향 (Upbit 매도 + 숏 커버)
             </div>
             <div className="mt-1 font-mono tabular-nums">
               {positiveCapCoin.toFixed(6)} {symbol}
@@ -1278,7 +1223,7 @@ function BalanceCapacityBar({
           </div>
           <div className="rounded border border-sky-500/30 bg-sky-500/5 p-2">
             <div className="text-[10px] uppercase text-sky-300 font-semibold">
-              ↘ - 방향 (Upbit 매수)
+              ↘ - 방향 (Upbit 매수 + 숏 추가)
             </div>
             <div className="mt-1 font-mono tabular-nums">
               {negativeCapCoin.toFixed(6)} {symbol}
@@ -1394,11 +1339,11 @@ function EntryModal({
   //  - 이동량 = 인벤토리(=notional/2)의 25% = notional/8 (USD)
   //  - Gross = (notional/8) × (threshold/100)
   //  - Fees (수수료 0.04% × 양쪽 거래) = (notional/4) × 0.0004
-  //  - 슬리피지 가정 = (notional/4) × 0.0002 (코인 ~0.01% × 양쪽)
+  //  - 슬리피지 = (notional/4) × 코인별 차등 (엔진 slippageRateFor 와 동일)
   const cycleTradeVolume = notional / 4; // 양쪽 합산 거래액
   const cycleGross = (notional / 8) * (threshold / 100);
   const cycleFees = cycleTradeVolume * 0.0004;
-  const cycleSlippage = cycleTradeVolume * 0.0002;
+  const cycleSlippage = cycleTradeVolume * slippageRateFor(target.symbol);
   const estPerCycle = cycleGross - cycleFees - cycleSlippage;
 
   function submit() {
@@ -1455,8 +1400,8 @@ function EntryModal({
               </span>
             </div>
             <div className="text-[11px] text-muted-foreground">
-              양쪽 거래소에 {target.symbol} + USDT 절반씩 보유. 김프가 ±임계값 도달 시 자동 리밸런싱(인벤토리의 25%씩) →
-              사이클마다 수익 누적. 양방향 모두 수익 가능. 만료 30일.
+              Upbit 현물 롱 + Binance 선물 숏 (델타 중립). 코인 가격 노출 0. 김프가 ±임계값 도달 시
+              자동 리밸런싱(25%씩) → 김프 진동 수익만 누적. 양방향 모두 수익 가능.
             </div>
           </div>
 
@@ -1465,13 +1410,8 @@ function EntryModal({
             <BacktestSummary symbol={target.symbol} volatility={volatility} threshold={threshold} />
           ) : null}
 
-          {/* ⚠️ 가격 노출 위험 경고 */}
-          <PriceExposureWarning
-            symbol={target.symbol}
-            notional={notional}
-            volatility={volatility}
-            estPerCycle={estPerCycle}
-          />
+          {/* ✓ 델타 중립 안내 */}
+          <PriceExposureWarning symbol={target.symbol} volatility={volatility} />
 
           <div>
             <Label htmlFor="notional" className="text-xs">
@@ -1544,24 +1484,24 @@ function EntryModal({
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
               <div className="text-[10px] font-semibold uppercase text-amber-400">
-                Upbit 셋업
+                Upbit 현물 롱
               </div>
               <div className="font-mono text-[11px]">
                 {target.symbol} {(notional / 2 / (target.upbitKrw / target.usdKrwRate)).toFixed(6)}
               </div>
               <div className="font-mono text-[11px] text-muted-foreground">
-                USDT ${(notional / 2).toFixed(2)}
+                현금 ${(notional / 2).toFixed(2)}
               </div>
             </div>
             <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-2">
               <div className="text-[10px] font-semibold uppercase text-sky-300">
-                Binance 셋업
+                Binance 선물 숏
               </div>
               <div className="font-mono text-[11px]">
-                {target.symbol} {(notional / 2 / target.binanceUsd).toFixed(6)}
+                {target.symbol} 숏 {(notional / 2 / target.binanceUsd).toFixed(6)}
               </div>
               <div className="font-mono text-[11px] text-muted-foreground">
-                USDT ${(notional / 2).toFixed(2)}
+                증거금 ${(notional / 2).toFixed(2)}
               </div>
             </div>
           </div>

@@ -40,11 +40,11 @@ export async function runArbitrageCronAction(): Promise<{
 }
 
 /**
- * 리밸런싱 인벤토리 모델 — 진입 입력.
+ * 델타 중립 김프 차익거래 — 진입 입력.
  *
  * 사용자는 한쪽 다리 노출(USD) + 리밸런싱 임계값(%)을 지정.
- * 시스템은 양쪽 거래소에 BTC 절반씩 + 나머지 USDT 절반씩 보유한 상태로 시작.
- * 김프가 ±threshold 도달 시 cron이 자동 리밸런싱하여 사이클당 수익 누적.
+ * 시스템은 Upbit 현물 롱 + Binance 선물 숏으로 시작 → 코인 가격 노출 = 0 (델타 중립).
+ * 김프가 ±threshold 도달 시 cron이 자동 리밸런싱하여 사이클당 김프 진동 수익 누적.
  */
 export interface EnterArbitrageInput {
   symbol: string;
@@ -95,16 +95,19 @@ export async function enterArbitrageAction(
   const afford = await canAffordMargin(user.id, totalMargin);
   if (!afford.ok) return { ok: false, error: afford.reason };
 
-  // 인벤토리 초기 분배:
-  //  - 양쪽 각각 notional/2 USD 가치의 진입 코인 보유 (= USDT의 절반은 코인으로 환전 효과)
-  //  - 리밸런싱 여유분으로 양쪽에 USDT 도 절반 보유
+  // 델타 중립 인벤토리 초기 분배 (총자본 2 × notional):
+  //  - Upbit: notional 예치 → halfUsd 현물 매수(롱), 현금 halfUsd 남김
+  //  - Binance: notional 예치 → halfUsd 선물 숏(공매도 대금 halfUsd 유입)
+  //  공매도 현금흐름 회계: usdtBinance 는 증거금 + 매도 대금을 합친 계정.
+  //  Binance 측 순자산 = usdtBinance − shortBinance × price (숏 부채 차감).
+  //  델타 = coinUpbit − shortBinance ≈ 0 → 코인 절대가 변동에 중립.
   const halfUsd = p.notionalUsd / 2;
-  const coinUpbit = halfUsd / p.upbitPriceUsd;
-  const coinBinance = halfUsd / p.binancePriceUsd;
-  const usdtUpbit = halfUsd;
-  const usdtBinance = halfUsd;
+  const coinUpbit = halfUsd / p.upbitPriceUsd; // Upbit 현물 롱
+  const usdtUpbit = p.notionalUsd - halfUsd; // = halfUsd
+  const shortBinance = halfUsd / p.binancePriceUsd; // Binance 선물 숏 수량
+  const usdtBinance = p.notionalUsd + halfUsd; // notional 예치 + 공매도 대금 halfUsd
 
-  // 평균 진입 코인 가격 (수익률 계산 베이스)
+  // 평균 진입 코인 가격 (참고 기록용)
   const avgCoinPriceUsd = (p.upbitPriceUsd + p.binancePriceUsd) / 2;
 
   const { data, error } = await supabase
@@ -114,17 +117,17 @@ export async function enterArbitrageAction(
       kind: "kimchi",
       symbol: p.symbol,
       notional_usd: p.notionalUsd,
-      // 기존 헤지 모델 필드는 진입 가격만 기록 (호환성)
+      // 다리 메타: Upbit 현물 롱 + Binance 선물 숏
       long_exchange: "upbit",
       long_entry_price: p.upbitPriceUsd,
       long_qty: coinUpbit,
       short_exchange: "binance",
       short_entry_price: p.binancePriceUsd,
-      short_qty: coinBinance,
+      short_qty: shortBinance,
       entry_premium_pct: p.entryPremiumPct ?? null,
-      // 인벤토리 모델 신규 필드
+      // 델타 중립 인벤토리 필드
       inventory_coin_upbit: coinUpbit,
-      inventory_coin_binance: coinBinance,
+      inventory_short_binance: shortBinance,
       inventory_usdt_upbit: usdtUpbit,
       inventory_usdt_binance: usdtBinance,
       target_threshold_pct: threshold,
@@ -151,7 +154,10 @@ export async function enterArbitrageAction(
 }
 
 /**
- * 리밸런싱 인벤토리 청산 — 양쪽 BTC 를 청산 시점 가격으로 USDT 환산 + 누적 사이클 수익 + BTC 가격 노출 손익 합산.
+ * 델타 중립 차익거래 청산 — Upbit 현물 매도 + Binance 숏 커버.
+ *   Upbit 측 = coinUpbit × price + usdtUpbit
+ *   Binance 측 = usdtBinance − shortBinance × price  (숏 청산 비용 차감)
+ *   현물 롱 손익과 숏 손익이 상쇄되어, 남는 것은 김프 사이클 수익뿐.
  */
 export async function closeArbitrageAction(
   id: string,
@@ -178,21 +184,20 @@ export async function closeArbitrageAction(
     return { ok: false, error: "청산 가격이 유효하지 않습니다." };
 
   const coinUpbit = Number(pos.inventory_coin_upbit ?? 0);
-  const coinBinance = Number(pos.inventory_coin_binance ?? 0);
+  const shortBinance = Number(pos.inventory_short_binance ?? 0);
   const usdtUpbit = Number(pos.inventory_usdt_upbit ?? 0);
   const usdtBinance = Number(pos.inventory_usdt_binance ?? 0);
   const notional = Number(pos.notional_usd);
 
-  // 청산 시 보유 코인을 USDT 로 환산 (양쪽 거래소 가격 적용)
-  const upbitCoinValueUsd = coinUpbit * upbitPriceUsdNow;
-  const binanceCoinValueUsd = coinBinance * binancePriceUsdNow;
+  // Upbit 현물 매도 → USDT 환산
+  const upbitValueUsd = coinUpbit * upbitPriceUsdNow + usdtUpbit;
+  // Binance 숏 커버 → 매수 비용(shortBinance × price)을 현금에서 차감
+  const binanceValueUsd = usdtBinance - shortBinance * binancePriceUsdNow;
 
-  const finalTotalUsd =
-    upbitCoinValueUsd + usdtUpbit + binanceCoinValueUsd + usdtBinance;
+  const finalTotalUsd = upbitValueUsd + binanceValueUsd;
 
-  // 시작 자본 = 2 × notional
-  // realizedPnl = (현재 가치 - 시작 자본) — 누적 사이클 수익은 이미 finalTotalUsd 에 반영됨
-  // 단순화: realizedPnl = finalTotalUsd - 2*notional (사이클 수익 + BTC 가격 변동 포함)
+  // 시작 자본 = 2 × notional. 현물 롱과 숏이 상쇄되어 코인 가격 변동은 0,
+  // 남는 것은 누적 사이클 수익뿐 (이미 인벤토리 현금에 반영됨).
   const grossPnl = finalTotalUsd - 2 * notional;
 
   // 수수료: 진입 시 2회 매수 + 청산 시 2회 매도 = 4회 fills × notional × 0.04% = 0.16% × notional

@@ -31,7 +31,7 @@ export default async function VirtualTradePage({
   const { data: openTrades } = await supabase
     .from("trades")
     .select(
-      "id, symbol, direction, entry, entry_actual, stop, target, position_quantity, paper_margin, fees_pct, context_flags, created_at, timeframe, extended_until, market_type",
+      "id, symbol, direction, entry, entry_actual, stop, target, position_quantity, paper_margin, fees_pct, context_flags, created_at, timeframe, extended_until, market_type, order_status",
     )
     .eq("user_id", user.id)
     .eq("is_paper", true)

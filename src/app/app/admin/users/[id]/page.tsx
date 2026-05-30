@@ -118,6 +118,34 @@ export default async function AdminUserDetailPage({
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
+        {/* Recent analyses */}
+        <Card>
+          <CardHeader>
+            <CardTitle>최근 분석</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              {u.recentAnalyses.length === 0 ? (
+                <div className="px-5 py-6 text-center text-sm text-muted-foreground">분석 없음</div>
+              ) : (
+                u.recentAnalyses.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between gap-2 px-5 py-2.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{a.symbol}</span>
+                      {a.primary_strategy ? (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {a.primary_strategy}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="font-mono text-[11px] text-muted-foreground">{dt(a.created_at)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Recent trades */}
         <Card>
           <CardHeader>

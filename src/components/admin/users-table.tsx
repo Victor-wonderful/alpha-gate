@@ -2,34 +2,115 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, ArrowUp, ArrowDown } from "lucide-react";
 import type { AdminUserRow } from "@/lib/admin/data";
 import { Input } from "@/components/ui/input";
-import { formatNumber } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
+
+type SortKey = "createdAt" | "usdtBalance" | "aiCredits" | "analysesCount" | "tradesCount";
+type StatusFilter = "all" | "active" | "disabled";
+
+const STATUS_TABS: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "전체" },
+  { key: "active", label: "활성" },
+  { key: "disabled", label: "비활성" },
+];
 
 export function UsersTable({ users }: { users: AdminUserRow[] }) {
   const [q, setQ] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return users;
-    return users.filter(
-      (u) =>
-        u.email.toLowerCase().includes(term) ||
-        (u.displayName ?? "").toLowerCase().includes(term),
+    let rows = users;
+    if (term) {
+      rows = rows.filter(
+        (u) =>
+          u.email.toLowerCase().includes(term) ||
+          (u.displayName ?? "").toLowerCase().includes(term),
+      );
+    }
+    if (status === "active") rows = rows.filter((u) => !u.disabled);
+    else if (status === "disabled") rows = rows.filter((u) => u.disabled);
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      let av: number;
+      let bv: number;
+      if (sortKey === "createdAt") {
+        av = new Date(a.createdAt).getTime();
+        bv = new Date(b.createdAt).getTime();
+      } else {
+        av = a[sortKey];
+        bv = b[sortKey];
+      }
+      return (av - bv) * dir;
+    });
+  }, [q, status, sortKey, sortDir, users]);
+
+  function SortHeader({ label, k }: { label: string; k: SortKey }) {
+    const active = sortKey === k;
+    return (
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        className={cn(
+          "inline-flex items-center gap-1 transition-colors hover:text-foreground",
+          active && "text-foreground",
+        )}
+      >
+        {label}
+        {active ? (
+          sortDir === "asc" ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : null}
+      </button>
     );
-  }, [q, users]);
+  }
 
   return (
     <div className="space-y-3">
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="이메일 / 표시명 검색"
-          className="pl-9"
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="이메일 / 표시명 검색"
+            className="pl-9"
+          />
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-card/40 p-1">
+          {STATUS_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setStatus(t.key)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                status === t.key
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border">
@@ -37,11 +118,21 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <th className="px-3 py-2.5 font-medium">회원</th>
-              <th className="px-3 py-2.5 text-right font-medium">vUSDT</th>
-              <th className="px-3 py-2.5 text-right font-medium">AI 크레딧</th>
-              <th className="px-3 py-2.5 text-right font-medium">분석</th>
-              <th className="px-3 py-2.5 text-right font-medium">거래</th>
-              <th className="px-3 py-2.5 font-medium">가입일</th>
+              <th className="px-3 py-2.5 text-right font-medium">
+                <SortHeader label="vUSDT" k="usdtBalance" />
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium">
+                <SortHeader label="AI 크레딧" k="aiCredits" />
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium">
+                <SortHeader label="분석" k="analysesCount" />
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium">
+                <SortHeader label="거래" k="tradesCount" />
+              </th>
+              <th className="px-3 py-2.5 font-medium">
+                <SortHeader label="가입일" k="createdAt" />
+              </th>
               <th className="px-3 py-2.5 font-medium">상태</th>
             </tr>
           </thead>

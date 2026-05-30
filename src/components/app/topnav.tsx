@@ -12,6 +12,7 @@ import {
   LineChart,
   LogOut,
   Menu,
+  Shield,
   Sparkles,
   Wallet,
   X,
@@ -92,11 +93,13 @@ function UserDropdown({
   balance,
   credits,
   pathname,
+  isAdmin,
 }: {
   email: string;
   balance: number;
   credits: number;
   pathname: string;
+  isAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -230,6 +233,22 @@ function UserDropdown({
             );
           })}
 
+          {isAdmin ? (
+            <Link
+              href="/app/admin"
+              onClick={() => setOpen(false)}
+              className={cn(
+                "flex items-center gap-2 border-t border-border px-3 py-2 text-sm",
+                pathMatches(pathname, "/app/admin")
+                  ? "bg-primary/10 text-foreground"
+                  : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              어드민
+            </Link>
+          ) : null}
+
           <a
             href={BLOG_URL}
             target="_blank"
@@ -263,6 +282,7 @@ function MobileDrawer({
   email,
   balance,
   credits,
+  isAdmin,
 }: {
   open: boolean;
   onClose: () => void;
@@ -270,6 +290,7 @@ function MobileDrawer({
   email: string;
   balance: number;
   credits: number;
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   async function signOut() {
@@ -380,6 +401,21 @@ function MobileDrawer({
         </nav>
 
         <div className="space-y-1 border-t border-border p-3">
+          {isAdmin ? (
+            <Link
+              href="/app/admin"
+              onClick={onClose}
+              className={cn(
+                "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs",
+                pathMatches(pathname, "/app/admin")
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+              )}
+            >
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              어드민
+            </Link>
+          ) : null}
           <a
             href={BLOG_URL}
             target="_blank"
@@ -408,10 +444,12 @@ export function TopNav({
   email,
   balance,
   credits,
+  isAdmin = false,
 }: {
   email: string;
   balance: number;
   credits: number;
+  isAdmin?: boolean;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -452,6 +490,7 @@ export function TopNav({
                 balance={balance}
                 credits={credits}
                 pathname={pathname}
+                isAdmin={isAdmin}
               />
             </div>
             <button
@@ -473,6 +512,7 @@ export function TopNav({
         email={email}
         balance={balance}
         credits={credits}
+        isAdmin={isAdmin}
       />
     </>
   );

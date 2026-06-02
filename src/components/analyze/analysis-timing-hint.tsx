@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, Clock, Waves } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TradingStyle } from "@/lib/analysis/style";
 import {
@@ -37,13 +37,18 @@ function minutesSinceLastHourCycle(h: number, m: number, cycle: number, offset =
   return Number.MAX_SAFE_INTEGER;
 }
 
-type Status = "good" | "caution" | "wait" | "avoid";
+// 톤 철학(개방적): 분석은 대부분의 시간에 유효하다. 캔들 마감 대기는 '금지'가 아니라
+// '미세 최적화'이므로 격려 톤("분석 가능")으로 보여주고, 베스트 순간만 초록으로 강조한다.
+// 진짜 회피(빨강)는 펀딩 정산 ±10분 같은 변동성 노이즈 구간으로 한정한다.
+type Status = "optimal" | "fine" | "avoid";
 
 type Verdict = {
   status: Status;
   title: string;
   detail: string;
+  /** 우측 미니 표시 (더 정확해지는 시점 / 재시도 시점) */
   nextWindow?: string;
+  nextLabel?: string;
 };
 
 /** 펀딩 정산 ±10분 여부 (Binance 8h: 09 / 17 / 01 KST). */
@@ -65,141 +70,122 @@ function evaluate(
   parts: { h: number; m: number; totalMin: number },
   tier: LiquidityTier,
 ): Verdict {
-  const { h, m, totalMin } = parts;
+  const { h, m } = parts;
 
-  // 0) 펀딩 정산 ±10분 — 모든 스타일 최우선 회피
+  // 0) 진짜 회피 — 펀딩 정산 ±10분 (변동성 노이즈). 매크로 이벤트는 추후 추가.
   if (inFundingWindow(h, m)) {
     return {
       status: "avoid",
-      title: "펀딩 정산 ±10분 — 분석 회피",
-      detail: "정산 직전·직후 변동성이 폭증해 분석 신뢰도가 떨어집니다. 10분 뒤 재시도.",
+      title: "펀딩 정산 ±10분 — 잠시 후 재시도",
+      detail: "정산 직전·직후 변동성이 폭증해 결과가 흔들립니다. 10분 뒤가 깔끔합니다.",
       nextWindow: "10분 후",
+      nextLabel: "재시도",
     };
   }
 
-  // ── 스캘핑: 캔들 마감 + 유동성 둘 다 필요 ──────────────────────────
+  // ── 스캘핑: 캔들 마감 + 유동성이 최적의 조건. 그 외엔 '가능'(격려). ──
   if (style === "scalp") {
     const sinceLast5m = m % 5;
     const fresh = sinceLast5m <= 2;
-
-    // 죽은 구간은 캔들이 막 마감해도 체결이 얇아 휩쏘 위험 → 하향
-    if (tier === "dead") {
+    if (fresh && (tier === "active" || tier === "golden")) {
       return {
-        status: "avoid",
-        title: "유동성 죽은 구간 — 스캘핑 비권장",
-        detail: "체결이 얇아 캔들 마감 신호도 휩쏘로 무너지기 쉽습니다. 16:00 런던 개장 이후 권장.",
-        nextWindow: "16:00 KST",
+        status: "optimal",
+        title: tier === "golden" ? "골든 타임 — 스캘핑 최적" : "지금 분석하기 좋은 시점",
+        detail: `5M 마감 ${sinceLast5m}분 경과 · 유동성 양호. 단기 데이터 안정적.`,
       };
     }
+    let detail = "지금 분석해도 무방합니다.";
+    let nextWindow: string | undefined;
+    let nextLabel: string | undefined;
     if (!fresh) {
-      return {
-        status: "wait",
-        title: "다음 5M 캔들 마감 대기",
-        detail: `${5 - sinceLast5m}분 뒤 캔들 확정 후 분석하면 더 정확합니다.`,
-        nextWindow: `${5 - sinceLast5m}분 후`,
-      };
+      detail += ` ${5 - sinceLast5m}분 뒤 5M 마감 시 더 정확.`;
+      nextWindow = `${5 - sinceLast5m}분 후`;
+      nextLabel = "더 정확";
     }
-    if (tier === "quiet") {
-      return {
-        status: "caution",
-        title: "분석 가능 — 단 아시아 한산",
-        detail: `5M 마감 ${sinceLast5m}분 경과. 변동성 낮아 박스 잦음, 목표 좁게.`,
-      };
-    }
-    // active / golden + fresh
-    return {
-      status: "good",
-      title: tier === "golden" ? "골든 타임 — 스캘핑 최적" : "지금 분석하기 좋은 시점",
-      detail: `5M 마감 ${sinceLast5m}분 경과 · 유동성 양호. 단기 데이터 안정적.`,
-    };
+    if (tier === "dead") detail += " 유동성 낮은 구간 — 16:00 런던 개장 이후 더 안정적.";
+    else if (tier === "quiet") detail += " 아시아 한산 — 목표는 좁게 잡으세요.";
+    return { status: "fine", title: "지금 분석 가능", detail, nextWindow, nextLabel };
   }
 
-  // ── 데이: 1H 마감 우선, 유동성은 보조 메모 ─────────────────────────
+  // ── 데이: 1H 마감이 최적, 그 외엔 '가능'. ──
   if (style === "day") {
     const fresh = m <= 15;
+    if (fresh && tier !== "dead") {
+      return {
+        status: "optimal",
+        title: "지금 분석하기 좋은 시점",
+        detail: `1H 마감 ${m}분 경과 · 유동성 양호. 안정적.`,
+      };
+    }
+    let detail = "지금 분석해도 무방합니다.";
+    let nextWindow: string | undefined;
+    let nextLabel: string | undefined;
     if (!fresh) {
-      return {
-        status: "wait",
-        title: "다음 1H 캔들 마감 대기",
-        detail: `${60 - m}분 뒤 분석하면 데이터가 더 안정적입니다.`,
-        nextWindow: `${60 - m}분 후`,
-      };
+      detail += ` ${60 - m}분 뒤 1H 마감 시 더 정확.`;
+      nextWindow = `${60 - m}분 후`;
+      nextLabel = "더 정확";
+    } else if (tier === "dead") {
+      detail += " 미국 마감 후 한산 — 신규 진입은 유동성 확인 후.";
     }
-    if (tier === "dead") {
-      return {
-        status: "caution",
-        title: "1H 마감 직후 — 단 한산",
-        detail: `1H 마감 ${m}분 경과. 미국 마감 후 복기엔 적합하나 신규 진입은 유동성 확인 후.`,
-      };
-    }
-    return {
-      status: "good",
-      title: "지금 분석하기 좋은 시점",
-      detail: `1H 마감 ${m}분 경과 · 유동성 양호. 안정적.`,
-    };
+    return { status: "fine", title: "지금 분석 가능", detail, nextWindow, nextLabel };
   }
 
-  // ── 스윙: 4H/1D 마감 기준 (HTF라 세션 영향 작음) ───────────────────
+  // ── 스윙: 4H/1D 마감이 최적 (HTF라 세션 영향 작음). 그 외엔 '가능'. ──
   if (style === "swing") {
-    const fourHourAnchors = [1, 5, 9, 13, 17, 21];
     const sinceLast4h = minutesSinceLastHourCycle(h, m, 4, 1);
     const sinceLast1d = h * 60 + m - 9 * 60; // since today 09:00 KST
     const sinceLast1dAdjusted = sinceLast1d >= 0 ? sinceLast1d : sinceLast1d + 24 * 60;
 
     if (sinceLast1dAdjusted <= 60) {
       return {
-        status: "good",
+        status: "optimal",
         title: "지금 분석하기 좋은 시점 — 일봉 마감 직후",
         detail: `1D 마감 ${sinceLast1dAdjusted}분 경과. 큰 시간대까지 안정적 — 스윙 최적.`,
       };
     }
     if (sinceLast4h <= 30) {
       return {
-        status: "good",
+        status: "optimal",
         title: "지금 분석하기 좋은 시점",
         detail: `4H 마감 ${sinceLast4h}분 경과. 데이터 안정적.`,
       };
     }
     const minsToNext4h = minutesToNextHourCycle(h, m, 4, 1);
-    const nextHour = fourHourAnchors.find((fh) => {
-      const diff = (fh - h + 24) % 24;
-      return diff * 60 - m === minsToNext4h || (diff === 0 && minsToNext4h === 24 * 60);
-    });
     return {
-      status: "wait",
-      title: "다음 4H 캔들 마감 대기",
-      detail: `${Math.floor(minsToNext4h / 60)}시간 ${minsToNext4h % 60}분 뒤 ${
-        nextHour !== undefined ? String(nextHour).padStart(2, "0") : "??"
-      }:00 KST.`,
+      status: "fine",
+      title: "지금 분석 가능",
+      detail: `지금 분석해도 무방합니다. ${Math.floor(minsToNext4h / 60)}시간 ${
+        minsToNext4h % 60
+      }분 뒤 4H 마감 시 더 정확.`,
       nextWindow: `${Math.floor(minsToNext4h / 60)}시간 ${minsToNext4h % 60}분 후`,
+      nextLabel: "더 정확",
     };
   }
 
-  // ── 포지션: 1D 마감 기준 ───────────────────────────────────────────
+  // ── 포지션: 1D 마감이 최적. 그 외엔 '가능'. ──
   const sincePositionDay = h * 60 + m - 9 * 60;
   const sincePositionDayAdj = sincePositionDay >= 0 ? sincePositionDay : sincePositionDay + 24 * 60;
   if (sincePositionDayAdj <= 120) {
     return {
-      status: "good",
+      status: "optimal",
       title: "지금 분석하기 좋은 시점 — 일봉 마감 직후",
       detail: `1D 마감 ${sincePositionDayAdj}분 경과. 포지션 매매에 가장 적합.`,
     };
   }
-  const minsToNext1D = (24 * 60 - sincePositionDayAdj) % (24 * 60);
-  const since4hPos = minutesSinceLastHourCycle(h, m, 4, 1);
-  if (since4hPos <= 30) {
+  if (minutesSinceLastHourCycle(h, m, 4, 1) <= 30) {
     return {
-      status: "good",
+      status: "optimal",
       title: "4H 마감 직후 — 분석 가능",
       detail: "이상적인 시점은 1D 마감(09:00 KST) 직후이지만, 4H 마감 직후도 무방.",
     };
   }
-  void totalMin;
+  const minsToNext1D = (24 * 60 - sincePositionDayAdj) % (24 * 60);
   return {
-    status: "wait",
-    title: "다음 1D 마감(09:00 KST) 대기 권장",
-    detail: `${Math.floor(minsToNext1D / 60)}시간 ${minsToNext1D % 60}분 뒤가 최적.`,
+    status: "fine",
+    title: "지금 분석 가능",
+    detail: `지금 분석해도 무방합니다. 가장 정확한 시점은 다음 1D 마감(09:00 KST).`,
     nextWindow: `${Math.floor(minsToNext1D / 60)}시간 ${minsToNext1D % 60}분 후`,
+    nextLabel: "최적",
   };
 }
 
@@ -207,7 +193,7 @@ const TIER_BADGE: Record<LiquidityTier, { label: string; cls: string }> = {
   golden: { label: "🌟 골든 타임", cls: "bg-grade-a/15 text-grade-a" },
   active: { label: "활성 세션", cls: "bg-primary/15 text-primary" },
   quiet: { label: "한산 (아시아)", cls: "bg-muted/50 text-muted-foreground" },
-  dead: { label: "⚠ 죽은 구간", cls: "bg-grade-d/15 text-grade-d" },
+  dead: { label: "유동성 낮음", cls: "bg-muted/50 text-muted-foreground" },
 };
 
 export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
@@ -233,9 +219,9 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
           <Clock className="h-4 w-4 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-muted-foreground">최적 시점 판정 중…</div>
+          <div className="text-sm font-semibold text-muted-foreground">시점 판정 중…</div>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-            현재 시각·세션 기준으로 분석하기 좋은 시점인지 확인합니다.
+            현재 시각·세션 기준으로 지금이 분석에 좋은 시점인지 확인합니다.
           </p>
         </div>
       </div>
@@ -247,37 +233,24 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
   const next = nextPrimeTime(style, parts.totalMin);
 
   const tone =
-    verdict.status === "good"
+    verdict.status === "optimal"
       ? "border-grade-a/40 bg-grade-a/5"
-      : verdict.status === "caution"
-        ? "border-grade-c/40 bg-grade-c/5"
-        : verdict.status === "wait"
-          ? "border-amber-500/40 bg-amber-500/5"
-          : "border-grade-d/40 bg-grade-d/5";
+      : verdict.status === "fine"
+        ? "border-primary/25 bg-primary/[0.04]"
+        : "border-grade-d/40 bg-grade-d/5";
   const dotTone =
-    verdict.status === "good"
+    verdict.status === "optimal"
       ? "bg-grade-a"
-      : verdict.status === "caution"
-        ? "bg-grade-c"
-        : verdict.status === "wait"
-          ? "bg-amber-500"
-          : "bg-grade-d";
-  const Icon =
-    verdict.status === "good"
-      ? CheckCircle2
-      : verdict.status === "caution"
-        ? Waves
-        : verdict.status === "wait"
-          ? Clock
-          : AlertTriangle;
+      : verdict.status === "fine"
+        ? "bg-primary"
+        : "bg-grade-d";
+  const Icon = verdict.status === "avoid" ? AlertTriangle : CheckCircle2;
   const iconColor =
-    verdict.status === "good"
+    verdict.status === "optimal"
       ? "text-grade-a"
-      : verdict.status === "caution"
-        ? "text-grade-c"
-        : verdict.status === "wait"
-          ? "text-amber-500"
-          : "text-grade-d";
+      : verdict.status === "fine"
+        ? "text-primary"
+        : "text-grade-d";
 
   const timeStr = `${String(parts.h).padStart(2, "0")}:${String(parts.m).padStart(2, "0")} KST`;
   const tierBadge = TIER_BADGE[liquidity.tier];
@@ -298,13 +271,15 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
         </div>
         {verdict.nextWindow ? (
           <div className="flex-none text-right">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">다음 적정</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {verdict.nextLabel ?? "참고"}
+            </div>
             <div className="text-xs font-semibold">{verdict.nextWindow}</div>
           </div>
         ) : null}
       </div>
 
-      {/* 하단: 현재 유동성 등급 + 오늘 다음 추천 분석 시각 */}
+      {/* 하단: 현재 유동성 등급 + 오늘 다음 추천(최적) 분석 시각 */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border/50 px-4 py-2">
         <span
           className={cn(
@@ -316,7 +291,7 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
           {tierBadge.label}
         </span>
         <span className="text-[11px] text-muted-foreground">
-          다음 추천 분석{" "}
+          오늘 추천 시각{" "}
           <span className="font-mono tabular-nums text-foreground">{fmtClock(next.at)} KST</span>
           <span className="text-muted-foreground/70"> · {fmtDuration(next.minsAhead)} 후</span>
         </span>

@@ -126,6 +126,31 @@ export function AnalysisTimingGuide({ defaultOpen = false, className }: Props) {
           </section>
         </div>
 
+        {/* 분석 적합도 4단계 범례 */}
+        <section className="mt-4 rounded-lg border border-border/60 bg-background/40 px-3 py-2.5 text-xs">
+          <div className="mb-1.5 font-semibold text-foreground">분석 적합도 4단계</div>
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {[
+              { name: "최적", dot: "bg-grade-a", desc: "캔들 마감 직후 + 유동성 좋음" },
+              { name: "양호", dot: "bg-primary", desc: "한 조건 충족" },
+              { name: "보통", dot: "bg-muted-foreground", desc: "분석 무방, 특별히 좋진 않음" },
+              { name: "회피", dot: "bg-grade-d", desc: "펀딩 ±10분 — 잠시 후" },
+            ].map((l) => (
+              <div key={l.name} className="flex items-start gap-1.5">
+                <span className={cn("mt-1 h-1.5 w-1.5 flex-none rounded-full", l.dot)} />
+                <span className="min-w-0">
+                  <span className="font-medium text-foreground">{l.name}</span>
+                  <span className="block text-[11px] leading-tight text-muted-foreground">{l.desc}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            최적·양호·보통은 모두 <span className="text-foreground">지금 분석 가능</span> — 품질 차이일 뿐입니다.
+            진짜 회피는 펀딩 정산뿐.
+          </p>
+        </section>
+
         {/* 피해야 할 시점 */}
         <section className="mt-4 rounded-lg border border-grade-c/30 bg-grade-c/5 px-3 py-2.5 text-xs">
           <div className="mb-1 flex items-center gap-1.5 font-semibold text-grade-c">

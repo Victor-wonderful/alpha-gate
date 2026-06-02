@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, Clock, Target } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Clock, Circle, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TradingStyle } from "@/lib/analysis/style";
 import {
@@ -39,18 +39,25 @@ function minutesSinceLastHourCycle(h: number, m: number, cycle: number, offset =
   return Number.MAX_SAFE_INTEGER;
 }
 
-// 톤 철학(개방적): 분석은 대부분의 시간에 유효하다. 캔들 마감 대기는 '금지'가 아니라
-// '미세 최적화'이므로 격려 톤("분석 가능")으로 보여주고, 베스트 순간만 초록으로 강조한다.
-// 진짜 회피(빨강)는 펀딩 정산 ±10분 같은 변동성 노이즈 구간으로 한정한다.
-type Status = "optimal" | "fine" | "avoid";
+// 분석 적합도 4단계. optimal/good/fair 는 모두 "지금 분석 가능"이지만 품질이 다르다.
+// avoid 는 펀딩 정산 ±10분 같은 노이즈 구간(잠시 회피).
+type Status = "optimal" | "good" | "fair" | "avoid";
 
 type Verdict = {
   status: Status;
-  title: string;
+  /** 레벨 옆 짧은 사유 */
+  headline: string;
   detail: string;
-  /** 우측 미니 표시 (더 정확해지는 시점 / 재시도 시점) */
+  /** 우측 미니 (더 정확해지는 시점 / 재시도) */
   nextWindow?: string;
   nextLabel?: string;
+};
+
+const LEVEL_NAME: Record<Status, string> = {
+  optimal: "최적",
+  good: "양호",
+  fair: "보통",
+  avoid: "회피",
 };
 
 /** 펀딩 정산 ±10분 여부 (Binance 8h: 09 / 17 / 01 KST). */
@@ -73,120 +80,140 @@ function evaluate(
   tier: LiquidityTier,
 ): Verdict {
   const { h, m } = parts;
+  const liqGood = tier === "golden" || tier === "active";
 
-  // 0) 진짜 회피 — 펀딩 정산 ±10분 (변동성 노이즈). 매크로 이벤트는 추후 추가.
+  // 0) 회피 — 펀딩 정산 ±10분 (변동성 노이즈)
   if (inFundingWindow(h, m)) {
     return {
       status: "avoid",
-      title: "펀딩 정산 ±10분 — 잠시 후 재시도",
+      headline: "펀딩 정산 ±10분",
       detail: "정산 직전·직후 변동성이 폭증해 결과가 흔들립니다. 10분 뒤가 깔끔합니다.",
       nextWindow: "10분 후",
       nextLabel: "재시도",
     };
   }
 
-  // ── 스캘핑: 캔들 마감 + 유동성이 최적의 조건. 그 외엔 '가능'(격려). ──
+  // ── 스캘핑: 캔들 신선도 + 유동성 둘 다 비중 ──
   if (style === "scalp") {
-    const sinceLast5m = m % 5;
-    const fresh = sinceLast5m <= 2;
-    if (fresh && (tier === "active" || tier === "golden")) {
+    const since5 = m % 5;
+    const fresh = since5 <= 2;
+    if (fresh && liqGood) {
       return {
         status: "optimal",
-        title: tier === "golden" ? "골든 타임 — 스캘핑 최적" : "지금 분석하기 좋은 시점",
-        detail: `5M 마감 ${sinceLast5m}분 경과 · 유동성 양호. 단기 데이터 안정적.`,
+        headline: tier === "golden" ? "골든 타임 · 5M 마감 직후" : "5M 마감 직후 · 유동성 양호",
+        detail: `5M 마감 ${since5}분 경과 · 단기 데이터 안정적.`,
       };
     }
-    let detail = "지금 분석해도 무방합니다.";
-    let nextWindow: string | undefined;
-    let nextLabel: string | undefined;
-    if (!fresh) {
-      detail += ` ${5 - sinceLast5m}분 뒤 5M 마감 시 더 정확.`;
-      nextWindow = `${5 - sinceLast5m}분 후`;
-      nextLabel = "더 정확";
-    }
-    if (tier === "dead") detail += " 유동성 낮은 구간 — 16:00 런던 개장 이후 더 안정적.";
-    else if (tier === "quiet") detail += " 아시아 한산 — 목표는 좁게 잡으세요.";
-    return { status: "fine", title: "지금 분석 가능", detail, nextWindow, nextLabel };
-  }
-
-  // ── 데이: 1H 마감이 최적, 그 외엔 '가능'. ──
-  if (style === "day") {
-    const fresh = m <= 15;
-    if (fresh && tier !== "dead") {
+    if (fresh) {
+      // 신선하나 유동성 약함
       return {
-        status: "optimal",
-        title: "지금 분석하기 좋은 시점",
-        detail: `1H 마감 ${m}분 경과 · 유동성 양호. 안정적.`,
+        status: tier === "dead" ? "fair" : "good",
+        headline: tier === "dead" ? "5M 마감 직후 · 유동성 낮음" : "5M 마감 직후 · 아시아 한산",
+        detail:
+          tier === "dead"
+            ? `5M 마감 ${since5}분 경과. 체결 얇음 — 목표 좁게, 16:00 이후 더 안정적.`
+            : `5M 마감 ${since5}분 경과. 박스 잦으니 목표는 좁게.`,
       };
     }
-    let detail = "지금 분석해도 무방합니다.";
-    let nextWindow: string | undefined;
-    let nextLabel: string | undefined;
-    if (!fresh) {
-      detail += ` ${60 - m}분 뒤 1H 마감 시 더 정확.`;
-      nextWindow = `${60 - m}분 후`;
-      nextLabel = "더 정확";
-    } else if (tier === "dead") {
-      detail += " 미국 마감 후 한산 — 신규 진입은 유동성 확인 후.";
-    }
-    return { status: "fine", title: "지금 분석 가능", detail, nextWindow, nextLabel };
-  }
-
-  // ── 스윙: 4H/1D 마감이 최적 (HTF라 세션 영향 작음). 그 외엔 '가능'. ──
-  if (style === "swing") {
-    const sinceLast4h = minutesSinceLastHourCycle(h, m, 4, 1);
-    const sinceLast1d = h * 60 + m - 9 * 60; // since today 09:00 KST
-    const sinceLast1dAdjusted = sinceLast1d >= 0 ? sinceLast1d : sinceLast1d + 24 * 60;
-
-    if (sinceLast1dAdjusted <= 60) {
-      return {
-        status: "optimal",
-        title: "지금 분석하기 좋은 시점 — 일봉 마감 직후",
-        detail: `1D 마감 ${sinceLast1dAdjusted}분 경과. 큰 시간대까지 안정적 — 스윙 최적.`,
-      };
-    }
-    if (sinceLast4h <= 30) {
-      return {
-        status: "optimal",
-        title: "지금 분석하기 좋은 시점",
-        detail: `4H 마감 ${sinceLast4h}분 경과. 데이터 안정적.`,
-      };
-    }
-    const minsToNext4h = minutesToNextHourCycle(h, m, 4, 1);
+    // 미마감
     return {
-      status: "fine",
-      title: "지금 분석 가능",
-      detail: `지금 분석해도 무방합니다. ${Math.floor(minsToNext4h / 60)}시간 ${
-        minsToNext4h % 60
-      }분 뒤 4H 마감 시 더 정확.`,
-      nextWindow: `${Math.floor(minsToNext4h / 60)}시간 ${minsToNext4h % 60}분 후`,
+      status: liqGood ? "good" : "fair",
+      headline: liqGood ? "유동성 양호 · 캔들 형성 중" : "분석 가능 · 캔들 형성 중",
+      detail: `지금 분석해도 무방. ${5 - since5}분 뒤 5M 마감 시 더 정확.`,
+      nextWindow: `${5 - since5}분 후`,
       nextLabel: "더 정확",
     };
   }
 
-  // ── 포지션: 1D 마감이 최적. 그 외엔 '가능'. ──
-  const sincePositionDay = h * 60 + m - 9 * 60;
-  const sincePositionDayAdj = sincePositionDay >= 0 ? sincePositionDay : sincePositionDay + 24 * 60;
-  if (sincePositionDayAdj <= 120) {
+  // ── 데이: 1H 마감 우선, 유동성 보조 ──
+  if (style === "day") {
+    const fresh = m <= 15;
+    if (fresh && liqGood) {
+      return {
+        status: "optimal",
+        headline: "1H 마감 직후 · 유동성 양호",
+        detail: `1H 마감 ${m}분 경과 · 안정적.`,
+      };
+    }
+    if (fresh) {
+      return {
+        status: "good",
+        headline: tier === "dead" ? "1H 마감 직후 · 한산" : "1H 마감 직후",
+        detail:
+          tier === "dead"
+            ? `1H 마감 ${m}분 경과. 미국 마감 후 복기엔 적합, 신규 진입은 유동성 확인.`
+            : `1H 마감 ${m}분 경과 · 안정적.`,
+      };
+    }
+    return {
+      status: liqGood ? "good" : "fair",
+      headline: liqGood ? "유동성 양호 · 캔들 형성 중" : "분석 가능 · 캔들 형성 중",
+      detail: `지금 분석해도 무방. ${60 - m}분 뒤 1H 마감 시 더 정확.`,
+      nextWindow: `${60 - m}분 후`,
+      nextLabel: "더 정확",
+    };
+  }
+
+  // ── 스윙: 4H/1D 마감 기준 (HTF라 세션 영향 작음) ──
+  if (style === "swing") {
+    const since4h = minutesSinceLastHourCycle(h, m, 4, 1);
+    const since1d = h * 60 + m - 9 * 60;
+    const since1dAdj = since1d >= 0 ? since1d : since1d + 24 * 60;
+
+    if (since1dAdj <= 60) {
+      return {
+        status: "optimal",
+        headline: "일봉 마감 직후 — 스윙 최적",
+        detail: `1D 마감 ${since1dAdj}분 경과. 큰 시간대까지 안정적.`,
+      };
+    }
+    if (since4h <= 30) {
+      return {
+        status: "optimal",
+        headline: "4H 마감 직후",
+        detail: `4H 마감 ${since4h}분 경과. 데이터 안정적.`,
+      };
+    }
+    if (since4h <= 120) {
+      return {
+        status: "good",
+        headline: "4H 마감 후 구간 · 구조 유효",
+        detail: `4H 마감 ${since4h}분 경과. 구조는 아직 유효합니다.`,
+      };
+    }
+    const toNext4h = minutesToNextHourCycle(h, m, 4, 1);
+    return {
+      status: "fair",
+      headline: "분석 가능 · 4H 마감 대기 구간",
+      detail: `지금 분석해도 무방. ${Math.floor(toNext4h / 60)}시간 ${toNext4h % 60}분 뒤 4H 마감 시 더 정확.`,
+      nextWindow: `${Math.floor(toNext4h / 60)}시간 ${toNext4h % 60}분 후`,
+      nextLabel: "더 정확",
+    };
+  }
+
+  // ── 포지션: 1D 마감 기준 ──
+  const since1d = h * 60 + m - 9 * 60;
+  const since1dAdj = since1d >= 0 ? since1d : since1d + 24 * 60;
+  if (since1dAdj <= 120) {
     return {
       status: "optimal",
-      title: "지금 분석하기 좋은 시점 — 일봉 마감 직후",
-      detail: `1D 마감 ${sincePositionDayAdj}분 경과. 포지션 매매에 가장 적합.`,
+      headline: "일봉 마감 직후 — 포지션 최적",
+      detail: `1D 마감 ${since1dAdj}분 경과. 포지션 매매에 가장 적합.`,
     };
   }
   if (minutesSinceLastHourCycle(h, m, 4, 1) <= 30) {
     return {
-      status: "optimal",
-      title: "4H 마감 직후 — 분석 가능",
+      status: "good",
+      headline: "4H 마감 직후",
       detail: "이상적인 시점은 1D 마감(09:00 KST) 직후이지만, 4H 마감 직후도 무방.",
     };
   }
-  const minsToNext1D = (24 * 60 - sincePositionDayAdj) % (24 * 60);
+  const toNext1D = (24 * 60 - since1dAdj) % (24 * 60);
   return {
-    status: "fine",
-    title: "지금 분석 가능",
-    detail: `지금 분석해도 무방합니다. 가장 정확한 시점은 다음 1D 마감(09:00 KST).`,
-    nextWindow: `${Math.floor(minsToNext1D / 60)}시간 ${minsToNext1D % 60}분 후`,
+    status: "fair",
+    headline: "분석 가능 · 1D 마감 대기 구간",
+    detail: "지금 분석해도 무방. 가장 정확한 시점은 다음 1D 마감(09:00 KST).",
+    nextWindow: `${Math.floor(toNext1D / 60)}시간 ${toNext1D % 60}분 후`,
     nextLabel: "최적",
   };
 }
@@ -196,6 +223,16 @@ const TIER_BADGE: Record<LiquidityTier, { label: string; cls: string }> = {
   active: { label: "활성 세션", cls: "bg-primary/15 text-primary" },
   quiet: { label: "한산 (아시아)", cls: "bg-muted/50 text-muted-foreground" },
   dead: { label: "유동성 낮음", cls: "bg-muted/50 text-muted-foreground" },
+};
+
+const STATUS_STYLE: Record<
+  Status,
+  { box: string; dot: string; text: string; icon: typeof CheckCircle2 }
+> = {
+  optimal: { box: "border-grade-a/40 bg-grade-a/5", dot: "bg-grade-a", text: "text-grade-a", icon: CheckCircle2 },
+  good: { box: "border-primary/30 bg-primary/[0.04]", dot: "bg-primary", text: "text-primary", icon: CheckCircle2 },
+  fair: { box: "border-border bg-card/40", dot: "bg-muted-foreground", text: "text-muted-foreground", icon: Circle },
+  avoid: { box: "border-grade-d/40 bg-grade-d/5", dot: "bg-grade-d", text: "text-grade-d", icon: AlertTriangle },
 };
 
 export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
@@ -221,9 +258,9 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
           <Clock className="h-4 w-4 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-muted-foreground">시점 판정 중…</div>
+          <div className="text-sm font-semibold text-muted-foreground">분석 적합도 판정 중…</div>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-            현재 시각·세션 기준으로 지금이 분석에 좋은 시점인지 확인합니다.
+            현재 시각·세션 기준으로 분석 적합도를 평가합니다.
           </p>
         </div>
       </div>
@@ -236,39 +273,23 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
   const entry = entrySuitability(parts.totalMin, parts.dow);
   const entryLink = analysisEntryLink(style, parts.totalMin, entry);
 
-  const tone =
-    verdict.status === "optimal"
-      ? "border-grade-a/40 bg-grade-a/5"
-      : verdict.status === "fine"
-        ? "border-primary/25 bg-primary/[0.04]"
-        : "border-grade-d/40 bg-grade-d/5";
-  const dotTone =
-    verdict.status === "optimal"
-      ? "bg-grade-a"
-      : verdict.status === "fine"
-        ? "bg-primary"
-        : "bg-grade-d";
-  const Icon = verdict.status === "avoid" ? AlertTriangle : CheckCircle2;
-  const iconColor =
-    verdict.status === "optimal"
-      ? "text-grade-a"
-      : verdict.status === "fine"
-        ? "text-primary"
-        : "text-grade-d";
-
+  const s = STATUS_STYLE[verdict.status];
+  const Icon = s.icon;
   const timeStr = `${String(parts.h).padStart(2, "0")}:${String(parts.m).padStart(2, "0")} KST`;
   const tierBadge = TIER_BADGE[liquidity.tier];
 
   return (
-    <div className={cn("rounded-lg border", tone)}>
+    <div className={cn("rounded-lg border", s.box)}>
       <div className="flex items-start gap-3 px-4 py-3">
         <div className="flex flex-none items-center gap-1.5 pt-0.5">
-          <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", dotTone)} />
-          <Icon className={cn("h-4 w-4", iconColor)} />
+          <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", s.dot)} />
+          <Icon className={cn("h-4 w-4", s.text)} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="text-sm font-semibold">{verdict.title}</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">분석 적합도</span>
+            <span className={cn("text-sm font-bold", s.text)}>{LEVEL_NAME[verdict.status]}</span>
+            <span className="text-xs text-muted-foreground">· {verdict.headline}</span>
             <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{timeStr}</span>
           </div>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{verdict.detail}</p>

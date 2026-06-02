@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { classifyLiquidity } from "@/lib/analysis/sessions";
+import { classifyLiquidity, dayOfWeekNote, entrySuitability, type EntryTier } from "@/lib/analysis/sessions";
 
 type Session = {
   name: string;
@@ -24,6 +24,7 @@ function clockNow(): {
   totalMin: number;
   utcH: number;
   utcM: number;
+  dow: number;
 } {
   const now = new Date();
   const kstMs = now.getTime() + 9 * 3600 * 1000;
@@ -36,8 +37,32 @@ function clockNow(): {
     totalMin: h * 60 + m,
     utcH: now.getUTCHours(),
     utcM: now.getUTCMinutes(),
+    dow: d.getUTCDay(), // KST 기준 요일 (0=일 … 6=토)
   };
 }
+
+const ENTRY_TONE: Record<EntryTier, { box: string; badge: string; dot: string }> = {
+  optimal: {
+    box: "border-grade-a/40 bg-grade-a/5",
+    badge: "bg-grade-a/15 text-grade-a",
+    dot: "bg-grade-a",
+  },
+  good: {
+    box: "border-primary/30 bg-primary/5",
+    badge: "bg-primary/15 text-primary",
+    dot: "bg-primary",
+  },
+  caution: {
+    box: "border-grade-c/40 bg-grade-c/5",
+    badge: "bg-grade-c/15 text-grade-c",
+    dot: "bg-grade-c",
+  },
+  avoid: {
+    box: "border-grade-d/40 bg-grade-d/5",
+    badge: "bg-grade-d/15 text-grade-d",
+    dot: "bg-grade-d",
+  },
+};
 
 function isOpen(s: Session, h: number) {
   return s.ranges.some(([a, b]) => h >= a && h < b);
@@ -86,12 +111,14 @@ export function SessionsClock() {
     totalMin: number;
     utcH: number;
     utcM: number;
+    dow: number;
   }>({
     h: 0,
     m: 0,
     totalMin: 0,
     utcH: 0,
     utcM: 0,
+    dow: 0,
   });
   const [mounted, setMounted] = useState(false);
 
@@ -106,6 +133,11 @@ export function SessionsClock() {
   const tier = mounted ? classifyLiquidity(time.totalMin).tier : null;
   const inGolden = tier === "golden";
   const inTrap = tier === "dead";
+
+  // 진입(트레이딩) 적합도 — 유동성 + 펀딩 + 요일 종합
+  const entry = mounted ? entrySuitability(time.totalMin, time.dow) : null;
+  const dayNote = mounted ? dayOfWeekNote(time.dow) : null;
+  const entryTone = entry ? ENTRY_TONE[entry.tier] : null;
 
   return (
     <section>
@@ -138,6 +170,33 @@ export function SessionsClock() {
           <span className="text-xs text-muted-foreground">KST · UTC</span>
         )}
       </div>
+
+      {/* 진입 적합도 — 지금이 실제 트레이딩하기 좋은 때인가 */}
+      {entry && entryTone ? (
+        <div className={cn("mb-2 rounded-xl border px-3 py-2.5", entryTone.box)}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-bold",
+                entryTone.badge,
+              )}
+            >
+              <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", entryTone.dot)} />
+              {entry.label}
+            </span>
+            <span className="min-w-0 flex-1 text-xs text-muted-foreground">{entry.advice}</span>
+          </div>
+          {dayNote ? (
+            <div className="mt-1.5 border-t border-border/40 pt-1.5 text-[11px] text-muted-foreground">
+              📅 {dayNote}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mb-2 rounded-xl border border-border/60 bg-card/30 px-3 py-2.5 text-xs text-muted-foreground">
+          진입 적합도 판정 중…
+        </div>
+      )}
 
       <article className="rounded-2xl border border-border/60 bg-card/40 p-3">
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">

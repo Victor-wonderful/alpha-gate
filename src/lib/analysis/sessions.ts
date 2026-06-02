@@ -111,3 +111,89 @@ export function fmtDuration(totalMin: number): string {
   if (m === 0) return `${h}시간`;
   return `${h}시간 ${m}분`;
 }
+
+// ─── 진입(트레이딩) 적합도 ────────────────────────────────────────────
+// "분석"이 아니라 "실제 진입"하기 좋은 시점인가? 유동성 + 펀딩 + 요일을 종합.
+
+/** 펀딩 정산 ±10분 (Binance 8h: 09 / 17 / 01 KST). */
+export function inFundingWindow(totalMin: number): boolean {
+  const fundingMins = [1 * 60, 9 * 60, 17 * 60];
+  return fundingMins.some((fm) => {
+    const diff = Math.min(
+      Math.abs(totalMin - fm),
+      Math.abs(totalMin - (fm + 24 * 60)),
+      Math.abs(totalMin - (fm - 24 * 60)),
+    );
+    return diff <= 10;
+  });
+}
+
+export type EntryTier = "optimal" | "good" | "caution" | "avoid";
+
+export interface EntrySuitability {
+  tier: EntryTier;
+  /** 배지 라벨 */
+  label: string;
+  /** 한 줄 조언 */
+  advice: string;
+}
+
+/**
+ * 현재 진입 적합도. dow = KST 기준 요일(0=일 … 6=토).
+ * 골든 타임 > 활성 세션 > 아시아 한산 > 죽은 구간. 펀딩 ±10분은 잠시 회피.
+ * 주말은 유동성 낮아 한 단계 하향.
+ */
+export function entrySuitability(totalMin: number, dow: number): EntrySuitability {
+  if (inFundingWindow(totalMin)) {
+    return {
+      tier: "avoid",
+      label: "펀딩 정산 — 잠시 회피",
+      advice: "정산 ±10분은 변동성 노이즈. 10분 뒤가 깔끔합니다.",
+    };
+  }
+
+  const liq = classifyLiquidity(totalMin);
+  const weekend = dow === 0 || dow === 6;
+
+  let tier: EntryTier =
+    liq.tier === "golden" ? "optimal" : liq.tier === "active" ? "good" : liq.tier === "quiet" ? "caution" : "avoid";
+
+  // 주말은 유동성·갭 위험으로 한 단계 하향 (최소 caution)
+  if (weekend && (tier === "optimal" || tier === "good")) tier = "caution";
+
+  const advice: Record<EntryTier, string> = {
+    optimal: weekend
+      ? "유동성은 좋지만 주말이라 갭 위험 — 사이즈 줄여서."
+      : "런던·뉴욕 겹침 — 추세·유동성 최상. 진입에 가장 좋은 시간.",
+    good: "유럽·미국 세션 — 유동성 양호. 추세·돌파 진입에 적합.",
+    caution: weekend
+      ? "주말 — 유동성 낮고 박스·갭 위험. 신규 진입 신중."
+      : "아시아 한산 — 박스 잦고 돌파가 가짜인 경우 많음. 신중히.",
+    avoid: "죽은 구간(미국 마감~아시아 개장) — 유동성 최저·휩쏘. 진입 비권장.",
+  };
+
+  const label: Record<EntryTier, string> = {
+    optimal: "진입 최적",
+    good: "진입 양호",
+    caution: "진입 신중",
+    avoid: "진입 비권장",
+  };
+
+  return { tier, label: label[tier], advice: advice[tier] };
+}
+
+/** 요일 효과 메모. dow = KST 기준 요일(0=일 … 6=토). */
+export function dayOfWeekNote(dow: number): string {
+  switch (dow) {
+    case 2:
+    case 3:
+    case 4:
+      return "화·수·목 — 추세 가장 안정적, 베스트 트레이딩 요일";
+    case 1:
+      return "월요일 — 주말 갭 소화로 변동성 큼 (기회이자 위험)";
+    case 5:
+      return "금요일 — 오후부터 포지션 정리, 신규 스윙은 신중";
+    default:
+      return "주말 — 유동성 낮음, 일요일 밤 스파이크 주의";
+  }
+}

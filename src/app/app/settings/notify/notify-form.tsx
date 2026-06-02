@@ -13,6 +13,7 @@ import {
   createTelegramLinkAction,
   getCurrentChatIdAction,
 } from "./_actions";
+import { ANALYSIS_ALERT_OPTIONS } from "@/lib/analysis/sessions";
 
 type Initial = {
   telegram_chat_id?: string | null;
@@ -21,6 +22,7 @@ type Initial = {
   enable_losing_streak?: boolean;
   enable_ai_coach_done?: boolean;
   enable_daily_digest?: boolean;
+  analysis_alert_times?: number[] | null;
 } | null;
 
 export function NotifyForm({ initial }: { initial: Initial }) {
@@ -31,6 +33,7 @@ export function NotifyForm({ initial }: { initial: Initial }) {
   const [eL, setEL] = useState(initial?.enable_losing_streak ?? true);
   const [eA, setEA] = useState(initial?.enable_ai_coach_done ?? true);
   const [eDig, setEDig] = useState(initial?.enable_daily_digest ?? false);
+  const [alertTimes, setAlertTimes] = useState<number[]>(initial?.analysis_alert_times ?? []);
   // Telegram 자동 폴링 — 링크 생성 시 활성화, chat_id 잡히면 자동 종료
   const [polling, setPolling] = useState(false);
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -69,6 +72,7 @@ export function NotifyForm({ initial }: { initial: Initial }) {
         enable_losing_streak: eL,
         enable_ai_coach_done: eA,
         enable_daily_digest: eDig,
+        analysis_alert_times: [...alertTimes].sort((a, b) => a - b),
       });
       if (r.error) toast.error(r.error);
       else toast.success("저장됨");
@@ -201,6 +205,30 @@ export function NotifyForm({ initial }: { initial: Initial }) {
             onChange={(e) => setEDig(e.target.checked)}
             label="일일 요약 (한국시간 09:00)"
           />
+        </div>
+
+        <div className="space-y-2 border-t border-border pt-4">
+          <div className="text-sm font-semibold">🎯 분석 시간 알림</div>
+          <p className="text-xs text-muted-foreground">
+            선택한 시각(KST)에 “지금이 분석하기 좋은 시간” 알림을 보냅니다. 스타일에 맞는 시각을 고르세요. 선택 안 하면 발송하지 않습니다.
+          </p>
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {ANALYSIS_ALERT_OPTIONS.map((o) => (
+              <Checkbox
+                key={o.min}
+                checked={alertTimes.includes(o.min)}
+                onChange={(e) =>
+                  setAlertTimes((prev) =>
+                    e.target.checked ? [...prev, o.min] : prev.filter((m) => m !== o.min),
+                  )
+                }
+                label={`${o.time} · ${o.label}`}
+              />
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            텔레그램·디스코드 채널이 연결돼 있어야 발송됩니다.
+          </p>
         </div>
 
         <div className="flex gap-2">

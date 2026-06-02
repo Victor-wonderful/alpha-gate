@@ -13,6 +13,7 @@ interface Payload {
   enable_losing_streak: boolean;
   enable_ai_coach_done: boolean;
   enable_daily_digest: boolean;
+  analysis_alert_times: number[];
 }
 
 export async function saveChannelsAction(p: Payload): Promise<{ error?: string }> {

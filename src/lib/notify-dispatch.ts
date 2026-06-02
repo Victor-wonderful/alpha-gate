@@ -8,6 +8,7 @@ export type NotifyEvent =
   | "ai_coach_done"
   | "daily_digest"
   | "scenario_alert"
+  | "analysis_timing"
   | "test";
 
 const EVENT_TOGGLES: Record<NotifyEvent, keyof Channels | null> = {
@@ -16,6 +17,7 @@ const EVENT_TOGGLES: Record<NotifyEvent, keyof Channels | null> = {
   ai_coach_done: "enable_ai_coach_done",
   daily_digest: "enable_daily_digest",
   scenario_alert: null, // 시나리오 알림은 사용자가 명시적으로 watch=true 등록한 것만 → 토글 없이 항상 발송
+  analysis_timing: null, // 분석 시간 알림은 cron이 사용자 선택 시각으로 필터 → 토글 없이 발송
   test: null,
 };
 
@@ -32,16 +34,19 @@ export interface NotifyPayload {
   title: string;
   body: string;
   tradeId?: string;
+  /** 임의 링크 (tradeId 대신 사용). 예: 분석 페이지로 유도. */
+  link?: { url: string; label: string };
 }
 
 function buildMessage(p: NotifyPayload, channel: "telegram" | "discord") {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-  const link = p.tradeId ? `${appUrl}/app/journal/${p.tradeId}` : null;
+  const link: { url: string; label: string } | null =
+    p.link ?? (p.tradeId ? { url: `${appUrl}/app/journal/${p.tradeId}`, label: "저널 보기" } : null);
   if (channel === "telegram") {
-    const linkLine = link ? `\n\n<a href="${link}">저널 보기</a>` : "";
+    const linkLine = link ? `\n\n<a href="${link.url}">${link.label}</a>` : "";
     return `<b>${p.title}</b>\n\n${p.body}${linkLine}`;
   }
-  const linkLine = link ? `\n\n${link}` : "";
+  const linkLine = link ? `\n\n${link.url}` : "";
   return `**${p.title}**\n\n${p.body}${linkLine}`;
 }
 

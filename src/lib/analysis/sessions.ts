@@ -239,6 +239,28 @@ export function analysisEntryLink(
   return "진입 타이밍 영향 적음 · 며칠에 걸쳐 분산 진입";
 }
 
+// ─── 분석 시간 텔레그램 알림 ──────────────────────────────────────────
+// 사용자가 받을 시각을 직접 고른다(복수 선택). 값은 KST 분누계.
+
+export interface AnalysisAlertOption {
+  /** KST 분누계 (0~1439) */
+  min: number;
+  /** "HH:MM" */
+  time: string;
+  /** 설명 라벨 */
+  label: string;
+}
+
+/** 알림으로 고를 수 있는 추천 분석 시각 (스타일별 베스트 타이밍). */
+export const ANALYSIS_ALERT_OPTIONS: AnalysisAlertOption[] = [
+  { min: 9 * 60 + 10, time: "09:10", label: "일봉 마감 — 스윙·포지션" },
+  { min: 16 * 60, time: "16:00", label: "런던 개장 — 스캘핑" },
+  { min: 21 * 60, time: "21:00", label: "4H 마감 — 스윙" },
+  { min: 21 * 60 + 30, time: "21:30", label: "미국 개장 전 — 데이" },
+  { min: 22 * 60 + 30, time: "22:30", label: "골든 타임 — 스캘핑" },
+  { min: 5 * 60, time: "05:00", label: "미국 마감 후 — 데이" },
+];
+
 /** 요일 효과 메모. dow = KST 기준 요일(0=일 … 6=토). */
 export function dayOfWeekNote(dow: number): string {
   switch (dow) {

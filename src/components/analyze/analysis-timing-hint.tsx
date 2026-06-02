@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Clock, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TradingStyle } from "@/lib/analysis/style";
 import {
+  analysisEntryLink,
   classifyLiquidity,
+  entrySuitability,
   fmtClock,
   fmtDuration,
   kstParts,
@@ -231,6 +233,8 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
   const liquidity = classifyLiquidity(parts.totalMin);
   const verdict = evaluate(style, parts, liquidity.tier);
   const next = nextPrimeTime(style, parts.totalMin);
+  const entry = entrySuitability(parts.totalMin, parts.dow);
+  const entryLink = analysisEntryLink(style, parts.totalMin, entry);
 
   const tone =
     verdict.status === "optimal"
@@ -277,6 +281,14 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
             <div className="text-xs font-semibold">{verdict.nextWindow}</div>
           </div>
         ) : null}
+      </div>
+
+      {/* 진입 연계 — 스타일별로 분석 실행이 실제 진입과 어떻게 이어지는지 */}
+      <div className="flex items-start gap-1.5 border-t border-border/50 px-4 py-2 text-[11px] text-muted-foreground">
+        <Target className="mt-0.5 h-3 w-3 flex-none text-muted-foreground/70" />
+        <span className="min-w-0">
+          <span className="font-medium text-foreground/80">진입 연계</span> · {entryLink}
+        </span>
       </div>
 
       {/* 하단: 현재 유동성 등급 + 오늘 다음 추천(최적) 분석 시각 */}

@@ -8,12 +8,12 @@ import type { TradingStyle } from "./style";
 
 export type LiquidityTier = "golden" | "active" | "quiet" | "dead";
 
-/** 현재 시각을 KST 시/분/분누계로 변환. (PC 타임존과 무관하게 일관 처리) */
-export function kstParts(now: Date): { h: number; m: number; totalMin: number } {
+/** 현재 시각을 KST 시/분/분누계/요일로 변환. (PC 타임존과 무관하게 일관 처리) */
+export function kstParts(now: Date): { h: number; m: number; totalMin: number; dow: number } {
   const kst = new Date(now.getTime() + 9 * 60 * 60_000);
   const h = kst.getUTCHours();
   const m = kst.getUTCMinutes();
-  return { h, m, totalMin: h * 60 + m };
+  return { h, m, totalMin: h * 60 + m, dow: kst.getUTCDay() };
 }
 
 /** [a, b) 구간 포함 여부 — 자정을 넘어가는(wrap) 구간도 처리. */
@@ -180,6 +180,63 @@ export function entrySuitability(totalMin: number, dow: number): EntrySuitabilit
   };
 
   return { tier, label: label[tier], advice: advice[tier] };
+}
+
+/**
+ * 다음 '좋은 진입' 구간(활성·골든 = 16:00~05:00 KST) 시작.
+ * 현재 그 구간 안이면 now=true.
+ */
+export function nextGoodEntry(totalMin: number): { now: boolean; at: number; minsAhead: number } {
+  const inGood = totalMin >= 16 * 60 || totalMin < 5 * 60; // 16:00 → 05:00(+1d)
+  if (inGood) return { now: true, at: totalMin, minsAhead: 0 };
+  const at = 16 * 60; // 다음 런던 개장
+  return { now: false, at, minsAhead: at - totalMin };
+}
+
+/** 스타일별 분석↔진입 결합도. */
+export type EntryCoupling = "tight" | "moderate" | "loose" | "none";
+export const STYLE_ENTRY_COUPLING: Record<TradingStyle, EntryCoupling> = {
+  scalp: "tight", //    분석=진입 거의 동시
+  day: "moderate", //   분석 후 같은 세션 진입
+  swing: "loose", //    분석=계획, 진입은 따로
+  position: "none", //  타이밍 무관, 분산 진입
+};
+
+/**
+ * 분석을 지금 실행하는 것이 진입과 어떻게 연결되는지 — 스타일별 한 줄 안내.
+ * entry = entrySuitability(totalMin, dow) 결과.
+ */
+export function analysisEntryLink(
+  style: TradingStyle,
+  totalMin: number,
+  entry: EntrySuitability,
+): string {
+  const coupling = STYLE_ENTRY_COUPLING[style];
+  const good = nextGoodEntry(totalMin);
+  const actionable = entry.tier === "optimal" || entry.tier === "good";
+
+  if (coupling === "tight") {
+    // 스캘핑 — 분석=진입
+    if (actionable) return `분석=진입 동시 · 지금 바로 실행 가능 (${entry.label})`;
+    return good.now
+      ? `분석=진입 동시 · 현재 ${entry.label} — 신중히`
+      : `분석=진입 동시 · 지금은 진입 어려움 → ${fmtClock(good.at)} KST 이후 분석+진입 권장`;
+  }
+  if (coupling === "moderate") {
+    // 데이 — 같은 세션 안에서 진입
+    if (actionable) return `분석 후 바로 진입 가능 (${entry.label})`;
+    return good.now
+      ? `지금 분석·진입 가능하나 ${entry.label}`
+      : `지금 분석해 계획 → 좋은 진입은 ${fmtClock(good.at)} KST부터`;
+  }
+  if (coupling === "loose") {
+    // 스윙 — 분석은 계획, 진입은 따로
+    return good.now
+      ? "분석=계획용 · 실제 진입도 지금 유동성 양호"
+      : `분석=계획용 · 실제 진입 추천 ${fmtClock(good.at)} KST (유동성 좋을 때)`;
+  }
+  // 포지션 — 타이밍 무관
+  return "진입 타이밍 영향 적음 · 며칠에 걸쳐 분산 진입";
 }
 
 /** 요일 효과 메모. dow = KST 기준 요일(0=일 … 6=토). */

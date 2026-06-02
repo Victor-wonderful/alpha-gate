@@ -14,6 +14,7 @@ import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { AnalysisTimingHint } from "@/components/analyze/analysis-timing-hint";
 import { AnalysisInfo } from "@/components/analyze/analysis-info";
+import { SessionsClock } from "@/components/market/sessions-clock";
 import { kstStringAgo, kstStringToDate, randomKstStringWithin6Months } from "@/lib/analysis/kst";
 
 // Top Binance USDT-Perp by recent volume — wide enough for most use cases.
@@ -211,6 +212,7 @@ function AnalyzeClientInner({
   return (
     <div className="space-y-6">
       <AnalysisInfo />
+      <SessionsClock />
       <Card>
         <CardHeader>
           <CardTitle>분석 대상</CardTitle>

@@ -7,22 +7,35 @@ import { cn } from "@/lib/utils";
 type Session = {
   name: string;
   ranges: [number, number][]; // [openHour, closeHour) in KST
+  utcRanges: [number, number][]; // same window expressed in UTC (KST − 9h)
 };
 
 const SESSIONS: Session[] = [
-  { name: "Sydney", ranges: [[6, 15]] },
-  { name: "Tokyo", ranges: [[9, 18]] },
-  { name: "London", ranges: [[16, 24], [0, 1]] },
-  { name: "New York", ranges: [[22, 24], [0, 7]] },
+  { name: "Sydney", ranges: [[6, 15]], utcRanges: [[21, 24], [0, 6]] },
+  { name: "Tokyo", ranges: [[9, 18]], utcRanges: [[0, 9]] },
+  { name: "London", ranges: [[16, 24], [0, 1]], utcRanges: [[7, 16]] },
+  { name: "New York", ranges: [[22, 24], [0, 7]], utcRanges: [[13, 22]] },
 ];
 
-function kstNow(): { h: number; m: number; totalMin: number } {
+function clockNow(): {
+  h: number;
+  m: number;
+  totalMin: number;
+  utcH: number;
+  utcM: number;
+} {
   const now = new Date();
   const kstMs = now.getTime() + 9 * 3600 * 1000;
   const d = new Date(kstMs);
   const h = d.getUTCHours();
   const m = d.getUTCMinutes();
-  return { h, m, totalMin: h * 60 + m };
+  return {
+    h,
+    m,
+    totalMin: h * 60 + m,
+    utcH: now.getUTCHours(),
+    utcM: now.getUTCMinutes(),
+  };
 }
 
 function isOpen(s: Session, h: number) {
@@ -66,17 +79,25 @@ function fmtRange(ranges: [number, number][]) {
 }
 
 export function SessionsClock() {
-  const [time, setTime] = useState<{ h: number; m: number; totalMin: number }>({
+  const [time, setTime] = useState<{
+    h: number;
+    m: number;
+    totalMin: number;
+    utcH: number;
+    utcM: number;
+  }>({
     h: 0,
     m: 0,
     totalMin: 0,
+    utcH: 0,
+    utcM: 0,
   });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    setTime(kstNow());
-    const t = setInterval(() => setTime(kstNow()), 30_000);
+    setTime(clockNow());
+    const t = setInterval(() => setTime(clockNow()), 30_000);
     return () => clearInterval(t);
   }, []);
 
@@ -106,10 +127,14 @@ export function SessionsClock() {
             <span className="font-mono text-sm tabular-nums text-muted-foreground">
               KST {String(time.h).padStart(2, "0")}:
               {String(time.m).padStart(2, "0")}
+              <span className="text-muted-foreground/60">
+                {" · "}UTC {String(time.utcH).padStart(2, "0")}:
+                {String(time.utcM).padStart(2, "0")}
+              </span>
             </span>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground">KST</span>
+          <span className="text-xs text-muted-foreground">KST · UTC</span>
         )}
       </div>
 
@@ -143,6 +168,9 @@ export function SessionsClock() {
                 </div>
                 <p className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
                   KST {fmtRange(s.ranges)}
+                </p>
+                <p className="font-mono text-[10px] tabular-nums text-muted-foreground/60">
+                  UTC {fmtRange(s.utcRanges)}
                 </p>
                 {mounted ? (
                   <p

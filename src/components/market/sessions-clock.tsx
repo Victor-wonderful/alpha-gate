@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { classifyLiquidity } from "@/lib/analysis/sessions";
 
 type Session = {
   name: string;
@@ -101,10 +102,10 @@ export function SessionsClock() {
     return () => clearInterval(t);
   }, []);
 
-  // Detect golden window (22:30–01:00 KST = London·NY overlap)
-  const inGolden = mounted && (time.totalMin >= 22 * 60 + 30 || time.totalMin < 60);
-  // Trap window (05:00–09:00)
-  const inTrap = mounted && time.totalMin >= 5 * 60 && time.totalMin < 9 * 60;
+  // 유동성 등급은 공유 분류기 사용 (분석 타이밍 힌트와 동일 기준)
+  const tier = mounted ? classifyLiquidity(time.totalMin).tier : null;
+  const inGolden = tier === "golden";
+  const inTrap = tier === "dead";
 
   return (
     <section>

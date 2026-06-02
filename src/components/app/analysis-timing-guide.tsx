@@ -19,9 +19,10 @@ const STYLE_ROWS: Array<{
 ];
 
 const SESSIONS: Array<{ label: string; time: string; note: string; tone: "muted" | "primary" | "warn" }> = [
-  { label: "아시아", time: "09:00 ~ 16:00", note: "변동성 낮음 · 박스 잦음", tone: "muted" },
-  { label: "유럽", time: "16:00 ~ 22:00", note: "변동성 ↑ · 추세 발생", tone: "primary" },
-  { label: "미국", time: "22:30 ~ 05:00", note: "최고 변동성 · 추세+휩쏘", tone: "warn" },
+  { label: "아시아", time: "09:00 ~ 16:00", note: "한산 · 변동성 낮음 · 박스 잦음", tone: "muted" },
+  { label: "유럽", time: "16:00 ~ 22:30", note: "활성 · 변동성 ↑ · 추세 발생", tone: "primary" },
+  { label: "골든", time: "22:30 ~ 01:00", note: "런던·뉴욕 겹침 · 최고 유동성", tone: "primary" },
+  { label: "죽은 구간", time: "05:00 ~ 09:00", note: "유동성 최저 · 휩쏘 · 단기 비권장", tone: "warn" },
 ];
 
 export function AnalysisTimingGuide({ defaultOpen = false, className }: Props) {
@@ -117,8 +118,9 @@ export function AnalysisTimingGuide({ defaultOpen = false, className }: Props) {
             <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
               <div className="mb-1 font-semibold text-primary">권장 분석 시간대</div>
               <ul className="space-y-0.5 text-muted-foreground">
-                <li>• 데일리: <span className="font-mono tabular-nums text-foreground">09:00 KST</span> (일봉 마감 직후)</li>
-                <li>• 인트라데이: <span className="font-mono tabular-nums text-foreground">21:30~22:00</span> (미국 개장 전), <span className="font-mono tabular-nums text-foreground">05:00</span> (마감 후)</li>
+                <li>• 스윙·포지션: <span className="font-mono tabular-nums text-foreground">09:10 KST</span> (일봉 마감 직후 — 09:00 펀딩 노이즈 회피)</li>
+                <li>• 데이: <span className="font-mono tabular-nums text-foreground">21:30</span> (미국 개장 전), <span className="font-mono tabular-nums text-foreground">05:00</span> (마감 후 복기)</li>
+                <li>• 스캘핑: <span className="font-mono tabular-nums text-foreground">16:00</span> (런던 개장), <span className="font-mono tabular-nums text-foreground">22:30~01:00</span> (골든 타임)</li>
               </ul>
             </div>
           </section>
@@ -132,6 +134,7 @@ export function AnalysisTimingGuide({ defaultOpen = false, className }: Props) {
           </div>
           <ul className="space-y-0.5 text-muted-foreground">
             <li>• 펀딩 정산 ±10분 — <span className="font-mono tabular-nums">09:00 / 17:00 / 01:00 KST</span></li>
+            <li>• 죽은 구간 <span className="font-mono tabular-nums">05:00~09:00</span> — 단기(스캘핑) 분석은 휩쏘 위험</li>
             <li>• 주요 지표 발표 전후 30분 — FOMC, CPI, 비농업 고용(NFP) 등</li>
             <li>• 변동성 폭발 직후 30분 — 분석 신뢰도 급락</li>
           </ul>

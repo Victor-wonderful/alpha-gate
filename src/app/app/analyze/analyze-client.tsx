@@ -169,17 +169,16 @@ function AnalyzeClientInner({
     setForm({ style: v });
   }
 
-  // 후보 레이더에서 코인 선택 → 심볼 + 추천 스타일 prefill + 입력창으로 스크롤/포커스.
+  // 후보 레이더에서 코인 선택 → 심볼+추천스타일 prefill + 입력창 스크롤/포커스 (수동 실행).
   function pickCandidate(sym: string, pickedStyle: TradingStyle) {
-    setForm({ symbol: sym.toUpperCase(), style: pickedStyle });
+    const target = sym.toUpperCase();
+    setForm({ symbol: target, style: pickedStyle });
     if (typeof document !== "undefined") {
       const el = document.getElementById("symbol-input") as HTMLInputElement | null;
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
       el?.focus({ preventScroll: true });
     }
-    toast.success(
-      `${sym.toUpperCase()} · ${STYLE_PRESETS[pickedStyle].label} 선택됨 — [분석 실행]을 누르세요`,
-    );
+    toast.success(`${target} · ${STYLE_PRESETS[pickedStyle].label} 선택됨 — [분석 실행]을 누르세요`);
   }
 
   function run() {

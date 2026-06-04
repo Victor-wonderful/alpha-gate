@@ -226,12 +226,13 @@ export async function saveTradeAction(args: {
   }
 
   // 3차 가드: 손절폭이 수수료 대비 너무 좁으면 진입 거부.
-  // 손절 적중 시 수수료가 1R 이상을 차지해 -2R 이상 손실이 확정됨.
-  const { MIN_STOP_PCT_VS_FEES } = await import("@/lib/analysis/standards");
+  // 손절 적중 시 수수료가 리스크의 큰 부분을 먹어 계획보다 큰 손실이 확정됨.
+  const { MIN_STOP_PCT_VS_FEES, ROUND_TRIP_COST_PCT } = await import("@/lib/analysis/standards");
   const stopPctCheck = (stopDist / input.entry) * 100;
   if (stopPctCheck < MIN_STOP_PCT_VS_FEES) {
+    const realizedR = stopPctCheck > 0 ? (stopPctCheck + ROUND_TRIP_COST_PCT) / stopPctCheck : 0;
     return {
-      error: `손절폭(${stopPctCheck.toFixed(3)}%)이 수수료의 3배(${MIN_STOP_PCT_VS_FEES.toFixed(2)}%) 미만입니다. 손절 적중 시 -2R 이상 손실이 확정됩니다. 손절을 더 멀리 잡으세요.`,
+      error: `손절폭(${stopPctCheck.toFixed(3)}%)이 수수료의 3배(${MIN_STOP_PCT_VS_FEES.toFixed(2)}%) 미만입니다. 손절 적중 시 수수료 포함 약 ${realizedR.toFixed(1)}R 손실(계획 1R 대비). 손절을 더 멀리 잡으세요.`,
     };
   }
 

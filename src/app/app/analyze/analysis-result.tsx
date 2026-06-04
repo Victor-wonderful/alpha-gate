@@ -26,6 +26,7 @@ import { GradeBadge } from "@/components/trade/grade-badge";
 import { recommendTradeParams } from "@/lib/recommend";
 import { ScenarioChart } from "@/components/analyze/scenario-chart";
 import { ScenarioProbability } from "@/components/analyze/scenario-probability";
+import { simulateRange } from "@/lib/analysis/monte-carlo";
 import { ChartErrorBoundary } from "@/components/analyze/chart-error-boundary";
 import { DownloadButtons } from "@/components/analyze/download-buttons";
 import { SpecialSignalCard } from "@/components/analyze/special-signal-card";
@@ -60,6 +61,9 @@ const GRADE_TEXT: Record<"A" | "B" | "C" | "D", string> = {
   C: "비추천 · 축소",
   D: "강한 자제",
 };
+
+// 예상 변동폭 콘 horizon (스타일 기준 TF 봉 수) — 레이더와 동일.
+const RANGE_HORIZON: Record<TradingStyle, number> = { scalp: 8, day: 12, swing: 20, position: 14 };
 
 /** 등급 헤드라인 — D는 원인(계좌/셋업)에 따라 다른 문구. "금지" 단정 안 함. */
 function gradeHeadline(g: ReturnType<typeof gradeTrade>): string {
@@ -293,6 +297,11 @@ export function AnalysisResult({
     () => snapshot.mtfChart?.candles?.map((c) => c.close) ?? [],
     [snapshot.mtfChart],
   );
+  // 예상 변동 범위 콘 (다음 horizon봉 80% 구간, 드리프트 0 = 방향 예측 아님).
+  const rangeCone = useMemo(
+    () => simulateRange(mtfCloses, RANGE_HORIZON[snapshot.style] ?? 20, 2000),
+    [mtfCloses, snapshot.style],
+  );
 
   return (
     <div className="space-y-6">
@@ -351,6 +360,14 @@ export function AnalysisResult({
               <span className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
                 스타일 <span className="font-mono text-foreground">{snapshot.style}</span>
               </span>
+              {!rangeCone.insufficient ? (
+                <span
+                  className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground"
+                  title={`다음 구간 80% 예상 변동폭 (${rangeCone.lowPct.toFixed(1)}% ~ +${rangeCone.highPct.toFixed(1)}%). 과거 변동성 부트스트랩(드리프트 0) — 방향 예측 아님.`}
+                >
+                  예상폭 <span className="font-mono text-foreground">±{((rangeCone.highPct - rangeCone.lowPct) / 2).toFixed(1)}%</span>
+                </span>
+              ) : null}
               <span className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
                 자금 <span className="font-mono text-foreground">{formatCurrency(accountSize, currency)}</span>
               </span>

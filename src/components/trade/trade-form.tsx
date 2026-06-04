@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { MIN_STOP_PCT_VS_FEES, ROUND_TRIP_COST_PCT } from "@/lib/analysis/standards";
 import { AlertTriangle, TrendingUp, TrendingDown, ArrowRight, Sparkles } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -264,6 +265,8 @@ function TradeFormInner({
   });
   // 시장가 진입가↔손절/목표 동기화를 심볼/세션당 1회만 하기 위한 플래그.
   const marketSyncedRef = useRef(false);
+  // "주문 금액(USDT)" 직접 입력 중 표시값 (포커스 동안만 사용 — controlled-input jitter 방지).
+  const [notionalDraft, setNotionalDraft] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     marketSyncedRef.current = false; // 심볼 바뀌면 시장가 재동기화 허용
@@ -562,6 +565,24 @@ function TradeFormInner({
     entryNumV > 0 && targetNumV > 0
       ? ((targetNumV - entryNumV) / entryNumV) * 100
       : 0;
+
+  // 수수료 가드: 손절폭이 수수료×3 미만이면 진입 차단(저장 시). 미리 인라인 경고로 표시.
+  const absStopPct = Math.abs(stopPct);
+  const feeUnsafe =
+    entryNumV > 0 && stopNumV > 0 && absStopPct > 0 && absStopPct < MIN_STOP_PCT_VS_FEES;
+  // 손절 적중 시 실제 실현 손실(R) = (손절폭 + 왕복수수료) / 손절폭.
+  const realizedRIfStopped = absStopPct > 0 ? (absStopPct + ROUND_TRIP_COST_PCT) / absStopPct : 0;
+  function widenStopToFeeSafe() {
+    if (entryNumV <= 0) return;
+    const targetDistPct = MIN_STOP_PCT_VS_FEES + 0.05; // 버퍼 0.05%
+    const isLongStop = stopNumV < entryNumV; // 손절이 진입가 아래 = 롱
+    const newStop = isLongStop
+      ? entryNumV * (1 - targetDistPct / 100)
+      : entryNumV * (1 + targetDistPct / 100);
+    setStop(formatPriceForInput(newStop));
+    toast.success(`손절을 ${targetDistPct.toFixed(2)}%로 넓혔습니다 (수수료 안전선).`);
+  }
+
   // 리스크%에서 도출되는 사이즈 (read-only 미리보기)
   const lossUsd = accountNumV * (Number(riskPct) || 0) / 100;
   const riskPerUnit = Math.abs(entryNumV - stopNumV);
@@ -879,6 +900,67 @@ function TradeFormInner({
               />
             </div>
 
+            {/* Leverage slider — 거래소 순서대로 사이즈 위에 배치 */}
+            <div className="space-y-2 rounded-md border border-border bg-background/30 p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">레버리지</Label>
+                <span className="font-mono text-sm font-bold text-foreground">{leverage}x</span>
+              </div>
+              {liqPrice > 0 ? (
+                <div className="flex items-center justify-between rounded bg-muted/30 px-2 py-1 text-[11px]">
+                  <span className="text-muted-foreground">청산가 (대략 · Isolated)</span>
+                  <span className="font-mono text-amber-400">${formatPriceForInput(liqPrice)}</span>
+                </div>
+              ) : null}
+              <input
+                type="range"
+                min={1}
+                max={50}
+                step={1}
+                value={leverage}
+                onChange={(e) => { setLeverage(Number(e.target.value)); setUserOverride(true); }}
+                className="w-full accent-primary"
+              />
+              <div className="flex flex-wrap gap-1">
+                {[1, 3, 5, 10, 20, 50].map((lv) => (
+                  <button
+                    key={lv}
+                    type="button"
+                    onClick={() => { setLeverage(lv); setUserOverride(true); }}
+                    className={cn(
+                      "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
+                      leverage === lv
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
+                    )}
+                  >
+                    {lv}x
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                레버리지는 손익비/등급과 무관. 필요 마진만 달라집니다.
+              </p>
+            </div>
+
+            {/* 수수료 가드 인라인 경고 — 진입 클릭 전에 표시 */}
+            {feeUnsafe ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-xs">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-grade-d" />
+                <span className="flex-1 text-grade-d">
+                  손절폭 {absStopPct.toFixed(3)}%가 수수료의 3배({MIN_STOP_PCT_VS_FEES.toFixed(2)}%) 미만 —
+                  손절 적중 시 수수료 포함 약 <strong>{realizedRIfStopped.toFixed(1)}R</strong> 손실(계획 1R 대비). 이대로는 진입이 차단됩니다.
+                </span>
+                <button
+                  type="button"
+                  onClick={widenStopToFeeSafe}
+                  className="shrink-0 rounded border border-grade-d/50 bg-grade-d/10 px-2.5 py-1 font-medium text-grade-d transition-colors hover:bg-grade-d/20"
+                >
+                  손절 자동 넓히기
+                </button>
+              </div>
+            ) : null}
+
             {/* Size / quantity section */}
             <div className="space-y-2 rounded-md border border-border bg-background/30 p-3">
               <div className="flex items-center justify-between text-xs">
@@ -964,7 +1046,27 @@ function TradeFormInner({
                   })()
                 : null}
 
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="space-y-1">
+                  <Label className="text-[11px]">주문 금액 (USDT)</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={notionalDraft ?? (previewNotional > 0 ? String(Math.round(previewNotional)) : "")}
+                    onFocus={() =>
+                      setNotionalDraft(previewNotional > 0 ? String(Math.round(previewNotional)) : "")
+                    }
+                    onChange={(e) => {
+                      setNotionalDraft(e.target.value);
+                      const usd = Number(e.target.value) || 0;
+                      const pct = accountNumV > 0 ? (usd / accountNumV) * 100 : 0;
+                      applyAccountPct(pct);
+                    }}
+                    onBlur={() => setNotionalDraft(null)}
+                    placeholder="노출 USDT"
+                    className="h-9 font-mono"
+                  />
+                </div>
                 <div className="space-y-1">
                   <Label className="text-[11px]">계좌 ({currency})</Label>
                   <Input
@@ -989,48 +1091,6 @@ function TradeFormInner({
               </div>
             </div>
 
-            {/* Leverage slider */}
-            <div className="space-y-2 rounded-md border border-border bg-background/30 p-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold">레버리지</Label>
-                <span className="font-mono text-sm font-bold text-foreground">{leverage}x</span>
-              </div>
-              {liqPrice > 0 ? (
-                <div className="flex items-center justify-between rounded bg-muted/30 px-2 py-1 text-[11px]">
-                  <span className="text-muted-foreground">청산가 (대략 · Isolated)</span>
-                  <span className="font-mono text-amber-400">${formatPriceForInput(liqPrice)}</span>
-                </div>
-              ) : null}
-              <input
-                type="range"
-                min={1}
-                max={50}
-                step={1}
-                value={leverage}
-                onChange={(e) => { setLeverage(Number(e.target.value)); setUserOverride(true); }}
-                className="w-full accent-primary"
-              />
-              <div className="flex flex-wrap gap-1">
-                {[1, 3, 5, 10, 20, 50].map((lv) => (
-                  <button
-                    key={lv}
-                    type="button"
-                    onClick={() => { setLeverage(lv); setUserOverride(true); }}
-                    className={cn(
-                      "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
-                      leverage === lv
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
-                    )}
-                  >
-                    {lv}x
-                  </button>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground">
-                레버리지는 손익비/등급과 무관. 필요 마진만 달라집니다.
-              </p>
-            </div>
           </CardContent>
         </Card>
 

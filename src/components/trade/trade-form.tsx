@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState, useTransition } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AlertTriangle, TrendingUp, TrendingDown, ArrowRight, Sparkles } from "lucide-react";
@@ -262,8 +262,11 @@ function TradeFormInner({
     fundingRate: null,
     minutesToFunding: null,
   });
+  // 시장가 진입가↔손절/목표 동기화를 심볼/세션당 1회만 하기 위한 플래그.
+  const marketSyncedRef = useRef(false);
   useEffect(() => {
     let alive = true;
+    marketSyncedRef.current = false; // 심볼 바뀌면 시장가 재동기화 허용
     fetch(`/api/market-context?symbol=${symbol}`)
       .then((r) => r.json())
       .then((d) => alive && setMarketCtx(d))
@@ -493,6 +496,7 @@ function TradeFormInner({
     setOrderTypeTouched(true);
     if (next === orderType) return;
     if (next === "market") {
+      marketSyncedRef.current = true; // 토글에서 직접 평행이동하므로 자동 sync는 스킵
       // 백업: 지금 입력값들이 곧 limit 기준값이 됨
       if (entry) setLimitEntry(entry);
       if (stop) setLimitStop(stop);
@@ -511,6 +515,7 @@ function TradeFormInner({
         setEntry(formatPriceForInput(currentPrice));
       }
     } else {
+      marketSyncedRef.current = false; // 다음 시장가 진입 시 현재가에 재동기화
       // 지정가 복원: AI 원래 값으로 (entry/stop/target 모두)
       if (limitEntry) setEntry(limitEntry);
       if (limitStop) setStop(limitStop);
@@ -519,13 +524,25 @@ function TradeFormInner({
     setOrderType(next);
   }
 
-  // 시장가 모드일 때 현재가가 새로 도착하면 진입가 비어있는 경우 자동 채움.
-  // (AI immediate 시나리오로 첫 진입했을 때의 케이스)
+  // 시장가 모드: 현재가 도착 시 진입가를 현재가로 맞추고, 손절/목표도 같은 delta로
+  // 평행이동(R:R 보존). AI 시나리오가 곧장 시장가로 로드된 경우에도 entry/손절/목표가
+  // 어긋나지 않도록 심볼당 1회 동기화한다. (이후엔 사용자가 자유롭게 수정 가능)
   useEffect(() => {
     if (orderType !== "market") return;
     if (!currentPrice || currentPrice <= 0) return;
-    if (entry) return;
+    if (marketSyncedRef.current) return;
+    marketSyncedRef.current = true;
+    const baseEntry = Number(limitEntry) || Number(entry) || 0;
+    if (baseEntry <= 0) {
+      setEntry(formatPriceForInput(currentPrice));
+      return;
+    }
+    const delta = currentPrice - baseEntry;
     setEntry(formatPriceForInput(currentPrice));
+    const baseStop = Number(limitStop) || Number(stop) || 0;
+    const baseTarget = Number(limitTarget) || Number(target) || 0;
+    if (baseStop > 0) setStop(formatPriceForInput(baseStop + delta));
+    if (baseTarget > 0) setTarget(formatPriceForInput(baseTarget + delta));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPrice, orderType]);
 

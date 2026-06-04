@@ -176,27 +176,27 @@ export async function classifyStrategy(snapshot: AnalysisSnapshot): Promise<Stra
     mtfChart: { tf: snapshot.mtfChart.tf, candleCount: snapshot.mtfChart.candles.length },
   };
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 600,
-    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-    messages: [
-      {
-        role: "user",
-        content: `[트레이딩 스타일: ${snapshot.styleLabel}]\n${styleHint}\n\n분석할 스냅샷:\n${JSON.stringify(compact, null, 2)}`,
-      },
-    ],
-  });
+  const userContent = `[트레이딩 스타일: ${snapshot.styleLabel}]\n${styleHint}\n\n분석할 스냅샷:\n${JSON.stringify(compact, null, 2)}`;
 
-  const text = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
-
-  const result = parseJsonLoose<StrategyResult>(text);
-  if ("error" in result) {
-    throw new Error(`Strategy Agent 응답 파싱 실패: ${result.error}\n원문: ${result.raw}`);
+  // LLM이 가끔 산문/잘린 JSON을 반환 → 파싱 실패 시 최대 2회까지 재시도.
+  let result: { data: StrategyResult } | { error: string; raw: string } | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 800,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: userContent }],
+    });
+    const text = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+    result = parseJsonLoose<StrategyResult>(text);
+    if (!("error" in result)) break;
+  }
+  if (!result || "error" in result) {
+    throw new Error(`Strategy Agent 응답 파싱 실패: ${result?.error}\n원문: ${result?.raw}`);
   }
   const parsed = result.data;
   // sanity defaults

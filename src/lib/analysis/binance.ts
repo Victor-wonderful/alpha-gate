@@ -113,6 +113,79 @@ export async function fetchTicker24h(symbol: string): Promise<{
   };
 }
 
+/** Bulk 24h ticker for ALL symbols (no symbol param). Used by the candidate radar
+ *  to rank the universe by quote volume in a single request. */
+export type BulkTicker = {
+  symbol: string;
+  lastPrice: number;
+  priceChangePercent: number;
+  highPrice: number;
+  lowPrice: number;
+  quoteVolume: number; // USD-ish notional traded in 24h
+};
+
+export async function fetchAllTickers24h(): Promise<BulkTicker[]> {
+  const raw = await jget<
+    {
+      symbol: string;
+      lastPrice: string;
+      priceChangePercent: string;
+      highPrice: string;
+      lowPrice: string;
+      quoteVolume: string;
+    }[]
+  >(`${FAPI}/fapi/v1/ticker/24hr`, 12000);
+  return raw.map((t) => ({
+    symbol: t.symbol,
+    lastPrice: Number(t.lastPrice),
+    priceChangePercent: Number(t.priceChangePercent),
+    highPrice: Number(t.highPrice),
+    lowPrice: Number(t.lowPrice),
+    quoteVolume: Number(t.quoteVolume),
+  }));
+}
+
+/** Set of tradeable CRYPTO USDT-perpetual symbols (underlyingType COIN).
+ *  Excludes Binance's TradFi perps (gold/silver/equities = TRADIFI_PERPETUAL,
+ *  underlyingType COMMODITY/EQUITY) and index products. Cached 1h — listings change rarely. */
+async function _fetchCryptoPerpSymbolsUncached(): Promise<string[]> {
+  const raw = await jget<{
+    symbols: {
+      symbol: string;
+      contractType: string;
+      underlyingType: string;
+      status: string;
+      quoteAsset: string;
+    }[];
+  }>(`${FAPI}/fapi/v1/exchangeInfo`, 15000);
+  return raw.symbols
+    .filter(
+      (s) =>
+        s.contractType === "PERPETUAL" &&
+        s.underlyingType === "COIN" &&
+        s.status === "TRADING" &&
+        s.quoteAsset === "USDT",
+    )
+    .map((s) => s.symbol);
+}
+
+export const fetchCryptoPerpSymbols = unstable_cache(
+  _fetchCryptoPerpSymbolsUncached,
+  ["crypto-perp-symbols-v1"],
+  { revalidate: 3600, tags: ["exchange-info"] },
+);
+
+/** Bulk funding/mark for ALL symbols (no symbol param). One request → map symbol→rate. */
+export async function fetchAllFunding(): Promise<Record<string, number>> {
+  const raw = await jget<{ symbol: string; lastFundingRate: string }[]>(
+    `${FAPI}/fapi/v1/premiumIndex`,
+    12000,
+  );
+  const out: Record<string, number> = {};
+  for (const r of raw) out[r.symbol] = Number(r.lastFundingRate);
+  return out;
+}
+
 export interface MarketDominance {
   btc: number;
   eth: number;

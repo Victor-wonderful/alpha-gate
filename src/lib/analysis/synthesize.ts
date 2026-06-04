@@ -464,22 +464,25 @@ export async function synthesizeAnalysis(
     },
   ];
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 3000,
-    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: userBlocks }],
-  });
-
-  const text = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
-
-  const result = parseJsonLoose<AnalysisReport>(text);
-  if ("error" in result) {
-    throw new Error(`시나리오 응답 파싱 실패: ${result.error}\n\n원문: ${result.raw}`);
+  // 파싱 실패 시 최대 2회까지 재시도 (가끔 산문/잘린 JSON 반환).
+  let result: { data: AnalysisReport } | { error: string; raw: string } | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 3000,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: userBlocks }],
+    });
+    const text = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+    result = parseJsonLoose<AnalysisReport>(text);
+    if (!("error" in result)) break;
+  }
+  if (!result || "error" in result) {
+    throw new Error(`시나리오 응답 파싱 실패: ${result?.error}\n\n원문: ${result?.raw}`);
   }
   return enforceEntryProximity(result.data, snapshot);
 }

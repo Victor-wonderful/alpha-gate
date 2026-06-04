@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -25,6 +25,7 @@ import { sizePosition } from "@/lib/sizing";
 import { GradeBadge } from "@/components/trade/grade-badge";
 import { recommendTradeParams } from "@/lib/recommend";
 import { ScenarioChart } from "@/components/analyze/scenario-chart";
+import { ScenarioProbability } from "@/components/analyze/scenario-probability";
 import { ChartErrorBoundary } from "@/components/analyze/chart-error-boundary";
 import { DownloadButtons } from "@/components/analyze/download-buttons";
 import { SpecialSignalCard } from "@/components/analyze/special-signal-card";
@@ -281,6 +282,12 @@ export function AnalysisResult({
   };
   const scTimeframe = tfMap[ltf] ?? "1h";
 
+  // 몬테카를로 확률용 MTF 종가 시계열 (안정적 참조 — 매 렌더 재계산 방지).
+  const mtfCloses = useMemo(
+    () => snapshot.mtfChart?.candles?.map((c) => c.close) ?? [],
+    [snapshot.mtfChart],
+  );
+
   return (
     <div className="space-y-6">
       <DownloadButtons
@@ -463,6 +470,7 @@ export function AnalysisResult({
                 style={snapshot.style}
                 currentPrice={snapshot.ticker.last}
                 mtfAtrPct={snapshot.atr?.find((a) => a.role === "MTF")?.pctOfPrice}
+                mtfCloses={mtfCloses}
                 scenario={s}
                 strategy={strategy}
                 entry={entry}
@@ -923,6 +931,7 @@ function SimpleScenarioCard({
   style,
   currentPrice,
   mtfAtrPct,
+  mtfCloses,
   scenario,
   strategy,
   entry,
@@ -943,6 +952,7 @@ function SimpleScenarioCard({
   style: TradingStyle;
   currentPrice: number;
   mtfAtrPct?: number;
+  mtfCloses: number[];
   scenario: AnalysisReport["scenarios"][number];
   strategy: StrategyResult;
   entry: number;
@@ -1201,6 +1211,16 @@ function SimpleScenarioCard({
         <div className="-mt-1 text-[10px] text-muted-foreground">
           ※ "실현"은 왕복 수수료 0.08% (Binance Taker × 2) 차감 + 슬리피지는 체결가에 별도 반영
         </div>
+
+        {/* 몬테카를로 도달 확률 */}
+        <ScenarioProbability
+          entry={entry}
+          stop={scenario.invalidation}
+          target={scenario.target}
+          direction={scenario.direction}
+          closes={mtfCloses}
+          style={style}
+        />
         </div>
         {/* ===== END LEFT ===== */}
 

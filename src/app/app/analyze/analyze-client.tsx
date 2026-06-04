@@ -14,7 +14,9 @@ import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { AnalysisTimingHint } from "@/components/analyze/analysis-timing-hint";
 import { AnalysisInfo } from "@/components/analyze/analysis-info";
+import { RadarPanel } from "@/components/analyze/radar-panel";
 import { SessionsClock } from "@/components/market/sessions-clock";
+import type { RadarSnapshot } from "@/lib/analysis/radar-persist";
 import { kstStringAgo, kstStringToDate, randomKstStringWithin6Months } from "@/lib/analysis/kst";
 
 // Top Binance USDT-Perp by recent volume — wide enough for most use cases.
@@ -56,6 +58,7 @@ export function AnalyzeClient(props: {
   riskPct: number;
   currency: "USD" | "KRW";
   money: import("@/types/trade").MoneyContext;
+  radar: RadarSnapshot;
 }) {
   return (
     <Suspense fallback={null}>
@@ -69,11 +72,13 @@ function AnalyzeClientInner({
   riskPct,
   currency,
   money,
+  radar,
 }: {
   accountSize: number;
   riskPct: number;
   currency: "USD" | "KRW";
   money: import("@/types/trade").MoneyContext;
+  radar: RadarSnapshot;
 }) {
   const [pending, startTransition] = useTransition();
   const [loadingFromHistory, setLoadingFromHistory] = useState(false);
@@ -164,6 +169,19 @@ function AnalyzeClientInner({
     setForm({ style: v });
   }
 
+  // 후보 레이더에서 코인 선택 → 심볼 + 추천 스타일 prefill + 입력창으로 스크롤/포커스.
+  function pickCandidate(sym: string, pickedStyle: TradingStyle) {
+    setForm({ symbol: sym.toUpperCase(), style: pickedStyle });
+    if (typeof document !== "undefined") {
+      const el = document.getElementById("symbol-input") as HTMLInputElement | null;
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.focus({ preventScroll: true });
+    }
+    toast.success(
+      `${sym.toUpperCase()} · ${STYLE_PRESETS[pickedStyle].label} 선택됨 — [분석 실행]을 누르세요`,
+    );
+  }
+
   function run() {
     const target = symbol.toUpperCase().trim();
     if (!target) {
@@ -213,6 +231,7 @@ function AnalyzeClientInner({
     <div className="space-y-6">
       <AnalysisInfo />
       <SessionsClock />
+      <RadarPanel initial={radar} onPick={pickCandidate} />
       <Card>
         <CardHeader>
           <CardTitle>분석 대상</CardTitle>

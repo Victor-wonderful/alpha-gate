@@ -4,6 +4,7 @@ import { AnalysisHistory } from "@/components/analyze/analysis-history";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { HelpLink } from "@/components/app/help-link";
 import { getMoneyContext } from "@/lib/money-management";
+import { loadLatestRadar, type RadarSnapshot } from "@/lib/analysis/radar-persist";
 import type { MoneyContext } from "@/types/trade";
 
 export const maxDuration = 60;
@@ -40,6 +41,11 @@ export default async function AnalyzePage() {
         openExposurePct: 0,
       };
 
+  // 후보 레이더 — 최신 스캔 배치 (크론이 10분마다 채움). 로그인 사용자만.
+  const radar: RadarSnapshot = user
+    ? await loadLatestRadar().catch(() => ({ candidates: [], scannedAt: null }))
+    : { candidates: [], scannedAt: null };
+
   return (
     <div className="space-y-6">
       <FlowStepper current="analyze" />
@@ -60,6 +66,7 @@ export default async function AnalyzePage() {
         riskPct={Number(profile?.default_risk_pct) || 1}
         currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
         money={money}
+        radar={radar}
       />
       <AnalysisHistory />
     </div>

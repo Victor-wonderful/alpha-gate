@@ -481,8 +481,9 @@ function TradeFormInner({
   const stopNumV = Number(stop) || 0;
   const targetNumV = Number(target) || 0;
   const accountNumV = Number(accountSize) || 0;
-  // 모든 심볼의 현재가 (Spot ticker). 시장가 진입 시 자동 입력에도 사용.
-  const currentPrice = marketCtx.symbolPrice ?? marketCtx.btcPrice;
+  // 해당 심볼의 현재가 (선물 last price). 시장가 진입 시 자동 입력에 사용.
+  // ⚠️ btcPrice로 폴백하면 알트인데 BTC 가격이 진입가로 들어가므로 절대 폴백하지 않는다.
+  const currentPrice = marketCtx.symbolPrice;
 
   /** 시장가/지정가 토글 시 진입가/손절/목표를 함께 갱신.
    *  - 시장가: AI 시나리오의 entry/stop/target를 현재가 기준 동일 delta로
@@ -550,6 +551,13 @@ function TradeFormInner({
   const previewQty = riskPerUnit > 0 ? lossUsd / riskPerUnit : 0;
   const previewNotional = previewQty * entryNumV;
   const notionalPctOfAccount = accountNumV > 0 ? (previewNotional / accountNumV) * 100 : 0;
+  // 청산가 (대략) — Isolated 가정, 유지증거금 무시. 거래소 주문창처럼 참고 표시.
+  const liqPrice =
+    entryNumV > 0 && leverage > 0
+      ? direction === "long"
+        ? entryNumV * (1 - 1 / leverage)
+        : entryNumV * (1 + 1 / leverage)
+      : 0;
 
   function applyAccountPct(pct: number) {
     // pct = 25/50/75/100 → riskPct를 그 % 만큼의 손실 한도로 환산
@@ -862,6 +870,22 @@ function TradeFormInner({
                   {previewQty > 0 ? `${formatNumber(previewQty, { maximumFractionDigits: 4 })} ${symbol.replace("USDT", "")}` : "—"}
                 </span>
               </div>
+              {/* 거래소식 사이즈 슬라이더 (계좌 노출 % 기준) */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.min(100, Math.max(0, Math.round(notionalPctOfAccount)))}
+                  onChange={(e) => applyAccountPct(Number(e.target.value))}
+                  className="w-full accent-primary"
+                  aria-label="포지션 사이즈 (계좌 대비 %)"
+                />
+                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+                  {notionalPctOfAccount.toFixed(0)}%
+                </span>
+              </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[11px] text-muted-foreground">계좌의:</span>
                 {[10, 25, 50, 100].map((pct) => (
@@ -883,6 +907,46 @@ function TradeFormInner({
                   노출 {notionalPctOfAccount.toFixed(1)}%
                 </span>
               </div>
+
+              {/* 실제 USDT 금액 — 수량/노출/마진/잃을 한도 */}
+              {previewQty > 0
+                ? (() => {
+                    const acct = Math.max(Number(accountSize) || 0, 0);
+                    const notionalUsd = acct * (notionalPctOfAccount / 100);
+                    const riskUsd = acct * (Number(riskPct) / 100);
+                    const marginUsd = leverage > 0 ? notionalUsd / leverage : notionalUsd;
+                    const base = symbol.replace("USDT", "");
+                    return (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-md bg-muted/30 px-2.5 py-2 text-[11px] sm:grid-cols-4">
+                        <div>
+                          <div className="text-muted-foreground">수량</div>
+                          <div className="font-mono text-foreground">
+                            {formatNumber(previewQty, { maximumFractionDigits: 4 })} {base}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">노출 금액</div>
+                          <div className="font-mono text-foreground">
+                            {formatCurrency(notionalUsd, currency)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">필요 마진</div>
+                          <div className="font-mono text-foreground">
+                            {formatCurrency(marginUsd, currency)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">잃을 한도</div>
+                          <div className="font-mono text-grade-d">
+                            {formatCurrency(riskUsd, currency)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                : null}
+
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <div className="space-y-1">
                   <Label className="text-[11px]">계좌 ({currency})</Label>
@@ -914,6 +978,12 @@ function TradeFormInner({
                 <Label className="text-xs font-semibold">레버리지</Label>
                 <span className="font-mono text-sm font-bold text-foreground">{leverage}x</span>
               </div>
+              {liqPrice > 0 ? (
+                <div className="flex items-center justify-between rounded bg-muted/30 px-2 py-1 text-[11px]">
+                  <span className="text-muted-foreground">청산가 (대략 · Isolated)</span>
+                  <span className="font-mono text-amber-400">${formatPriceForInput(liqPrice)}</span>
+                </div>
+              ) : null}
               <input
                 type="range"
                 min={1}
@@ -1280,7 +1350,7 @@ function TradeFormInner({
               <div className="flex items-center gap-2 text-grade-d">
                 <AlertTriangle className="h-4 w-4" />
                 <div className="text-sm font-semibold">
-                  D등급 — 거래 금지 권장
+                  D등급 — 강한 자제 (원하면 축소 사이즈로 진입 가능)
                 </div>
               </div>
               <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs leading-relaxed">

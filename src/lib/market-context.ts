@@ -10,14 +10,21 @@ async function jget<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Symbol 현재가 — Spot ticker. Spot이 Vercel에서 더 안정적. */
+/** Symbol 현재가 — 선물(fapi) last price.
+ *  신규/선물전용 코인(LAB·MAGMA 등)은 Binance 현물에 없어 Spot 조회가 404 → null이 된다.
+ *  거래 평가는 무기한 선물 기준이므로 fapi를 1순위로, 실패 시에만 Spot 폴백. */
 async function fetchSymbolPrice(symbol: string): Promise<number | null> {
   try {
-    const t = await jget<{ price: string }>(
-      `${SAPI}/api/v3/ticker/price?symbol=${symbol}`,
-    );
+    const t = await jget<{ price: string }>(`${FAPI}/fapi/v1/ticker/price?symbol=${symbol}`);
     const p = Number(t.price);
-    return Number.isFinite(p) ? p : null;
+    if (Number.isFinite(p) && p > 0) return p;
+  } catch {
+    // fall through to spot
+  }
+  try {
+    const t = await jget<{ price: string }>(`${SAPI}/api/v3/ticker/price?symbol=${symbol}`);
+    const p = Number(t.price);
+    return Number.isFinite(p) && p > 0 ? p : null;
   } catch {
     return null;
   }

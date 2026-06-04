@@ -4,8 +4,8 @@ import type { Grade } from "@/types/trade";
 const STYLES: Record<Grade, { bg: string; ring: string; label: string }> = {
   A: { bg: "bg-grade-a", ring: "ring-grade-a/30", label: "진입 가능" },
   B: { bg: "bg-grade-b", ring: "ring-grade-b/30", label: "조건부 진입" },
-  C: { bg: "bg-grade-c", ring: "ring-grade-c/30", label: "비추천" },
-  D: { bg: "bg-grade-d", ring: "ring-grade-d/30", label: "매매 금지" },
+  C: { bg: "bg-grade-c", ring: "ring-grade-c/30", label: "비추천 · 축소" },
+  D: { bg: "bg-grade-d", ring: "ring-grade-d/30", label: "강한 자제" },
 };
 
 export function GradeBadge({ grade, size = "lg" }: { grade: Grade; size?: "sm" | "lg" }) {

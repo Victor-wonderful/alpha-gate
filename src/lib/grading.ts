@@ -114,9 +114,26 @@ export function gradeTrade(input: TradeInput): GradeResult {
   const score = reasons.reduce((s, r) => s + r.points, 0);
   const grade = score >= 8 ? "A" : score >= 5 ? "B" : score >= 2 ? "C" : "D";
 
+  // D의 주된 원인: 계좌 상태(한도 도달/과노출 = 행동 자제 필요) vs 셋업 약함.
+  // 사이즈 축소로 해결되는 셋업 문제와, "오늘은 멈춤"이 필요한 계좌 문제를 구분.
+  const accountStop = reasons.some(
+    (r) => r.code === "daily_loss_limit" || r.code === "overexposed",
+  );
+  const dCause: GradeResult["dCause"] =
+    grade === "D" ? (accountStop ? "account" : "setup") : undefined;
+
   // ─── 행동 권고 ────────────────────────────────────────
   const actions: string[] = [];
-  if (grade === "D") actions.push("이 거래는 하지 마세요. 조건이 너무 나쁩니다.");
+  if (grade === "D") {
+    if (accountStop)
+      actions.push(
+        "오늘은 보류하세요 — 셋업과 무관하게 누적 손실/노출이 한도입니다. 워치리스트에 저장하고 다음 기회를 노리세요.",
+      );
+    else
+      actions.push(
+        "고위험 자리입니다. 막진 않지만, 굳이 한다면 권장 리스크의 10% 축소 사이즈로만. 더 좋은 진입을 기다리는 걸 권장합니다.",
+      );
+  }
   if (rr > 0 && rr < 1.5) actions.push("손익비가 낮습니다. 목표가를 조정하거나 거래를 취소하세요.");
   if (rr === 0) actions.push("진입가/손절가/목표가 방향이 어긋났습니다. 다시 입력하세요.");
   if (!input.market.not_box_middle)
@@ -132,5 +149,5 @@ export function gradeTrade(input: TradeInput): GradeResult {
   if (actions.length === 0 && grade === "C")
     actions.push("조건이 부족합니다. 눌림 대기를 권장합니다.");
 
-  return { grade, score, reasons, actions, rr };
+  return { grade, score, reasons, actions, rr, dCause };
 }

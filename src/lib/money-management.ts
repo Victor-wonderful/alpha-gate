@@ -26,17 +26,20 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
   const kstMidnight = new Date(Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate(), 0, 0, 0));
   const utcStartOfTodayKST = new Date(kstMidnight.getTime() - 9 * 60 * 60 * 1000);
 
+  // 백테스트 거래는 일일 손실 한도/노출 집계에서 제외 (시뮬이라 실제 자금 관리와 무관).
   const { data: closedToday } = await supabase
     .from("trades")
     .select("result_r")
     .eq("user_id", user.id)
+    .neq("mode", "backtest")
     .not("closed_at", "is", null)
     .gte("closed_at", utcStartOfTodayKST.toISOString());
 
   const { data: openRows } = await supabase
     .from("trades")
-    .select("id, symbol, direction, entry, position_quantity")
+    .select("id, symbol, direction, entry, position_quantity, order_status")
     .eq("user_id", user.id)
+    .neq("mode", "backtest")
     .is("closed_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -47,12 +50,17 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
   );
   const todayClosedCount = closedToday?.length ?? 0;
 
-  const openPositions = (openRows ?? []).map((r) => ({
-    id: r.id as string,
-    symbol: r.symbol as string,
-    direction: r.direction as Direction,
-    positionSize: (Number(r.entry) || 0) * (Number(r.position_quantity) || 0),
-  }));
+  // 미체결/취소/만료 지정가 주문은 실제 보유 포지션이 아니므로 노출에서 제외.
+  // (체결된 포지션 = order_status "filled", 구버전 시장가 = null → 둘 다 포함)
+  const NON_POSITION = new Set(["pending", "canceled", "expired"]);
+  const openPositions = (openRows ?? [])
+    .filter((r) => !NON_POSITION.has((r.order_status as string | null) ?? ""))
+    .map((r) => ({
+      id: r.id as string,
+      symbol: r.symbol as string,
+      direction: r.direction as Direction,
+      positionSize: (Number(r.entry) || 0) * (Number(r.position_quantity) || 0),
+    }));
 
   const totalExposure = openPositions.reduce((s, p) => s + p.positionSize, 0);
   const openExposurePct = accountSize > 0 ? (totalExposure / accountSize) * 100 : 0;

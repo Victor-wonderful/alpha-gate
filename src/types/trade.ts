@@ -118,6 +118,8 @@ export interface GradeResult {
   reasons: ScoreReason[];
   actions: string[];
   rr: number;
+  /** D 등급의 주된 원인 — "account"(계좌 한도/과노출 = 오늘 보류) vs "setup"(약한 자리 = 축소 진입). 문구 분기용. */
+  dCause?: "account" | "setup";
 }
 
 export interface SizingResult {

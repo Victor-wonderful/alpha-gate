@@ -57,9 +57,15 @@ import {
 const GRADE_TEXT: Record<"A" | "B" | "C" | "D", string> = {
   A: "좋은 거래",
   B: "조건부 진입",
-  C: "비추천",
-  D: "거래 금지",
+  C: "비추천 · 축소",
+  D: "강한 자제",
 };
+
+/** 등급 헤드라인 — D는 원인(계좌/셋업)에 따라 다른 문구. "금지" 단정 안 함. */
+function gradeHeadline(g: ReturnType<typeof gradeTrade>): string {
+  if (g.grade === "D") return g.dCause === "account" ? "오늘은 보류" : "고위험 · 최소 사이즈";
+  return GRADE_TEXT[g.grade];
+}
 
 function tradeFormHref(
   symbol: string,
@@ -1085,7 +1091,14 @@ function SimpleScenarioCard({
             <GradeBadge grade={grade.grade} size="sm" />
             <div className="text-right">
               <div className="text-xs text-muted-foreground">매매 등급</div>
-              <div className="text-sm font-semibold">{GRADE_TEXT[grade.grade]}</div>
+              <div className="text-sm font-semibold">{gradeHeadline(grade)}</div>
+              {grade.grade === "D" ? (
+                <div className="text-[11px] text-muted-foreground">
+                  {grade.dCause === "account"
+                    ? "셋업 무관 · 계좌 한도 → 워치리스트 권장"
+                    : "막진 않음 · 권장 리스크 10% 축소로만"}
+                </div>
+              ) : null}
             </div>
             {onToggleWatch && watchState !== undefined ? (
               <button

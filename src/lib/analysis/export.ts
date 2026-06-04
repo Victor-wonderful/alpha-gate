@@ -5,8 +5,8 @@ import { STRATEGY_LABELS, type StrategyResult } from "./strategy";
 const GRADE_LABEL: Record<string, string> = {
   A: "좋은 거래 (A)",
   B: "조건부 진입 (B)",
-  C: "비추천 (C)",
-  D: "거래 금지 (D)",
+  C: "비추천 · 축소 (C)",
+  D: "강한 자제 (D)",
 };
 
 export function buildAnalysisMarkdown(args: {

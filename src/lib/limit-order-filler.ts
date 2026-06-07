@@ -128,12 +128,19 @@ export async function checkAndFillLimitOrders(): Promise<number> {
 
     const limitPrice = Number(order.limit_price);
     const direction = order.direction as "long" | "short";
+    const kind = (order.order_kind as "limit" | "stop" | null) ?? "limit";
 
     // 체결 조건 판단
+    //  LIMIT (되돌림 대기): 롱 = 현재가 ≤ 트리거, 숏 = 현재가 ≥ 트리거
+    //  STOP  (돌파 추격):   롱 = 현재가 ≥ 트리거, 숏 = 현재가 ≤ 트리거
     const shouldFill =
-      direction === "long"
-        ? currentPrice <= limitPrice
-        : currentPrice >= limitPrice;
+      kind === "stop"
+        ? direction === "long"
+          ? currentPrice >= limitPrice
+          : currentPrice <= limitPrice
+        : direction === "long"
+          ? currentPrice <= limitPrice
+          : currentPrice >= limitPrice;
 
     if (!shouldFill) continue;
 
@@ -167,7 +174,7 @@ export async function checkAndFillLimitOrders(): Promise<number> {
       .update({
         entry_actual: currentPrice,
         order_status: "filled",
-        order_type: "limit",
+        order_type: kind,
       })
       .eq("id", order.trade_id);
 

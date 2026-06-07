@@ -207,7 +207,10 @@ Strategy Agent가 메인 전략 1개를 골랐어도, 같은 시장 상황에서
 
 entryType 의미:
 - "immediate": 지금 바로 또는 분 단위 안에 진입 가능. trigger는 단순 확인 ("현재가 부근에서 종가 확정" 등).
-- "pending": 가격이 entryZone까지 와야 함. trigger에 "가격이 $X까지 내려오면" 같은 도달 조건 명시 필수.
+- "pending": 가격이 entryZone까지 와야 함. trigger에 도달 조건 명시 필수. pending은 두 방향 모두 가능하다:
+  · 되돌림 대기(LIMIT형): 진입가가 현재가 대비 "유리한 쪽"(롱은 현재가 아래, 숏은 현재가 위). trigger 예: "가격이 $X까지 내려오면(롱)/올라오면(숏) 리테스트 진입".
+  · 돌파 추격(STOP형): 진입가가 현재가 대비 "불리한 쪽"(롱은 현재가 위, 숏은 현재가 아래). 저항 돌파/지지 이탈을 확인하고 추격할 때 사용. trigger 예: "가격이 저항 $X를 종가로 돌파하면 롱 / 지지 $X를 깨면 숏".
+  코드가 진입가와 현재가의 방향을 보고 LIMIT/STOP 주문을 자동 결정하므로, 너는 진입가만 구조에 맞게 정확히 내놓으면 된다.
 
 위 한도를 넘으면 그 시나리오는 "지금 의미 없음" → 빈 scenarios로 가거나 다른 셋업 찾아라. 절대로 현재가에서 10% 떨어진 진입가를 스캘핑/데이 시나리오로 내놓지 마라. 사용자가 진입을 못 한다.
 
@@ -392,6 +395,9 @@ export interface AnalysisReport {
      *  selected by Strategy Agent if not provided (backward compat). */
     strategyHint?: StrategyId;
     entryType?: "immediate" | "pending";
+    /** 거래소 주문 유형 힌트 — entryType + (진입가 vs 현재가) 방향으로 코드가 산출.
+     *  "market": 즉시 진입. "limit": 되돌림 대기(진입가가 유리한 쪽). "stop": 돌파 추격(불리한 쪽). */
+    orderHint?: "market" | "limit" | "stop";
     qualityIssues?: string[];
     entries?: ScenarioEntry[];
     trigger: string;
@@ -611,9 +617,24 @@ function enforceEntryProximity(report: AnalysisReport, snapshot: AnalysisSnapsho
 
     const requested = s.entryType;
     const finalType = requested === "pending" || requested === "immediate" ? requested : resolved;
+
+    // 주문 유형 힌트 — 진입가가 현재가 대비 어느 방향인지로 limit/stop 결정.
+    //  immediate → market.
+    //  pending + 진입가가 "유리한 쪽"(롱은 현재가 아래, 숏은 현재가 위) → limit(되돌림 대기).
+    //  pending + 진입가가 "불리한 쪽"(롱은 현재가 위, 숏은 현재가 아래) → stop(돌파 추격).
+    let orderHint: "market" | "limit" | "stop";
+    if (finalType === "immediate") {
+      orderHint = "market";
+    } else {
+      const isLong = s.direction === "long";
+      const entryFavorable = isLong ? mid <= current : mid >= current;
+      orderHint = entryFavorable ? "limit" : "stop";
+    }
+
     kept.push({
       ...s,
       entryType: finalType,
+      orderHint,
       entries: processedEntries,
       qualityIssues: issues.length ? issues : undefined,
     });

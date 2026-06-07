@@ -133,13 +133,16 @@ export default async function JournalListPage({
   const games = (gamesRes.data ?? []) as GameRow[];
 
   const trades = (tradesRaw ?? []) as (TradeRow & {
-    order_type?: "market" | "limit" | null;
+    order_type?: "market" | "limit" | "stop" | null;
     order_status?: "pending" | "filled" | "canceled" | "expired" | null;
     limit_price?: number | null;
   })[];
-  // Pending limit orders: waiting for price to reach limit_price. Not yet a real position.
+  // Pending limit/stop orders: waiting for price to reach the trigger. Not yet a real position.
   const pendingLimits = trades.filter(
-    (t) => !t.closed_at && t.order_status === "pending" && t.order_type === "limit",
+    (t) =>
+      !t.closed_at &&
+      t.order_status === "pending" &&
+      (t.order_type === "limit" || t.order_type === "stop"),
   );
   const open = trades.filter(
     (t) => !t.closed_at && t.order_status !== "pending" && t.order_status !== "canceled" && t.order_status !== "expired",
@@ -539,7 +542,7 @@ export default async function JournalListPage({
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-            대기 중 지정가 주문 ({pendingLimits.length})
+            대기 중 주문 ({pendingLimits.length})
           </h2>
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
@@ -548,7 +551,8 @@ export default async function JournalListPage({
                   <th className="px-4 py-2 text-left">등록 시각</th>
                   <th className="px-4 py-2 text-left">코인</th>
                   <th className="px-4 py-2 text-left">방향</th>
-                  <th className="px-4 py-2 text-right">지정가</th>
+                  <th className="px-4 py-2 text-left">유형</th>
+                  <th className="px-4 py-2 text-right">트리거가</th>
                   <th className="px-4 py-2 text-right">손절</th>
                   <th className="px-4 py-2 text-right">목표</th>
                   <th className="px-4 py-2 text-right">현재가</th>
@@ -576,6 +580,9 @@ export default async function JournalListPage({
                         >
                           {t.direction === "long" ? "롱" : "숏"}
                         </span>
+                      </td>
+                      <td className="px-4 py-2 text-[11px] text-muted-foreground">
+                        {t.order_type === "stop" ? "역지정가" : "지정가"}
                       </td>
                       <td className="px-4 py-2 text-right font-mono">{formatNumber(limit)}</td>
                       <td className="px-4 py-2 text-right font-mono text-grade-d">{formatNumber(Number(t.stop))}</td>

@@ -272,6 +272,10 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                           <span className="rounded bg-sky-500/10 px-1 py-0.5 text-[10px] text-sky-400">
                             지정
                           </span>
+                        ) : t.order_type === "stop" ? (
+                          <span className="rounded bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-400">
+                            역지정
+                          </span>
                         ) : (
                           <span className="rounded bg-muted/40 px-1 py-0.5 text-[10px] text-muted-foreground">
                             시장

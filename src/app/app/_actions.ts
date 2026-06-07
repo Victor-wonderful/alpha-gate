@@ -178,13 +178,14 @@ export async function saveTradeAction(args: {
   leverage?: number;
   forecast?: unknown; // Monte Carlo result snapshot at save time (live mode)
   /** 'market' (default): execute immediately at current price.
-   *  'limit': park in pending_limit_orders and wait for price to reach input.entry. */
-  orderType?: "market" | "limit";
+   *  'limit': 되돌림 대기 — 가격이 input.entry로 돌아오면 체결(진입가가 유리한 쪽).
+   *  'stop': 돌파 추격 — 가격이 input.entry를 통과하면 체결(진입가가 불리한 쪽). */
+  orderType?: "market" | "limit" | "stop";
   /** D 등급 거래를 사용자가 확인 모달로 override 한 경우 true. */
   gradeOverride?: boolean;
   /** 백테스트 모드 — ISO 시각. 있으면 라이브 가드 스킵 + simulator 자동 실행 후 결과 즉시 채움. */
   backtestAt?: string;
-}): Promise<{ id?: string; error?: string; orderType?: "market" | "limit"; status?: "filled" | "pending" | "closed" }> {
+}): Promise<{ id?: string; error?: string; orderType?: "market" | "limit" | "stop"; status?: "filled" | "pending" | "closed" }> {
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -236,30 +237,42 @@ export async function saveTradeAction(args: {
     };
   }
 
-  // ── 지정가 주문 분기 ───────────────────────────────────────────────────
-  if (orderType === "limit") {
+  // ── 지정가(LIMIT) / 역지정가(STOP) 주문 분기 ──────────────────────────────
+  if (orderType === "limit" || orderType === "stop") {
+    const kindLabel = orderType === "stop" ? "역지정가" : "지정가";
     if (!input.entry || input.entry <= 0) {
-      return { error: "지정가는 0보다 커야 합니다." };
+      return { error: `${kindLabel}는 0보다 커야 합니다.` };
     }
-    // Check current market: limit makes no sense if price is already past
-    // entry in the favorable direction (would fill instantly = use market instead).
+    // 트리거가가 현재가 대비 올바른 쪽에 있는지 검증.
+    //  LIMIT(되돌림): 롱은 현재가 아래, 숏은 현재가 위여야 유효(즉시 체결 방지).
+    //  STOP(돌파):    롱은 현재가 위,   숏은 현재가 아래여야 유효(즉시 체결 방지).
     try {
       const ticker = await fetchTicker24h(input.symbol);
       const px = ticker.lastPrice;
       if (Number.isFinite(px) && px > 0) {
-        // Long limit buy below market; short limit sell above market.
-        if (input.direction === "long" && px <= input.entry) {
-          return { error: `현재가($${px.toFixed(2)})가 이미 지정가($${input.entry.toFixed(2)}) 이하입니다. 시장가로 진입하세요.` };
+        const isLong = input.direction === "long";
+        if (orderType === "limit") {
+          if (isLong && px <= input.entry) {
+            return { error: `현재가($${px.toFixed(2)})가 이미 지정가($${input.entry.toFixed(2)}) 이하입니다. 시장가 또는 역지정가(돌파)로 진입하세요.` };
+          }
+          if (!isLong && px >= input.entry) {
+            return { error: `현재가($${px.toFixed(2)})가 이미 지정가($${input.entry.toFixed(2)}) 이상입니다. 시장가 또는 역지정가(돌파)로 진입하세요.` };
+          }
+        } else {
+          // STOP: 트리거가가 현재가에 비해 잘못된 쪽이면 이미 통과한 것.
+          if (isLong && px >= input.entry) {
+            return { error: `현재가($${px.toFixed(2)})가 이미 역지정가 트리거($${input.entry.toFixed(2)})를 넘었습니다. 시장가로 진입하거나 트리거를 위로 옮기세요.` };
+          }
+          if (!isLong && px <= input.entry) {
+            return { error: `현재가($${px.toFixed(2)})가 이미 역지정가 트리거($${input.entry.toFixed(2)}) 아래입니다. 시장가로 진입하거나 트리거를 아래로 옮기세요.` };
+          }
         }
-        if (input.direction === "short" && px >= input.entry) {
-          return { error: `현재가($${px.toFixed(2)})가 이미 지정가($${input.entry.toFixed(2)}) 이상입니다. 시장가로 진입하세요.` };
+        // 손절-진입 관계는 LIMIT/STOP 공통: 롱은 진입가가 손절가 위, 숏은 아래.
+        if (isLong && input.entry <= input.stop) {
+          return { error: `롱 ${kindLabel}는 손절가보다 위에 있어야 합니다.` };
         }
-        // Also reject limits placed past stop (= guaranteed instant loss if filled)
-        if (input.direction === "long" && input.entry <= input.stop) {
-          return { error: "롱 지정가는 손절가보다 위에 있어야 합니다." };
-        }
-        if (input.direction === "short" && input.entry >= input.stop) {
-          return { error: "숏 지정가는 손절가보다 아래에 있어야 합니다." };
+        if (!isLong && input.entry >= input.stop) {
+          return { error: `숏 ${kindLabel}는 손절가보다 아래에 있어야 합니다.` };
         }
       }
     } catch {
@@ -290,6 +303,7 @@ export async function saveTradeAction(args: {
           trigger: input.trigger,
           marketCtx: input.marketCtx,
           limitOrder: true,
+          orderKind: orderType,
         },
         pre_grade: grade.grade,
         pre_score: grade.score,
@@ -303,7 +317,7 @@ export async function saveTradeAction(args: {
         fees_pct: PAPER_FEES_PCT,
         paper_margin: null,
         is_paper: true,
-        order_type: "limit",
+        order_type: orderType,
         limit_price: input.entry,
         order_status: "pending",
         grade_override: !!args.gradeOverride,
@@ -311,7 +325,7 @@ export async function saveTradeAction(args: {
       .select("id")
       .single();
 
-    if (error || !data) return { error: error?.message ?? "지정가 주문 생성 실패" };
+    if (error || !data) return { error: error?.message ?? `${kindLabel} 주문 생성 실패` };
 
     const { error: ploErr } = await supabase.from("pending_limit_orders").insert({
       user_id: user.id,
@@ -323,15 +337,16 @@ export async function saveTradeAction(args: {
       leverage: lev,
       stop: input.stop,
       target: input.target,
+      order_kind: orderType,
     });
     if (ploErr) {
       await supabase.from("trades").delete().eq("id", data.id);
-      return { error: `지정가 주문 등록 실패: ${ploErr.message}` };
+      return { error: `${kindLabel} 주문 등록 실패: ${ploErr.message}` };
     }
 
     revalidatePath("/app/journal");
     revalidatePath("/app/dashboard");
-    return { id: data.id, orderType: "limit", status: "pending" };
+    return { id: data.id, orderType, status: "pending" };
   }
 
   // ── 시장가 주문 ───────────────────────────────────────────────────────

@@ -189,7 +189,7 @@ function TradeFormInner({
     return q === "short" ? "short" : "long";
   });
   const [timeframe, setTimeframe] = useState<Timeframe>("1h");
-  const [orderType, setOrderType] = useState<"market" | "limit">("market");
+  const [orderType, setOrderType] = useState<"market" | "limit" | "stop">("market");
   const [orderTypeTouched, setOrderTypeTouched] = useState(false);
   const [entry, setEntry] = useState(() => params.get("entry") ?? "");
   const [stop, setStop] = useState(() => params.get("stop") ?? "");
@@ -246,13 +246,20 @@ function TradeFormInner({
     });
   }, [aiMode]);
 
-  // AI 모드 + 시나리오의 entryType 기반 주문 유형 기본값 자동 설정.
-  // - pending: 가격이 entryZone까지 와야 진입 → 지정가 대기가 자연스러움
-  // - immediate: 지금 바로 진입 가능 → 시장가
+  // AI 모드 + 시나리오 기반 주문 유형 기본값 자동 설정.
+  // - orderHint(코드가 방향까지 보고 산출): "market"/"limit"/"stop" 우선 사용
+  //   · limit = 되돌림 대기(진입가가 현재가 대비 유리한 쪽)
+  //   · stop  = 돌파 추격(진입가가 불리한 쪽 — 가격이 통과하면 진입)
+  // - orderHint 없으면(구버전 분석) entryType으로 폴백: pending→limit, immediate→market
   // 사용자가 토글을 한 번이라도 만지면(orderTypeTouched) 더 이상 자동 변경 안 함.
   useEffect(() => {
     if (!aiMode || !activeScenario || orderTypeTouched) return;
-    setOrderType(activeScenario.entryType === "pending" ? "limit" : "market");
+    const hint = activeScenario.orderHint;
+    if (hint === "market" || hint === "limit" || hint === "stop") {
+      setOrderType(hint);
+    } else {
+      setOrderType(activeScenario.entryType === "pending" ? "limit" : "market");
+    }
   }, [aiMode, activeScenario, orderTypeTouched]);
 
   // 시장 컨텍스트: 심볼 변경 시 재fetch
@@ -435,8 +442,13 @@ function TradeFormInner({
       if (backtestAt) {
         toast.success("백테스트 거래 저장 — 자동 시뮬 결과가 저널에 기록됐습니다.", { duration: 6000 });
         router.push(`/app/journal?view=trades`);
-      } else if (res.orderType === "limit") {
-        toast.success("지정가 주문이 등록됐습니다. 가격 도달 시 자동 체결됩니다.", { duration: 6000 });
+      } else if (res.orderType === "limit" || res.orderType === "stop") {
+        toast.success(
+          res.orderType === "stop"
+            ? "역지정가 주문이 등록됐습니다. 트리거 돌파 시 자동 체결됩니다."
+            : "지정가 주문이 등록됐습니다. 가격 도달 시 자동 체결됩니다.",
+          { duration: 6000 },
+        );
         router.push(`/app/journal`);
       } else {
         toast.success("가상 트레이딩에 진입했습니다.");
@@ -495,7 +507,7 @@ function TradeFormInner({
    *  - 시장가: AI 시나리오의 entry/stop/target를 현재가 기준 동일 delta로
    *    평행이동(R:R 그대로 보존). 즉시 체결되면서도 손익비는 유지.
    *  - 지정가: 백업해둔 AI 원래 값(entry/stop/target)으로 복원. */
-  function changeOrderType(next: "market" | "limit") {
+  function changeOrderType(next: "market" | "limit" | "stop") {
     setOrderTypeTouched(true);
     if (next === orderType) return;
     if (next === "market") {
@@ -527,6 +539,22 @@ function TradeFormInner({
     setOrderType(next);
   }
 
+  /** 지정가가 무효(현재가가 이미 통과)일 때: 손절·목표는 AI가 잡은 구조 그대로 두고
+   *  진입가만 현재가로 바꿔 시장가 진입으로 전환한다. 평행이동(R:R 보존)이 아니라
+   *  "구조 유지 + 진입가만 현재가" → 손익비가 실제로 재계산된다. */
+  function switchToMarketAtCurrent() {
+    if (!currentPrice || currentPrice <= 0) return;
+    setOrderTypeTouched(true);
+    marketSyncedRef.current = true; // 자동 재동기화(평행이동) 스킵
+    if (entry) setLimitEntry(entry);
+    if (stop) setLimitStop(stop);
+    if (target) setLimitTarget(target);
+    setEntry(formatPriceForInput(currentPrice));
+    // 손절/목표는 그대로 유지 (구조 기반 레벨 보존)
+    setOrderType("market");
+    toast.success("시장가로 전환했습니다. 손절·목표는 유지, 손익비는 현재가 기준으로 재계산됩니다.", { duration: 5000 });
+  }
+
   // 시장가 모드: 현재가 도착 시 진입가를 현재가로 맞추고, 손절/목표도 같은 delta로
   // 평행이동(R:R 보존). AI 시나리오가 곧장 시장가로 로드된 경우에도 entry/손절/목표가
   // 어긋나지 않도록 심볼당 1회 동기화한다. (이후엔 사용자가 자유롭게 수정 가능)
@@ -549,9 +577,9 @@ function TradeFormInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPrice, orderType]);
 
-  // 지정가 모드에서 사용자가 직접 수정하면 limit 백업값도 동기화.
+  // 지정가/역지정가 모드에서 사용자가 직접 수정하면 백업값도 동기화(시장가 토글 복원용).
   useEffect(() => {
-    if (orderType !== "limit") return;
+    if (orderType === "market") return;
     if (entry) setLimitEntry(entry);
     if (stop) setLimitStop(stop);
     if (target) setLimitTarget(target);
@@ -565,6 +593,42 @@ function TradeFormInner({
     entryNumV > 0 && targetNumV > 0
       ? ((targetNumV - entryNumV) / entryNumV) * 100
       : 0;
+
+  // ── 대기 주문 무효(현재가가 이미 트리거 레벨 통과) 감지 + 현재가 진입 R:R 재계산 ──
+  // LIMIT(되돌림): 롱은 현재가 아래·숏은 위여야 유효 → 반대면 즉시 체결(무효).
+  // STOP(돌파):    롱은 현재가 위·숏은 아래여야 유효 → 반대면 트리거를 이미 지난 것(무효).
+  const cp = currentPrice ?? 0;
+  const isLongDir = stopNumV > 0 ? stopNumV < entryNumV : targetNumV > entryNumV;
+  const orderCrossed =
+    (orderType === "limit" || orderType === "stop") &&
+    cp > 0 &&
+    entryNumV > 0 &&
+    (orderType === "limit"
+      ? isLongDir
+        ? cp <= entryNumV
+        : cp >= entryNumV
+      : isLongDir
+        ? cp >= entryNumV
+        : cp <= entryNumV);
+  const orderKindLabel = orderType === "stop" ? "역지정가" : "지정가";
+  // 통과 방향 문구: LIMIT은 진입가 아래/위로 빠짐, STOP은 위/아래로 돌파.
+  const crossedDirWord =
+    orderType === "stop"
+      ? isLongDir
+        ? "위로"
+        : "아래로"
+      : isLongDir
+        ? "아래로"
+        : "위로";
+  // 현재가로 진입했을 때(손절·목표 유지)의 손익비.
+  const mktRisk = cp > 0 && stopNumV > 0 ? Math.abs(cp - stopNumV) : 0;
+  const mktReward = cp > 0 && targetNumV > 0 ? Math.abs(targetNumV - cp) : 0;
+  const mktRR = mktRisk > 0 ? mktReward / mktRisk : 0;
+  // 현재가가 손절/목표를 이미 통과했는지 (시장가로도 진입 불가).
+  const mktStopPassed =
+    cp > 0 && stopNumV > 0 && (isLongDir ? cp <= stopNumV : cp >= stopNumV);
+  const mktTargetPassed =
+    cp > 0 && targetNumV > 0 && (isLongDir ? cp >= targetNumV : cp <= targetNumV);
 
   // 수수료 가드: 손절폭이 수수료×3 미만이면 진입 차단(저장 시). 미리 인라인 경고로 표시.
   const absStopPct = Math.abs(stopPct);
@@ -806,38 +870,48 @@ function TradeFormInner({
                 <span className="text-[10px] text-muted-foreground">
                   {orderType === "market"
                     ? "현재가로 즉시 체결"
-                    : "지정가 도달 시 자동 체결 (24시간 유효)"}
+                    : orderType === "stop"
+                      ? "트리거 돌파 시 자동 체결 (24시간 유효)"
+                      : "지정가 도달 시 자동 체결 (24시간 유효)"}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-background/40 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => changeOrderType("market")}
-                  className={cn(
-                    "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
-                    orderType === "market"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-                  )}
-                >
-                  시장가
-                </button>
-                <button
-                  type="button"
-                  onClick={() => changeOrderType("limit")}
-                  className={cn(
-                    "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
-                    orderType === "limit"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-                  )}
-                >
-                  지정가
-                </button>
+              <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background/40 p-0.5">
+                {([
+                  { key: "market", label: "시장가" },
+                  { key: "limit", label: "지정가" },
+                  { key: "stop", label: "역지정가" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => changeOrderType(opt.key)}
+                    className={cn(
+                      "rounded px-2 py-1.5 text-xs font-semibold transition-colors",
+                      orderType === opt.key
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
+              {orderType === "stop" ? (
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  역지정가(STOP)는 가격이 트리거를 <span className="font-semibold">{isLongDir ? "위로 돌파" : "아래로 이탈"}</span>할 때 진입하는 돌파 추종 주문입니다.
+                </p>
+              ) : null}
               {aiMode && activeScenario && !orderTypeTouched ? (
                 <p className="text-[10px] text-muted-foreground">
-                  AI 시나리오의 진입 유형이 <span className="font-semibold">{activeScenario.entryType === "pending" ? "대기 진입(pending)" : "즉시 진입(immediate)"}</span>이라 {orderType === "limit" ? "지정가" : "시장가"}로 자동 설정됐습니다. 필요하면 직접 바꿀 수 있어요.
+                  AI 시나리오 기준{" "}
+                  <span className="font-semibold">
+                    {orderType === "stop"
+                      ? "돌파 추격(역지정가)"
+                      : orderType === "limit"
+                        ? "되돌림 대기(지정가)"
+                        : "즉시 진입(시장가)"}
+                  </span>
+                  로 자동 설정됐습니다. 필요하면 직접 바꿀 수 있어요.
                 </p>
               ) : null}
             </div>
@@ -865,7 +939,7 @@ function TradeFormInner({
                 </div>
               ) : (
                 <PriceRow
-                  label="지정가"
+                  label={orderType === "stop" ? "트리거가" : "지정가"}
                   value={entry}
                   onChange={setEntry}
                   accent={ENTRY_ACCENT}
@@ -899,6 +973,75 @@ function TradeFormInner({
                 }
               />
             </div>
+
+            {/* 대기 주문(지정가/역지정가) 무효 경고 — 현재가가 이미 트리거를 통과한 경우 */}
+            {orderCrossed ? (
+              <div
+                className={cn(
+                  "space-y-2 rounded-md border p-3 text-xs",
+                  mktStopPassed || mktTargetPassed
+                    ? "border-grade-d/40 bg-grade-d/10"
+                    : "border-amber-500/40 bg-amber-500/10",
+                )}
+              >
+                <p className="font-semibold text-foreground">
+                  ⚠️ {orderKindLabel}가 무효입니다 — 현재가($
+                  {cp.toLocaleString()})가 이미 {orderKindLabel}($
+                  {entryNumV.toLocaleString()})를 {crossedDirWord} 통과했습니다.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  {orderType === "stop"
+                    ? `${isLongDir ? "롱" : "숏"} 역지정가는 가격이 ${isLongDir ? "올라가" : "내려가"} 트리거를 돌파할 때 진입하는 주문입니다. 이미 통과해 지금 걸면 즉시 체결됩니다.`
+                    : `${isLongDir ? "롱" : "숏"} 지정가는 가격이 ${isLongDir ? "내려와" : "올라와"} 도달하길 기다리는 주문입니다. 이미 통과해 거래소에 걸어도 즉시 체결(시장가와 동일)됩니다.`}
+                </p>
+
+                {mktStopPassed ? (
+                  <p className="font-medium text-grade-d">
+                    현재가가 손절가($
+                    {stopNumV.toLocaleString()})도 통과했습니다. <span className="font-semibold">진입 거부</span> — 새 셋업을 기다리세요.
+                  </p>
+                ) : mktTargetPassed ? (
+                  <p className="font-medium text-grade-d">
+                    현재가가 목표가($
+                    {targetNumV.toLocaleString()})를 이미 통과했습니다. <span className="font-semibold">추격 금지</span> — 목표를 다시 잡거나 포기하세요.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between rounded bg-background/40 px-2 py-1.5">
+                      <span className="text-muted-foreground">
+                        현재가로 진입 시 손익비 (손절·목표 유지)
+                      </span>
+                      <span
+                        className={cn(
+                          "font-mono font-bold tabular-nums",
+                          mktRR >= 1.5 ? "text-grade-a" : "text-grade-d",
+                        )}
+                      >
+                        {mktRR.toFixed(2)} R
+                      </span>
+                    </div>
+                    {mktRR < 1.5 ? (
+                      <p className="text-grade-d">
+                        목표가가 너무 가까워 손익비가 나오지 않습니다. 시장가로 들어가도 불리한 거래입니다 — 목표 재조정 또는 포기를 권장합니다.
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        손익비는 유효합니다. 시장가로 전환해 현재가에 진입할 수 있습니다.
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={switchToMarketAtCurrent}
+                    >
+                      시장가로 전환 (진입가 → 현재가, 손익비 {mktRR.toFixed(2)}R)
+                    </Button>
+                  </>
+                )}
+              </div>
+            ) : null}
 
             {/* Leverage slider — 거래소 순서대로 사이즈 위에 배치 */}
             <div className="space-y-2 rounded-md border border-border bg-background/30 p-3">
@@ -1405,14 +1548,20 @@ function TradeFormInner({
           {pending
             ? orderType === "limit"
               ? "지정가 주문 등록 중..."
-              : "진입 처리 중..."
+              : orderType === "stop"
+                ? "역지정가 주문 등록 중..."
+                : "진입 처리 중..."
             : orderType === "limit"
               ? aiMode
                 ? "이 계획으로 지정가 주문"
                 : "지정가 주문 등록"
-              : aiMode
-                ? "이 계획으로 가상 진입"
-                : "가상 진입"}
+              : orderType === "stop"
+                ? aiMode
+                  ? "이 계획으로 역지정가 주문"
+                  : "역지정가 주문 등록"
+                : aiMode
+                  ? "이 계획으로 가상 진입"
+                  : "가상 진입"}
         </Button>
         {aiMode ? (
           <p className="text-center text-[11px] text-muted-foreground">

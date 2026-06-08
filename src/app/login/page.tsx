@@ -67,7 +67,7 @@ function LoginInner() {
     }
 
     setLoading(true);
-    const { error } =
+    const { data, error } =
       mode === "signin"
         ? await supabase.auth.signInWithPassword({ email, password })
         : await supabase.auth.signUp({ email, password });
@@ -77,7 +77,15 @@ function LoginInner() {
       return;
     }
     if (mode === "signup") {
-      toast.success("가입 확인 이메일을 보냈습니다. 메일함을 확인해주세요.");
+      // 이메일 확인이 꺼져 있으면 가입 즉시 세션이 생긴다 → 바로 앱으로.
+      // 이메일 확인이 켜져 있으면 session 이 없다 → 확인 메일 안내.
+      if (data.session) {
+        toast.success("가입이 완료됐습니다. 환영합니다!");
+        router.replace(next);
+        router.refresh();
+      } else {
+        toast.success("가입 확인 이메일을 보냈습니다. 메일함을 확인해주세요.");
+      }
     } else {
       router.replace(next);
       router.refresh();

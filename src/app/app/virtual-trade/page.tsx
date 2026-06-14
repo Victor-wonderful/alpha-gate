@@ -70,7 +70,7 @@ export default async function VirtualTradePage({
   // 미체결 지정가 주문 조회
   const { data: openOrders } = await supabase
     .from("pending_limit_orders")
-    .select("id, symbol, direction, limit_price, quantity, leverage, stop, target, expires_at, created_at")
+    .select("id, symbol, direction, limit_price, quantity, leverage, stop, target, expires_at, created_at, order_kind")
     .eq("user_id", user.id)
     .eq("status", "open")
     .order("created_at", { ascending: false })
@@ -85,6 +85,7 @@ export default async function VirtualTradePage({
     leverage: Number(o.leverage),
     stop: o.stop != null ? Number(o.stop) : null,
     target: o.target != null ? Number(o.target) : null,
+    kind: (o.order_kind === "stop" ? "stop" : "limit") as "limit" | "stop",
     expiresAt: o.expires_at as string,
     createdAt: o.created_at as string,
   }));

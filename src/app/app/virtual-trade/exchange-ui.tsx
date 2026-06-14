@@ -80,6 +80,7 @@ type PendingOrder = {
   leverage: number;
   stop: number | null;
   target: number | null;
+  kind: "limit" | "stop";
   expiresAt: string;
   createdAt: string;
 };
@@ -1088,7 +1089,7 @@ function OrderPanel({
 }) {
   const isSpot = marketType === "spot";
   const [direction, setDirection] = useState<"long" | "short">("long");
-  const [orderType, setOrderType] = useState<"limit" | "market" | "tpsl">("market");
+  const [orderType, setOrderType] = useState<"limit" | "market" | "stop" | "tpsl">("market");
   const [leverage, setLeverage] = useState(5);
 
   // Spot 모드 진입 시 강제 정렬: 매수만 + 1x.
@@ -1155,6 +1156,20 @@ function OrderPanel({
       toast.error("지정가를 입력하세요.");
       return;
     }
+    if (orderType === "stop") {
+      if (!price || Number(price) <= 0) {
+        toast.error("트리거가를 입력하세요.");
+        return;
+      }
+      if (lastPrice && direction === "long" && Number(price) <= lastPrice) {
+        toast.error("역지정가 롱은 트리거가가 현재가보다 높아야 합니다.");
+        return;
+      }
+      if (lastPrice && direction === "short" && Number(price) >= lastPrice) {
+        toast.error("역지정가 숏은 트리거가가 현재가보다 낮아야 합니다.");
+        return;
+      }
+    }
     if (orderType === "market" && margin > wallet.available) {
       toast.error(`가상 잔액 부족 — 필요 $${margin.toFixed(2)}, 가능 $${wallet.available.toFixed(2)}`);
       return;
@@ -1167,8 +1182,8 @@ function OrderPanel({
         leverage,
         stop: stop ? Number(stop) : undefined,
         target: target ? Number(target) : undefined,
-        orderType: orderType === "limit" ? "limit" : "market",
-        limitPrice: orderType === "limit" ? Number(price) : undefined,
+        orderType: orderType === "limit" ? "limit" : orderType === "stop" ? "stop" : "market",
+        limitPrice: orderType === "limit" || orderType === "stop" ? Number(price) : undefined,
         marketType,
       });
       if (!r.ok) {
@@ -1178,6 +1193,10 @@ function OrderPanel({
       if (r.orderType === "limit") {
         toast.success(
           `지정가 주문 등록 · ${direction === "long" ? "롱" : "숏"} ${symbol} @ $${formatNumber(r.limitPrice ?? 0)} · 24시간 내 미체결 시 만료`,
+        );
+      } else if (r.orderType === "stop") {
+        toast.success(
+          `역지정가 주문 등록 · ${direction === "long" ? "롱" : "숏"} ${symbol} @ 트리거 $${formatNumber(r.limitPrice ?? 0)} · 도달 시 추격 진입`,
         );
       } else {
         toast.success(`${direction === "long" ? "롱" : "숏"} 진입 완료 · 체결가 $${formatNumber(r.fillPrice ?? 0)} · 마진 $${formatNumber(r.margin ?? 0)}`);
@@ -1190,7 +1209,7 @@ function OrderPanel({
   }
 
   // Effective price for calc (limit이면 입력가, market이면 lastPrice)
-  const effectivePrice = orderType === "limit" && price ? Number(price) : lastPrice;
+  const effectivePrice = (orderType === "limit" || orderType === "stop") && price ? Number(price) : lastPrice;
 
   // Recompute derived metrics with effective price
   const _qtyNum = Number(qty) || 0;
@@ -1265,7 +1284,7 @@ function OrderPanel({
 
         {/* 주문 유형 sub-tab */}
         <div className="flex items-center gap-4 border-b border-border/40 pb-1.5">
-          {(["limit", "market", "tpsl"] as const).map((t) => (
+          {(["limit", "market", "stop", "tpsl"] as const).map((t) => (
             <button
               key={t}
               type="button"
@@ -1287,7 +1306,7 @@ function OrderPanel({
                     : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {t === "limit" ? "지정가" : t === "market" ? "시장가" : "TP/SL"}
+              {t === "limit" ? "지정가" : t === "market" ? "시장가" : t === "stop" ? "역지정가" : "TP/SL"}
               {(t === "tpsl" ? tpslEnabled : orderType === t) ? (
                 <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-primary" />
               ) : null}
@@ -1303,7 +1322,7 @@ function OrderPanel({
           </span>
         </div>
 
-        {/* Price (Limit일 때만 활성) */}
+        {/* Price — 지정가/역지정가는 입력, 시장가는 현재가 표시 */}
         {orderType === "limit" ? (
           <div>
             <div className="mb-1 flex items-center justify-between text-[10px]">
@@ -1317,6 +1336,27 @@ function OrderPanel({
               placeholder={lastPrice ? String(lastPrice.toFixed(2)) : "—"}
               className="font-mono"
             />
+          </div>
+        ) : orderType === "stop" ? (
+          <div>
+            <div className="mb-1 flex items-center justify-between text-[10px]">
+              <span className="text-muted-foreground">트리거가 (vUSDT)</span>
+              <span className="text-muted-foreground/60">
+                {direction === "long" ? "현재가 위로 돌파 시 진입" : "현재가 아래로 이탈 시 진입"}
+              </span>
+            </div>
+            <Input
+              type="number"
+              inputMode="decimal"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder={lastPrice ? String(lastPrice.toFixed(2)) : "—"}
+              className="font-mono"
+            />
+            <p className="mt-1 text-[9px] text-muted-foreground/70">
+              역지정가 {direction === "long" ? "롱" : "숏"} — 트리거가는 현재가보다{" "}
+              {direction === "long" ? "높아야" : "낮아야"} 합니다 (돌파 추격).
+            </p>
           </div>
         ) : (
           <div>
@@ -1607,7 +1647,7 @@ function PositionsTabs({
           )
         ) : tab === "orders" ? (
           pendingOrders.length === 0 ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">미체결 지정가 주문이 없습니다.</div>
+            <div className="py-6 text-center text-xs text-muted-foreground">미체결 주문이 없습니다.</div>
           ) : (
             <PendingOrdersTable orders={pendingOrders} />
           )
@@ -1633,7 +1673,7 @@ function PendingOrdersTable({ orders }: { orders: PendingOrder[] }) {
           <tr className="border-b border-border/40">
             <th className="px-2 py-2 text-left font-medium">심볼</th>
             <th className="px-2 py-2 text-left font-medium">방향</th>
-            <th className="px-2 py-2 text-right font-medium">지정가</th>
+            <th className="px-2 py-2 text-right font-medium">주문가</th>
             <th className="px-2 py-2 text-right font-medium">수량</th>
             <th className="px-2 py-2 text-right font-medium">손절 / 목표</th>
             <th className="px-2 py-2 text-right font-medium">만료</th>
@@ -1658,14 +1698,15 @@ function PendingOrderRow({ order }: { order: PendingOrder }) {
   const expiresMinutes = Math.floor((expiresIn % 3_600_000) / 60_000);
 
   function cancel() {
-    if (!confirm(`${order.symbol} 지정가 ${isLong ? "매수" : "매도"} 주문을 취소하시겠습니까?`)) return;
+    const kindLabel = order.kind === "stop" ? "역지정가" : "지정가";
+    if (!confirm(`${order.symbol} ${kindLabel} ${isLong ? "매수" : "매도"} 주문을 취소하시겠습니까?`)) return;
     startCancelTransition(async () => {
       const r = await cancelLimitOrderAction(order.id);
       if (!r.ok) {
         toast.error(r.error ?? "취소 실패");
         return;
       }
-      toast.success("지정가 주문이 취소되었습니다.");
+      toast.success("주문이 취소되었습니다.");
     });
   }
 
@@ -1675,6 +1716,16 @@ function PendingOrderRow({ order }: { order: PendingOrder }) {
         <div className="flex items-center gap-2">
           <span aria-hidden className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")} />
           <span className="font-mono text-xs font-semibold">{order.symbol}</span>
+          <span
+            className={cn(
+              "rounded px-1 py-px text-[9px] font-medium",
+              order.kind === "stop"
+                ? "bg-amber-500/15 text-amber-300"
+                : "bg-muted/50 text-muted-foreground",
+            )}
+          >
+            {order.kind === "stop" ? "역지정" : "지정"}
+          </span>
         </div>
       </td>
       <td className="px-2 py-2.5">

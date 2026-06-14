@@ -16,9 +16,9 @@ export interface PlaceOrderInput {
   target?: number;
   /** Trading style — controls timeframe & defaults. */
   timeframe?: "15m" | "1h" | "4h" | "1D";
-  /** Order type: 'market' (default) or 'limit'. */
-  orderType?: "market" | "limit";
-  /** Required when orderType === 'limit'. Target fill price. */
+  /** Order type: 'market' (default), 'limit', or 'stop' (역지정가 — 돌파 추격). */
+  orderType?: "market" | "limit" | "stop";
+  /** Required when orderType === 'limit' or 'stop'. limit=목표 체결가, stop=트리거가. */
   limitPrice?: number;
   /** 'futures' (default, USDT-M Futures) or 'spot' (현물). Spot은 자동으로
    *  leverage=1, direction=long, 수수료 0.2% 적용. */
@@ -33,8 +33,8 @@ export interface PlaceOrderResult {
   newBalance?: number;
   newAvailable?: number;
   error?: string;
-  /** Limit 주문일 때 반환 */
-  orderType?: "market" | "limit";
+  /** Limit/Stop 주문일 때 반환 */
+  orderType?: "market" | "limit" | "stop";
   limitPrice?: number;
   status?: "filled" | "pending";
 }
@@ -165,6 +165,104 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
       tradeId: trade.id,
       orderType: "limit",
       limitPrice,
+      status: "pending",
+    };
+  }
+
+  // ── 역지정가(STOP 진입) 분기 — 돌파 추격 ─────────────────────────────────
+  if (input.orderType === "stop") {
+    if (!Number.isFinite(input.limitPrice) || (input.limitPrice ?? 0) <= 0) {
+      return { ok: false, error: "트리거가를 입력하세요." };
+    }
+    const triggerPrice = input.limitPrice!;
+
+    // 현재가 대비 "불리한 쪽" 검증 (롱=위로 돌파, 숏=아래로 이탈)
+    let lastPrice: number;
+    try {
+      const ticker = await fetchTicker24h(symbol);
+      lastPrice = ticker.lastPrice;
+      if (!Number.isFinite(lastPrice) || lastPrice <= 0) {
+        return { ok: false, error: "현재가를 가져올 수 없습니다." };
+      }
+    } catch (e) {
+      return { ok: false, error: `시세 조회 실패: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    if (input.direction === "long" && triggerPrice <= lastPrice) {
+      return { ok: false, error: "역지정가 롱은 트리거가가 현재가보다 높아야 합니다 (위로 돌파 추격)." };
+    }
+    if (input.direction === "short" && triggerPrice >= lastPrice) {
+      return { ok: false, error: "역지정가 숏은 트리거가가 현재가보다 낮아야 합니다 (아래로 이탈 추격)." };
+    }
+
+    const stop = input.stop ?? (input.direction === "long" ? triggerPrice * 0.98 : triggerPrice * 1.02);
+    const target = input.target ?? (input.direction === "long" ? triggerPrice * 1.04 : triggerPrice * 0.96);
+    const timeframe = input.timeframe ?? "1h";
+    const afford = await canAffordMargin(user.id, 0);
+    const balance = afford.balance;
+
+    const { data: trade, error: insertErr } = await supabase
+      .from("trades")
+      .insert({
+        user_id: user.id,
+        symbol,
+        direction: input.direction,
+        timeframe,
+        entry: triggerPrice,
+        stop,
+        target,
+        account_size: balance,
+        allowed_loss_pct: 1,
+        position_quantity: input.quantity,
+        market_checks: {},
+        psych_checks: {},
+        context_flags: { leverage: input.leverage, directOrder: true, stopOrder: true },
+        pre_grade: "B",
+        pre_score: 5,
+        pre_score_breakdown: [],
+        pre_actions: [],
+        pre_rr: Math.abs((target - triggerPrice) / (triggerPrice - stop)),
+        simulation_meta: null,
+        entry_actual: null,
+        entry_slippage_pct: 0,
+        fees_pct: feesPct,
+        paper_margin: null, // 체결 시점에 결정
+        is_paper: true,
+        order_type: "stop",
+        limit_price: triggerPrice,
+        order_status: "pending",
+        market_type: isSpot ? "spot" : "futures",
+      })
+      .select("id")
+      .single();
+
+    if (insertErr || !trade) {
+      return { ok: false, error: `거래 생성 실패: ${insertErr?.message ?? "unknown"}` };
+    }
+
+    const { error: ploErr } = await supabase.from("pending_limit_orders").insert({
+      user_id: user.id,
+      trade_id: trade.id,
+      symbol,
+      direction: input.direction,
+      limit_price: triggerPrice,
+      quantity: input.quantity,
+      leverage: input.leverage,
+      stop,
+      target,
+      order_kind: "stop",
+    });
+
+    if (ploErr) {
+      await supabase.from("trades").delete().eq("id", trade.id);
+      return { ok: false, error: `역지정가 주문 등록 실패: ${ploErr.message}` };
+    }
+
+    revalidatePath("/app/virtual-trade");
+    return {
+      ok: true,
+      tradeId: trade.id,
+      orderType: "stop",
+      limitPrice: triggerPrice,
       status: "pending",
     };
   }

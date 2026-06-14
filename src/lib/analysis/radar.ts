@@ -11,6 +11,7 @@ import { findSwings, detectLiquiditySweeps, classifyTrend } from "./smc";
 import { classifyTrendComposite } from "./trend";
 import { computeVolumeProfile } from "./volume-profile";
 import { simulateRange } from "./monte-carlo";
+import { PINNED_SYMBOLS } from "./radar-constants";
 import type { TradingStyle } from "./style";
 
 /**
@@ -96,8 +97,6 @@ const MIN_SCORE = 2;
 
 const BLOCKLIST = new Set(["BTCDOMUSDT", "DEFIUSDT", "BLUEBIRDUSDT"]);
 
-// 항상 후보 레이더에 고정 표시하는 기준 자산 (점수 컷오프 무관, 표시 순서도 이 순).
-export const PINNED_SYMBOLS = ["BTCUSDT", "ETHUSDT", "XRPUSDT", "BNBUSDT"];
 const PINNED = new Set(PINNED_SYMBOLS);
 
 /** 거래대금 상위 N개 USDT 무기한 (크립토만). */

@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type RadarCandidate, PINNED_SYMBOLS } from "@/lib/analysis/radar";
+import type { RadarCandidate } from "@/lib/analysis/radar";
+import { PINNED_SYMBOLS } from "@/lib/analysis/radar-constants";
 import type { RadarSnapshot } from "@/lib/analysis/radar-persist";
 import type { TradingStyle } from "@/lib/analysis/style";
 import { STYLE_STANDARDS, MIN_STOP_PCT_VS_FEES } from "@/lib/analysis/standards";

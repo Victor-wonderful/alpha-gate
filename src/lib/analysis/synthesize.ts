@@ -108,6 +108,10 @@ Strategy Agent가 메인 전략 1개를 골랐어도, 같은 시장 상황에서
 - 혼조 → 1~2개 (보수적)
 - wait 신호 → 0개
 
+★ BTCUSDT 예외 (기준 자산): 심볼이 BTCUSDT이면 **항상 최소 1개 시나리오를 만들어라** (wait/0개 금지).
+  변동성이 낮아 구조 손절이 좁더라도, 가장 가까운 구조 레벨로 시나리오를 1개 이상 제시한다.
+  (손절이 수수료 하한보다 좁으면 코드가 자동으로 하한까지 넓힌다.)
+
 각 시나리오에 strategyHint를 정확히 적어라. 메인 전략과 다른 시나리오를 만들 때는 그 시나리오의 strategyHint가 메인과 달라야 한다.
 
 ★ 전략별 플레이북 — Strategy Agent가 정한 전략에 따라 다음 템플릿을 따른다:
@@ -546,6 +550,8 @@ function enforceEntryProximity(
   const atr = mtfAtrPct ?? 0;
   const proxImmediate = Math.max(proxLimits.immediate, atr * 0.5);
   const proxPending = Math.max(proxLimits.pending, atr * 1.2);
+  // BTC는 기준 자산 — 손절이 수수료 하한보다 좁으면 하한까지 넓혀 시나리오를 항상 유지(사용자 요청).
+  const isBtc = snapshot.symbol === "BTCUSDT";
 
   const kept: AnalysisReport["scenarios"] = [];
   const dropped: string[] = [];
@@ -563,27 +569,38 @@ function enforceEntryProximity(
     }
 
     // 2) Stop/target/RR — collect issues. 절대 하한(수수료×3) 위반은 즉시 폐기.
-    const stopPct = (Math.abs(mid - s.invalidation) / mid) * 100;
+    let stopPct = (Math.abs(mid - s.invalidation) / mid) * 100;
     const targetPct = (Math.abs(s.target - mid) / mid) * 100;
-    const rr = stopPct === 0 ? 0 : targetPct / stopPct;
     const issues: string[] = [];
 
     // 하드 가드 1: 손절폭이 수수료×3 미만 → 폐기 (어떤 스타일/전략에서도 불허용)
     if (stopPct < MIN_STOP_PCT_VS_FEES) {
-      const realizedR = (stopPct + ROUND_TRIP_COST_PCT) / stopPct;
-      dropped.push(
-        `${s.name} (손절폭 ${stopPct.toFixed(3)}% < 수수료×3 ${MIN_STOP_PCT_VS_FEES.toFixed(2)}% — 손절 적중 시 수수료 포함 약 ${realizedR.toFixed(1)}R 손실)`,
-      );
-      continue;
+      if (isBtc) {
+        // BTC: 손절을 수수료 하한까지 넓혀 시나리오 유지 (구조 손절이 좁아도 항상 분석 가능).
+        const dirSign = s.direction === "long" ? -1 : 1;
+        s.invalidation = mid * (1 + (dirSign * MIN_STOP_PCT_VS_FEES) / 100);
+        stopPct = MIN_STOP_PCT_VS_FEES;
+        issues.push(
+          `BTC — 손절을 수수료 하한(${MIN_STOP_PCT_VS_FEES.toFixed(2)}%)까지 넓힘 (구조 손절 좁음 · 노이즈/수수료 부담 큼)`,
+        );
+      } else {
+        const realizedR = (stopPct + ROUND_TRIP_COST_PCT) / stopPct;
+        dropped.push(
+          `${s.name} (손절폭 ${stopPct.toFixed(3)}% < 수수료×3 ${MIN_STOP_PCT_VS_FEES.toFixed(2)}% — 손절 적중 시 수수료 포함 약 ${realizedR.toFixed(1)}R 손실)`,
+        );
+        continue;
+      }
     }
 
-    // 하드 가드 2: 손절폭이 스타일 표준 하한의 80% 미만 → 폐기
-    if (stopPct < stopLimits.stopMin * 0.8) {
+    // 하드 가드 2: 손절폭이 스타일 표준 하한의 80% 미만 → 폐기 (BTC는 예외 — 위에서 하한 보장).
+    if (!isBtc && stopPct < stopLimits.stopMin * 0.8) {
       dropped.push(
         `${s.name} (손절폭 ${stopPct.toFixed(2)}% < 스타일 하한 ${stopLimits.stopMin}% × 0.8 = ${(stopLimits.stopMin * 0.8).toFixed(2)}% — 노이즈에 잡힐 위험 큼)`,
       );
       continue;
     }
+
+    const rr = stopPct === 0 ? 0 : targetPct / stopPct;
 
     if (stopPct < stopLimits.stopMin) {
       issues.push(`손절폭 ${stopPct.toFixed(2)}% — 스타일 하한 ${stopLimits.stopMin}% 미달 (노이즈 위험)`);

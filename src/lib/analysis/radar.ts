@@ -304,7 +304,9 @@ async function scanCoin(
     if (!best || adj > best.adj) best = { style, score, signals, adj };
   }
 
-  if (!best || best.score < MIN_SCORE || best.signals.length === 0) return null;
+  // BTC는 기준 자산 — 신호 점수가 낮아도 항상 후보에 포함 (사용자 요청).
+  const isBtc = meta.symbol === "BTCUSDT";
+  if (!best || (!isBtc && (best.score < MIN_SCORE || best.signals.length === 0))) return null;
 
   const refCandles = byTf["4h"] ?? byTf[STYLE_TF[best.style]];
   const price = refCandles[refCandles.length - 1].close || meta.lastPrice;
@@ -369,7 +371,14 @@ export async function runRadarScan(): Promise<RadarCandidate[]> {
     if (r.status === "fulfilled" && r.value) candidates.push(r.value);
   }
 
-  return candidates
-    .sort((a, b) => b.score - a.score || b.volume24hUsd - a.volume24hUsd)
-    .slice(0, MAX_CANDIDATES);
+  const sorted = candidates.sort(
+    (a, b) => b.score - a.score || b.volume24hUsd - a.volume24hUsd,
+  );
+  const top = sorted.slice(0, MAX_CANDIDATES);
+  // BTC가 점수 컷오프에 밀려 잘렸으면 다시 추가 (항상 후보에 포함).
+  if (!top.some((c) => c.symbol === "BTCUSDT")) {
+    const btc = sorted.find((c) => c.symbol === "BTCUSDT");
+    if (btc) top.push(btc);
+  }
+  return top;
 }

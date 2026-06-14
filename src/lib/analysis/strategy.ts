@@ -93,6 +93,7 @@ const SYSTEM_PROMPT = `당신은 시장 구조 스냅샷을 보고 가장 적합
 - classification = "mixed" (혼조 — 지표 의견 갈림):
   · 가격이 명확한 키레벨(POC/VAH/VAL/직전 스윙) 근처면 range_fade
   · 그렇지 않으면 wait 허용
+  · ★ 단, snapshot.symbol이 "BTCUSDT"이면 wait 금지 — 가장 가까운 구조로 방향을 잡아라(기준 자산, 항상 분석 가능해야 함).
 
 ★ 특수 전략 우선 트리거 (위 분류보다 먼저 검사):
 

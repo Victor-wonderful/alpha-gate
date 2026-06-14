@@ -138,35 +138,18 @@ function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview
   };
 }
 
-/** 예상 진입 방향 추정 (LLM 없이 추세 + 신호 방향성 가중합 — 추정임을 명확히).
- *  실제 방향은 클릭 후 본 분석(Strategy Agent)이 확정. neutral = 방향 불명확(양방향 가능). */
+/** 예상 진입 방향 = 추세 방향. (LLM 없이 결정론적, 추정.)
+ *
+ *  ⚠️ 근거: 실거래 분석 291건(strategy_direction)으로 검증 — 추세가 방향성을 가질 때
+ *  실제 Strategy Agent 방향과 98.4% 일치. sweep/펀딩/매물대/24h극단 등 다른 신호는
+ *  방향 예측에 무작위~역효과(sweep 49.6%, 펀딩 42%, 매물대 32% — 모두 기준선 77.7% 이하)라
+ *  방향 판정에서 전부 제외. range(횡보)는 신뢰할 방향 신호가 없으므로 정직하게 "양방향".
+ *  검증 하니스: scripts/validate-radar-bias.mjs, scripts/validate-radar-rules.mjs.
+ *  실제 방향은 클릭 후 본 분석(Strategy Agent)이 확정. */
 function inferBias(c: RadarCandidate): "long" | "short" | "neutral" {
-  let v = 0;
-  if (c.trend === "up") v += 2;
-  else if (c.trend === "down") v -= 2;
-  for (const s of c.signals) {
-    switch (s.key) {
-      case "sweep": // sweep 직후 = 쓸어낸 반대 방향으로 반등/반락 (하단 sweep=롱, 상단=숏)
-        v += s.label.includes("하단") ? 3 : -3;
-        break;
-      case "funding": // 펀딩 역프=롱 우위(숏 과밀), 과열=숏 우위(롱 과밀) — 역추세 압착
-        v += s.label.includes("역프") ? 1 : -1;
-        break;
-      case "vah": // 매물대 상단: 추세장이면 돌파 롱, 횡보면 저항 fade 숏
-        v += c.trend === "up" ? 1 : -2;
-        break;
-      case "val": // 매물대 하단: 하락장이면 이탈 숏, 그 외 지지 반등 롱
-        v += c.trend === "down" ? -1 : 2;
-        break;
-      case "high24h":
-        v += c.trend === "down" ? -1 : 1;
-        break;
-      case "low24h":
-        v += c.trend === "up" ? 1 : -1;
-        break;
-    }
-  }
-  return v >= 2 ? "long" : v <= -2 ? "short" : "neutral";
+  if (c.trend === "up") return "long";
+  if (c.trend === "down") return "short";
+  return "neutral";
 }
 
 /** 분석 시 나올 시나리오 개수 추정 (LLM 없이 추세·신호로 — 프롬프트 개수 가이드와 동일 논리).

@@ -11,25 +11,10 @@ import { CancelPendingButton } from "./cancel-pending-button";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
-import { ViewTabs, parseView, type View } from "@/components/app/view-tabs";
 import { ModeFilter, parseMode, type TradeMode } from "@/components/app/mode-filter";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
 import { Suspense } from "react";
 import { ClosedTradesTable, type ClosedTradeRow } from "./closed-trades-table";
-
-interface GameRow {
-  id: string;
-  symbol: string;
-  direction: "call" | "put";
-  bet_points: number;
-  entry_price: number;
-  exit_price: number | null;
-  won: boolean | null;
-  pnl_points: number | null;
-  status: "pending" | "settled";
-  entry_time: string;
-  created_at: string;
-}
 import { fetchTicker24h } from "@/lib/analysis/binance";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
@@ -63,74 +48,23 @@ interface TradeRow {
   mode: "live" | "backtest" | null;
 }
 
-interface ArbitrageRow {
-  id: string;
-  symbol: string;
-  notional_usd: number;
-  entry_premium_pct: number | null;
-  target_threshold_pct: number | null;
-  cycles_count: number | null;
-  accrued_cycle_pnl: number | null;
-  realized_pnl: number | null;
-  close_reason: string | null;
-  status: string;
-  created_at: string;
-  closed_at: string | null;
-}
-
 export default async function JournalListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; mode?: string }>;
+  searchParams: Promise<{ mode?: string }>;
 }) {
   const sp = await searchParams;
-  const view: View = parseView(sp.view);
   const tradeMode: TradeMode = parseMode(sp.mode);
   const supabase = await getSupabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  const [tradesRes, gamesRes, arbitragesRes] = await Promise.all([
-    supabase
-      .from("trades")
-      .select(
-        "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual, mode",
-      )
-      .order("created_at", { ascending: false })
-      .limit(100),
-    user
-      ? supabase
-          .from("binary_games")
-          .select(
-            "id, symbol, direction, bet_points, entry_price, exit_price, won, pnl_points, status, entry_time, created_at",
-          )
-          .eq("user_id", user.id)
-          .eq("status", "settled")
-          .order("created_at", { ascending: false })
-          .limit(50)
-      : Promise.resolve({ data: [] as GameRow[] }),
-    user
-      ? supabase
-          .from("arbitrage_positions")
-          .select(
-            "id, symbol, notional_usd, entry_premium_pct, target_threshold_pct, cycles_count, accrued_cycle_pnl, realized_pnl, close_reason, status, created_at, closed_at",
-          )
-          .eq("user_id", user.id)
-          .eq("kind", "kimchi")
-          .order("created_at", { ascending: false })
-          .limit(100)
-      : Promise.resolve({ data: [] as ArbitrageRow[] }),
-  ]);
-  const arbitrages = (arbitragesRes.data ?? []) as ArbitrageRow[];
-  const arbitrageClosed = arbitrages.filter((a) => a.status !== "open");
-  const arbitrageOpen = arbitrages.filter((a) => a.status === "open");
-  const arbitragePnl = arbitrageClosed.reduce(
-    (s, a) => s + (a.realized_pnl != null ? Number(a.realized_pnl) : 0),
-    0,
-  );
+  const tradesRes = await supabase
+    .from("trades")
+    .select(
+      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual, mode",
+    )
+    .order("created_at", { ascending: false })
+    .limit(100);
   const tradesRaw = tradesRes.data;
-  const games = (gamesRes.data ?? []) as GameRow[];
 
   const trades = (tradesRaw ?? []) as (TradeRow & {
     order_type?: "market" | "limit" | "stop" | null;
@@ -284,37 +218,6 @@ export default async function JournalListPage({
     .filter((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc && t.result_r != null)
     .reduce((s, t) => s + Number(t.result_r ?? 0), 0);
 
-  // ── Game stats ──────────────────────────────────────────────
-  const totalGames = games.length;
-  const gameWins = games.filter((g) => g.won === true).length;
-  const gameLosses = games.filter((g) => g.won === false).length;
-  const gamePnl = games.reduce((s, g) => s + (g.pnl_points != null ? Number(g.pnl_points) : 0), 0);
-  const gameWinRate = totalGames > 0 ? (gameWins / totalGames) * 100 : 0;
-  const todayGames = games.filter(
-    (g) => new Date(g.created_at) >= kstStartUtc,
-  );
-  const todayGamePnl = todayGames.reduce(
-    (s, g) => s + (g.pnl_points != null ? Number(g.pnl_points) : 0),
-    0,
-  );
-
-  // Closed-trades realized PnL (for combined display in "all" view)
-  function tradeRealizedPnl(t: typeof trades[number]): number {
-    if (t.paper_realized_pnl != null) return Number(t.paper_realized_pnl);
-    if (!t.position_quantity) return 0;
-    const entry = Number(t.entry_actual ?? t.entry ?? 0);
-    const exit = Number(t.exit_actual ?? t.exit_price ?? 0);
-    const qty = Number(t.position_quantity);
-    const feesPct = Number(t.fees_pct ?? 0.12);
-    if (entry <= 0 || exit <= 0 || qty <= 0) return 0;
-    const move = t.direction === "long" ? exit - entry : entry - exit;
-    return move * qty - entry * (feesPct / 100) * qty;
-  }
-  const totalTradePnl = closed.reduce((s, t) => s + tradeRealizedPnl(t), 0);
-  const todayTradePnl = closed
-    .filter((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
-    .reduce((s, t) => s + tradeRealizedPnl(t), 0);
-
   const cluster = clusters.results({
     openCount: open.length + pendingLimits.length,
     rightSlot: (
@@ -337,208 +240,67 @@ export default async function JournalListPage({
         rightSlot={cluster.rightSlot}
       />
 
-      {/* View sub-tabs + 거래 모드 필터 */}
+      {/* 거래 모드 필터 (실거래/백테스트) */}
       <div className="flex flex-wrap items-center gap-3">
-        <ViewTabs
+        <ModeFilter
           basePath="/app/journal"
-          current={view}
+          view="all"
+          current={tradeMode}
           counts={{
-            all: closedAll.length + games.length + arbitrageClosed.length,
-            trades: closedAll.length,
-            games: games.length,
-            arbitrage: arbitrageClosed.length,
+            all: closedAll.length,
+            live: liveCount,
+            backtest: backtestCount,
           }}
         />
-        {view === "trades" || view === "all" ? (
-          <ModeFilter
-            basePath="/app/journal"
-            view={view}
-            current={tradeMode}
-            counts={{
-              all: closedAll.length,
-              live: liveCount,
-              backtest: backtestCount,
-            }}
-          />
-        ) : null}
       </div>
 
-      {/* KPI cards — content depends on view */}
+      {/* KPI cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {view === "games" ? (
-          <>
-            <KpiCard
-              icon={<Activity className="h-4 w-4" />}
-              label="오늘 게임 PnL"
-              value={
-                todayGames.length > 0
-                  ? `${todayGamePnl >= 0 ? "+" : ""}${formatNumber(todayGamePnl, { maximumFractionDigits: 0 })}`
-                  : "—"
-              }
-              sub={`vUSDT · 오늘 ${todayGames.length}판`}
-              tone={todayGamePnl > 0 ? "good" : todayGamePnl < 0 ? "bad" : "neutral"}
-            />
-            <KpiCard
-              icon={<Layers className="h-4 w-4" />}
-              label="총 게임"
-              value={`${totalGames}판`}
-              sub={`승 ${gameWins} · 패 ${gameLosses}`}
-            />
-            <KpiCard
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="승률"
-              value={totalGames > 0 ? `${gameWinRate.toFixed(1)}%` : "—"}
-              tone={gameWinRate >= 50 ? "good" : gameWinRate >= 35 ? "neutral" : "bad"}
-            />
-            <KpiCard
-              icon={gamePnl >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              label="누적 게임 PnL"
-              value={
-                totalGames > 0
-                  ? `${gamePnl >= 0 ? "+" : ""}${formatNumber(gamePnl, { maximumFractionDigits: 0 })}`
-                  : "—"
-              }
-              sub="vUSDT — 전체 게임 합계"
-              tone={gamePnl > 0 ? "good" : gamePnl < 0 ? "bad" : "neutral"}
-            />
-          </>
-        ) : view === "trades" ? (
-          <>
-            <KpiCard
-              icon={<Activity className="h-4 w-4" />}
-              label="오늘 실현 R"
-              value={
-                closed.some((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
-                  ? `${todayR >= 0 ? "+" : ""}${todayR.toFixed(2)}R`
-                  : "—"
-              }
-              tone={todayR > 0 ? "good" : todayR < 0 ? "bad" : "neutral"}
-            />
-            <KpiCard
-              icon={<Layers className="h-4 w-4" />}
-              label="진행 중 포지션"
-              value={`${positions.length}건`}
-              sub={positions.length > 0 ? "아래 카드 참고" : "없음"}
-            />
-            <KpiCard
-              icon={totalUnrealizedR >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              label="미실현 합계"
-              value={
-                positions.length > 0
-                  ? `${totalUnrealizedR >= 0 ? "+" : ""}${totalUnrealizedR.toFixed(2)}R`
-                  : "—"
-              }
-              sub={
-                positions.length > 0
-                  ? `${totalUnrealizedUsd >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedUsd, "USD")}`
-                  : "진행 중 없음"
-              }
-              tone={totalUnrealizedR > 0 ? "good" : totalUnrealizedR < 0 ? "bad" : "neutral"}
-            />
-            <KpiCard
-              icon={<Wallet className="h-4 w-4" />}
-              label="총 노출"
-              value={positions.length > 0 ? `${totalExposurePct.toFixed(1)}%` : "—"}
-              sub={
-                positions.length > 0
-                  ? `${formatCurrency(totalNotional, "USD")} / ${formatCurrency(accountSize, "USD")}`
-                  : "—"
-              }
-            />
-          </>
-        ) : view === "arbitrage" ? (
-          <>
-            <KpiCard
-              icon={<Activity className="h-4 w-4" />}
-              label="진행 중 차익"
-              value={`${arbitrageOpen.length}건`}
-              sub={arbitrageOpen.length > 0 ? "사이클 자동 누적 중" : "없음"}
-            />
-            <KpiCard
-              icon={<Layers className="h-4 w-4" />}
-              label="종료된 차익"
-              value={`${arbitrageClosed.length}건`}
-              sub={
-                arbitrageClosed.length > 0
-                  ? `누적 사이클 ${arbitrageClosed.reduce((s, a) => s + Number(a.cycles_count ?? 0), 0)}회`
-                  : "없음"
-              }
-            />
-            <KpiCard
-              icon={arbitragePnl >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              label="누적 차익 PnL"
-              value={
-                arbitrageClosed.length > 0
-                  ? `${arbitragePnl >= 0 ? "+" : ""}${formatNumber(arbitragePnl, { maximumFractionDigits: 2 })}`
-                  : "—"
-              }
-              sub="vUSDT (수수료/슬리피지 차감 후)"
-              tone={arbitragePnl > 0 ? "good" : arbitragePnl < 0 ? "bad" : "neutral"}
-            />
-            <KpiCard
-              icon={<Wallet className="h-4 w-4" />}
-              label="평균 사이클당 수익"
-              value={(() => {
-                const totalCycles = arbitrageClosed.reduce(
-                  (s, a) => s + Number(a.cycles_count ?? 0),
-                  0,
-                );
-                if (totalCycles === 0) return "—";
-                const avg = arbitragePnl / totalCycles;
-                return `${avg >= 0 ? "+" : ""}${avg.toFixed(2)}`;
-              })()}
-              sub="vUSDT / 사이클"
-            />
-          </>
-        ) : (
-          /* all view — combined */
-          <>
-            <KpiCard
-              icon={<Activity className="h-4 w-4" />}
-              label="오늘 통합 PnL"
-              value={
-                todayGames.length > 0 || closed.some((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
-                  ? `${todayTradePnl + todayGamePnl >= 0 ? "+" : ""}${formatNumber(todayTradePnl + todayGamePnl, { maximumFractionDigits: 0 })}`
-                  : "—"
-              }
-              sub={`vUSDT · 거래 ${todayTradePnl >= 0 ? "+" : ""}${formatNumber(todayTradePnl, { maximumFractionDigits: 0 })} · 게임 ${todayGamePnl >= 0 ? "+" : ""}${formatNumber(todayGamePnl, { maximumFractionDigits: 0 })}`}
-              tone={todayTradePnl + todayGamePnl > 0 ? "good" : todayTradePnl + todayGamePnl < 0 ? "bad" : "neutral"}
-            />
-            <KpiCard
-              icon={<Layers className="h-4 w-4" />}
-              label="진행 중 포지션"
-              value={`${positions.length + arbitrageOpen.length}건`}
-              sub={
-                positions.length + arbitrageOpen.length > 0
-                  ? `거래 ${positions.length} · 차익 ${arbitrageOpen.length}`
-                  : "없음"
-              }
-            />
-            <KpiCard
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="누적 통합 PnL"
-              value={`${totalTradePnl + gamePnl + arbitragePnl >= 0 ? "+" : ""}${formatNumber(totalTradePnl + gamePnl + arbitragePnl, { maximumFractionDigits: 0 })}`}
-              sub={`vUSDT · 거래 ${formatNumber(totalTradePnl, { maximumFractionDigits: 0 })} · 게임 ${formatNumber(gamePnl, { maximumFractionDigits: 0 })} · 차익 ${formatNumber(arbitragePnl, { maximumFractionDigits: 0 })}`}
-              tone={
-                totalTradePnl + gamePnl + arbitragePnl > 0
-                  ? "good"
-                  : totalTradePnl + gamePnl + arbitragePnl < 0
-                    ? "bad"
-                    : "neutral"
-              }
-            />
-            <KpiCard
-              icon={<Wallet className="h-4 w-4" />}
-              label="활동 횟수"
-              value={`${closed.length + totalGames + arbitrageClosed.length}건`}
-              sub={`거래 ${closed.length} · 게임 ${totalGames} · 차익 ${arbitrageClosed.length}`}
-            />
-          </>
-        )}
+        <KpiCard
+          icon={<Activity className="h-4 w-4" />}
+          label="오늘 실현 R"
+          value={
+            closed.some((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
+              ? `${todayR >= 0 ? "+" : ""}${todayR.toFixed(2)}R`
+              : "—"
+          }
+          tone={todayR > 0 ? "good" : todayR < 0 ? "bad" : "neutral"}
+        />
+        <KpiCard
+          icon={<Layers className="h-4 w-4" />}
+          label="진행 중 포지션"
+          value={`${positions.length}건`}
+          sub={positions.length > 0 ? "아래 카드 참고" : "없음"}
+        />
+        <KpiCard
+          icon={totalUnrealizedR >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+          label="미실현 합계"
+          value={
+            positions.length > 0
+              ? `${totalUnrealizedR >= 0 ? "+" : ""}${totalUnrealizedR.toFixed(2)}R`
+              : "—"
+          }
+          sub={
+            positions.length > 0
+              ? `${totalUnrealizedUsd >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedUsd, "USD")}`
+              : "진행 중 없음"
+          }
+          tone={totalUnrealizedR > 0 ? "good" : totalUnrealizedR < 0 ? "bad" : "neutral"}
+        />
+        <KpiCard
+          icon={<Wallet className="h-4 w-4" />}
+          label="총 노출"
+          value={positions.length > 0 ? `${totalExposurePct.toFixed(1)}%` : "—"}
+          sub={
+            positions.length > 0
+              ? `${formatCurrency(totalNotional, "USD")} / ${formatCurrency(accountSize, "USD")}`
+              : "—"
+          }
+        />
       </div>
 
-      {/* Pending limit orders — trades only */}
-      {(view === "trades" || view === "all") && pendingLimits.length > 0 ? (
+      {/* Pending limit orders */}
+      {pendingLimits.length > 0 ? (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
@@ -615,8 +377,8 @@ export default async function JournalListPage({
         </section>
       ) : null}
 
-      {/* Open positions board — trades only */}
-      {(view === "trades" || view === "all") && positions.length > 0 ? (
+      {/* Open positions board */}
+      {positions.length > 0 ? (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-grade-a" />
@@ -630,8 +392,7 @@ export default async function JournalListPage({
         </section>
       ) : null}
 
-      {/* Closed trades table — hidden in 'games' view */}
-      {(view === "trades" || view === "all") ? (
+      {/* Closed trades table */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           종료된 거래 ({closed.length})
@@ -646,186 +407,7 @@ export default async function JournalListPage({
           <ClosedTradesTable rows={closedRows} />
         )}
       </section>
-      ) : null}
 
-      {/* Game history table — shown in 'games' or 'all' view */}
-      {(view === "games" || view === "all") && games.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            종료된 게임 ({games.length})
-          </h2>
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 text-left">시각</th>
-                  <th className="px-4 py-2 text-left">코인</th>
-                  <th className="px-4 py-2 text-left">방향</th>
-                  <th className="px-4 py-2 text-right">베팅</th>
-                  <th className="px-4 py-2 text-right">진입가</th>
-                  <th className="px-4 py-2 text-right">종가</th>
-                  <th className="px-4 py-2 text-right">PnL</th>
-                  <th className="px-4 py-2 text-right">ROI</th>
-                  <th className="px-4 py-2 text-left">결과</th>
-                </tr>
-              </thead>
-              <tbody>
-                {games.map((g) => {
-                  const bet = Number(g.bet_points);
-                  const pnl = g.pnl_points != null ? Number(g.pnl_points) : null;
-                  const roiPct = pnl != null && bet > 0 ? (pnl / bet) * 100 : null;
-                  return (
-                    <tr key={g.id} className="border-t border-border hover:bg-accent/40">
-                      <td className="px-4 py-2 text-muted-foreground">
-                        {new Date(g.entry_time).toLocaleString("ko-KR", { hour12: false })}
-                      </td>
-                      <td className="px-4 py-2 font-mono">{g.symbol}</td>
-                      <td className="px-4 py-2">
-                        <span
-                          className={cn(
-                            "rounded px-1.5 py-0.5 text-[11px] font-semibold",
-                            g.direction === "call" ? "bg-grade-a/15 text-grade-a" : "bg-grade-d/15 text-grade-d",
-                          )}
-                        >
-                          {g.direction === "call" ? "상승" : "하락"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono">{formatNumber(bet, { maximumFractionDigits: 0 })}</td>
-                      <td className="px-4 py-2 text-right font-mono">{formatNumber(Number(g.entry_price))}</td>
-                      <td className="px-4 py-2 text-right font-mono">
-                        {g.exit_price != null ? formatNumber(Number(g.exit_price)) : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono">
-                        {pnl != null ? (
-                          <span className={pnl >= 0 ? "text-grade-a" : "text-grade-d"}>
-                            {pnl >= 0 ? "+" : ""}
-                            {formatNumber(pnl, { maximumFractionDigits: 2 })}{" "}
-                            <span className="text-[10px] text-muted-foreground">vUSDT</span>
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono">
-                        {roiPct != null ? (
-                          <span className={roiPct >= 0 ? "text-grade-a" : "text-grade-d"}>
-                            {roiPct >= 0 ? "+" : ""}
-                            {roiPct.toFixed(0)}%
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-xs">
-                        {g.won === true ? (
-                          <span className="text-grade-a font-semibold">WIN</span>
-                        ) : g.won === false ? (
-                          <span className="text-grade-d font-semibold">LOSE</span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
-
-      {view === "games" && games.length === 0 ? (
-        <Card>
-          <CardContent className="p-10 text-center text-sm text-muted-foreground">
-            아직 종료된 게임이 없습니다.{" "}
-            <Link href="/app/game" className="text-primary underline-offset-2 hover:underline">
-              가격 예측 게임
-            </Link>
-            에서 첫 베팅을 해보세요.
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* 차익거래 종료 리스트 — arbitrage view 또는 all view */}
-      {(view === "arbitrage" || view === "all") && arbitrageClosed.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            종료된 차익거래 ({arbitrageClosed.length})
-          </h2>
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 text-left">종료</th>
-                  <th className="px-4 py-3 text-left">코인</th>
-                  <th className="px-4 py-3 text-right">노출</th>
-                  <th className="px-4 py-3 text-right">임계값</th>
-                  <th className="px-4 py-3 text-right">사이클</th>
-                  <th className="px-4 py-3 text-right">PnL (vUSDT)</th>
-                  <th className="px-4 py-3 text-left">사유</th>
-                </tr>
-              </thead>
-              <tbody>
-                {arbitrageClosed.map((a) => {
-                  const closeAt = a.closed_at ? new Date(a.closed_at) : null;
-                  const pnl = a.realized_pnl != null ? Number(a.realized_pnl) : null;
-                  return (
-                    <tr key={a.id} className="border-t border-border/60 hover:bg-accent/30">
-                      <td className="px-4 py-3 text-xs">
-                        {closeAt
-                          ? `${closeAt.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })} ${closeAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 font-mono font-semibold">{a.symbol}</td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        ${formatNumber(a.notional_usd, { maximumFractionDigits: 0 })}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        {a.target_threshold_pct != null ? `±${Number(a.target_threshold_pct).toFixed(1)}%` : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        {a.cycles_count ?? 0}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        {pnl != null ? (
-                          <span className={pnl >= 0 ? "text-grade-a" : "text-grade-d"}>
-                            {pnl >= 0 ? "+" : ""}
-                            {pnl.toFixed(2)}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {a.close_reason === "manual"
-                          ? "수동"
-                          : a.close_reason === "expired"
-                            ? "만료"
-                            : a.close_reason ?? "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
-
-      {view === "arbitrage" && arbitrageClosed.length === 0 && arbitrageOpen.length === 0 ? (
-        <Card>
-          <CardContent className="p-10 text-center text-sm text-muted-foreground">
-            아직 차익거래 이력이 없습니다.{" "}
-            <Link
-              href="/app/arbitrage"
-              className="text-primary underline-offset-2 hover:underline"
-            >
-              차익거래 페이지
-            </Link>
-            에서 첫 진입을 해보세요.
-          </CardContent>
-        </Card>
-      ) : null}
     </div>
   );
 }

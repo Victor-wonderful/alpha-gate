@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 export type TradeMode = "all" | "live" | "backtest";
 
 /**
- * 거래 모드(실거래/백테스트) 필터 — Journal/Dashboard에서 ViewTabs 옆에 사용.
- * ?view 파라미터를 보존하면서 ?mode만 토글.
+ * 거래 모드(실거래/백테스트) 필터 — Journal/Dashboard 상단에 사용.
+ * ?mode만 토글.
  */
 export function ModeFilter({
   basePath,

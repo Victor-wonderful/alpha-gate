@@ -1,10 +1,10 @@
 import type { TradingStyle } from "./style";
 import type { StrategyId } from "./strategy";
 
-/** Round-trip taker fee on Binance USDT-M Futures (Taker 0.04% × 2).
- *  슬리피지는 entry_actual/exit_actual에서 별도 처리하므로 여기에 포함시키지 않는다.
- *  (예전 0.12% 값은 슬리피지를 함께 포함했지만 이중 차감 문제로 0.08%로 분리.) */
-export const ROUND_TRIP_COST_PCT = 0.08;
+/** Round-trip fee on Binance USDT-M Futures — 테이커+메이커 합쳐 최대 0.075%
+ *  (예: 한쪽 메이커 체결 기준). 슬리피지는 entry_actual/exit_actual에서 별도 처리하므로
+ *  여기에 포함시키지 않는다. (예전 0.12%는 슬리피지 포함 → 이중차감으로 분리, 이후 0.08%→0.075% 정정.) */
+export const ROUND_TRIP_COST_PCT = 0.075;
 
 export interface StyleStandard {
   /** % of entry price */
@@ -189,8 +189,8 @@ export function checkRiskPct(riskPct: number): RangeCheck {
 }
 
 /** 손절폭이 수수료 대비 너무 좁아 손절 적중 시 -1R보다 큰 손실이 나는 케이스 차단.
- *  손절가 = stop, 진입가 = entry. 손절폭이 수수료(왕복 0.08%) × 3 (= 0.24%) 미만이면 무조건 reject.
- *  이 하한에서 손절 적중 시 실현 손실 = (0.24%+0.08%)/0.24% ≈ 1.33R, 더 좁으면 더 커진다. */
+ *  손절가 = stop, 진입가 = entry. 손절폭이 수수료(왕복 0.075%) × 3 (≈ 0.225%) 미만이면 무조건 reject.
+ *  이 하한에서 손절 적중 시 실현 손실 = (0.225%+0.075%)/0.225% ≈ 1.33R, 더 좁으면 더 커진다. */
 export const MIN_STOP_PCT_VS_FEES = ROUND_TRIP_COST_PCT * 3;
 
 /** 스타일 표준 하한의 80% 미만이면 "지나치게 좁음"으로 판단 (전략 예외 적용 후 기준). */
@@ -210,7 +210,7 @@ export interface StopValidation {
 
 /**
  * 손절폭이 거래 가능한 최소 기준을 통과하는지 검사.
- * - 절대 하한: 수수료 × 3 (0.24%) — 어떤 스타일/전략에서도 미달 시 거부
+ * - 절대 하한: 수수료 × 3 (≈0.225%) — 어떤 스타일/전략에서도 미달 시 거부
  * - 상대 하한: 스타일 표준 하한 × 0.8 — 미달 시 거부
  * 두 조건 모두 통과해야 ok.
  */

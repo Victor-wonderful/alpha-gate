@@ -13,9 +13,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /** Simulated market-order slippage in % for paper trading.
  *  Direction-aware: long fills slightly higher, short slightly lower (unfavorable side). */
 const PAPER_SLIPPAGE_PCT = 0.05;
-/** Round-trip taker fee (entry + exit) — Binance USDT-M Futures 기준 0.04% × 2.
+/** Round-trip fee (entry + exit) — Binance USDT-M Futures, 테이커+메이커 합쳐 최대 0.075%.
  *  슬리피지는 entry_actual/exit_actual에서 PAPER_SLIPPAGE_PCT로 별도 적용. */
-const PAPER_FEES_PCT = 0.08;
+const PAPER_FEES_PCT = 0.075;
 
 /** Simulate a market-order fill for paper trading.
  *  - Fetches Binance current price

@@ -40,8 +40,8 @@ export interface PlaceOrderResult {
 }
 
 const PAPER_SLIPPAGE_PCT = 0.05;
-// Binance USDT-M Futures Taker 0.04% × 2 (round-trip). 슬리피지는 별도 처리.
-const PAPER_FEES_PCT_FUTURES = 0.08;
+// Binance USDT-M Futures 왕복 수수료 — 테이커+메이커 합쳐 최대 0.075%. 슬리피지는 별도 처리.
+const PAPER_FEES_PCT_FUTURES = 0.075;
 // Binance Spot Taker 0.1% × 2 — 현물은 더 비쌈.
 const PAPER_FEES_PCT_SPOT = 0.2;
 const PAPER_FEES_PCT = PAPER_FEES_PCT_FUTURES; // 기본 — 호환성용

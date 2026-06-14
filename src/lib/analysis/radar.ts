@@ -96,6 +96,10 @@ const MIN_SCORE = 2;
 
 const BLOCKLIST = new Set(["BTCDOMUSDT", "DEFIUSDT", "BLUEBIRDUSDT"]);
 
+// 항상 후보 레이더에 고정 표시하는 기준 자산 (점수 컷오프 무관, 표시 순서도 이 순).
+export const PINNED_SYMBOLS = ["BTCUSDT", "ETHUSDT", "XRPUSDT", "BNBUSDT"];
+const PINNED = new Set(PINNED_SYMBOLS);
+
 /** 거래대금 상위 N개 USDT 무기한 (크립토만). */
 export async function fetchTopSymbolsByVolume(n = UNIVERSE_SIZE): Promise<
   Array<{
@@ -112,16 +116,22 @@ export async function fetchTopSymbolsByVolume(n = UNIVERSE_SIZE): Promise<
     fetchCryptoPerpSymbols(),
   ]);
   const allowed = new Set(cryptoSymbols);
-  return all
-    .filter(
-      (t) =>
-        allowed.has(t.symbol) &&
-        !BLOCKLIST.has(t.symbol) &&
-        t.lastPrice > 0 &&
-        Number.isFinite(t.quoteVolume),
-    )
-    .sort((a, b) => b.quoteVolume - a.quoteVolume)
-    .slice(0, n);
+  const eligible = all.filter(
+    (t) =>
+      allowed.has(t.symbol) &&
+      !BLOCKLIST.has(t.symbol) &&
+      t.lastPrice > 0 &&
+      Number.isFinite(t.quoteVolume),
+  );
+  const top = eligible.sort((a, b) => b.quoteVolume - a.quoteVolume).slice(0, n);
+  // 고정 자산이 상위 n에서 밀렸어도 유니버스에 반드시 포함 (항상 스캔·표시).
+  for (const sym of PINNED_SYMBOLS) {
+    if (!top.some((t) => t.symbol === sym)) {
+      const m = eligible.find((t) => t.symbol === sym);
+      if (m) top.push(m);
+    }
+  }
+  return top;
 }
 
 // --- 신호 계산 헬퍼 ---
@@ -304,9 +314,9 @@ async function scanCoin(
     if (!best || adj > best.adj) best = { style, score, signals, adj };
   }
 
-  // BTC는 기준 자산 — 신호 점수가 낮아도 항상 후보에 포함 (사용자 요청).
-  const isBtc = meta.symbol === "BTCUSDT";
-  if (!best || (!isBtc && (best.score < MIN_SCORE || best.signals.length === 0))) return null;
+  // 고정 자산(BTC/ETH/XRP/BNB)은 신호 점수가 낮아도 항상 후보에 포함 (사용자 요청).
+  const isPinned = PINNED.has(meta.symbol);
+  if (!best || (!isPinned && (best.score < MIN_SCORE || best.signals.length === 0))) return null;
 
   const refCandles = byTf["4h"] ?? byTf[STYLE_TF[best.style]];
   const price = refCandles[refCandles.length - 1].close || meta.lastPrice;
@@ -375,10 +385,12 @@ export async function runRadarScan(): Promise<RadarCandidate[]> {
     (a, b) => b.score - a.score || b.volume24hUsd - a.volume24hUsd,
   );
   const top = sorted.slice(0, MAX_CANDIDATES);
-  // BTC가 점수 컷오프에 밀려 잘렸으면 다시 추가 (항상 후보에 포함).
-  if (!top.some((c) => c.symbol === "BTCUSDT")) {
-    const btc = sorted.find((c) => c.symbol === "BTCUSDT");
-    if (btc) top.push(btc);
+  // 고정 자산(BTC/ETH/XRP/BNB)이 점수 컷오프에 밀려 잘렸으면 다시 추가 (항상 후보에 포함).
+  for (const sym of PINNED_SYMBOLS) {
+    if (!top.some((c) => c.symbol === sym)) {
+      const c = sorted.find((x) => x.symbol === sym);
+      if (c) top.push(c);
+    }
   }
   return top;
 }

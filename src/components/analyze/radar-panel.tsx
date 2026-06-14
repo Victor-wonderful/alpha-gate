@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { RadarCandidate } from "@/lib/analysis/radar";
+import { type RadarCandidate, PINNED_SYMBOLS } from "@/lib/analysis/radar";
 import type { RadarSnapshot } from "@/lib/analysis/radar-persist";
 import type { TradingStyle } from "@/lib/analysis/style";
 import { STYLE_STANDARDS, MIN_STOP_PCT_VS_FEES } from "@/lib/analysis/standards";
@@ -111,11 +111,11 @@ function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview
   const atr = c.styleAtr?.[style] ?? 0;
   const floor = styleFloor(style);
   const hasAtr = atr > 0;
-  // BTC는 기준 자산 — 항상 진입 가능 (분석도 항상 시나리오 생성).
-  const isBtc = c.symbol === "BTCUSDT";
+  // 고정 자산(BTC/ETH/XRP/BNB)은 기준 자산 — 항상 진입 가능 (분석도 항상 시나리오 생성).
+  const isPinned = PINNED_SYMBOLS.includes(c.symbol);
   // 진입 가능 = ATR이 손절 하한 이상(LLM이 두는 구조 손절 ~0.8~1×ATR이 floor를 넘김 = 수수료/노이즈 이김)
   // 이고, ATR이 상한 이하(저유동성 이상치 제외). ×1.1로 약간의 여유.
-  const tradeable = isBtc || (hasAtr && atr >= floor * 1.1 && atr <= STYLE_ATR_CAP[style]);
+  const tradeable = isPinned || (hasAtr && atr >= floor * 1.1 && atr <= STYLE_ATR_CAP[style]);
   const stopPct = Math.max(floor, atr); // 구조 손절 추정 ≈ 1×ATR (BTC는 하한)
   const targetPct = stopPct * STYLE_STANDARDS[style].rr.min;
   const bias = inferBias(c);
@@ -245,16 +245,21 @@ export function RadarPanel({
     (c) => c.styleAtr && Object.keys(c.styleAtr).length > 0,
   );
 
-  // 선택 스타일로 진입 가능한 코인만, 점수(해당 스타일 신호) 높은 순. BTC는 맨 앞 고정.
+  // 선택 스타일로 진입 가능한 코인만. 고정 자산(BTC/ETH/XRP/BNB)을 지정 순서로 맨 앞, 그 다음 점수 높은 순.
   const rows = candidates
     .map((c) => {
       const price = live[c.symbol] ?? c.price;
       return { c, price, p: preview(c, style, price) };
     })
     .filter((r) => r.p.tradeable)
-    .sort((a, b) => b.p.score - a.p.score);
-  const btcIdx = rows.findIndex((r) => r.c.symbol === "BTCUSDT");
-  if (btcIdx > 0) rows.unshift(rows.splice(btcIdx, 1)[0]);
+    .sort((a, b) => {
+      const ap = PINNED_SYMBOLS.indexOf(a.c.symbol);
+      const bp = PINNED_SYMBOLS.indexOf(b.c.symbol);
+      const aPin = ap === -1 ? Number.MAX_SAFE_INTEGER : ap;
+      const bPin = bp === -1 ? Number.MAX_SAFE_INTEGER : bp;
+      if (aPin !== bPin) return aPin - bPin;
+      return b.p.score - a.p.score;
+    });
 
   const hidden = Math.max(0, rows.length - COLLAPSED_COUNT);
   const visible = expanded ? rows : rows.slice(0, COLLAPSED_COUNT);

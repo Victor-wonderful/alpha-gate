@@ -10,7 +10,6 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,6 +95,8 @@ interface Preview {
   hasAtr: boolean;
   tradeable: boolean;
   dir: "long" | "short";
+  /** 예상 진입 방향 (추정). neutral = 방향 불명확(양방향 가능). */
+  bias: "long" | "short" | "neutral";
   stopPct: number;
   targetPct: number;
   entry: number;
@@ -117,7 +118,9 @@ function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview
   const tradeable = isBtc || (hasAtr && atr >= floor * 1.1 && atr <= STYLE_ATR_CAP[style]);
   const stopPct = Math.max(floor, atr); // 구조 손절 추정 ≈ 1×ATR (BTC는 하한)
   const targetPct = stopPct * STYLE_STANDARDS[style].rr.min;
-  const dir: "long" | "short" = c.trend === "down" ? "short" : "long";
+  const bias = inferBias(c);
+  // 손절/목표 기하학은 long/short만 가능 — 방향 불명확이면 추세 기준(상승·횡보=롱)으로 폴백.
+  const dir: "long" | "short" = bias === "short" ? "short" : "long";
   const stop = dir === "long" ? price * (1 - stopPct / 100) : price * (1 + stopPct / 100);
   const target = dir === "long" ? price * (1 + targetPct / 100) : price * (1 - targetPct / 100);
   return {
@@ -125,6 +128,7 @@ function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview
     hasAtr,
     tradeable,
     dir,
+    bias,
     stopPct,
     targetPct,
     entry: price,
@@ -132,6 +136,37 @@ function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview
     target,
     score: c.styleFit?.[style] ?? 0,
   };
+}
+
+/** 예상 진입 방향 추정 (LLM 없이 추세 + 신호 방향성 가중합 — 추정임을 명확히).
+ *  실제 방향은 클릭 후 본 분석(Strategy Agent)이 확정. neutral = 방향 불명확(양방향 가능). */
+function inferBias(c: RadarCandidate): "long" | "short" | "neutral" {
+  let v = 0;
+  if (c.trend === "up") v += 2;
+  else if (c.trend === "down") v -= 2;
+  for (const s of c.signals) {
+    switch (s.key) {
+      case "sweep": // sweep 직후 = 쓸어낸 반대 방향으로 반등/반락 (하단 sweep=롱, 상단=숏)
+        v += s.label.includes("하단") ? 3 : -3;
+        break;
+      case "funding": // 펀딩 역프=롱 우위(숏 과밀), 과열=숏 우위(롱 과밀) — 역추세 압착
+        v += s.label.includes("역프") ? 1 : -1;
+        break;
+      case "vah": // 매물대 상단: 추세장이면 돌파 롱, 횡보면 저항 fade 숏
+        v += c.trend === "up" ? 1 : -2;
+        break;
+      case "val": // 매물대 하단: 하락장이면 이탈 숏, 그 외 지지 반등 롱
+        v += c.trend === "down" ? -1 : 2;
+        break;
+      case "high24h":
+        v += c.trend === "down" ? -1 : 1;
+        break;
+      case "low24h":
+        v += c.trend === "up" ? 1 : -1;
+        break;
+    }
+  }
+  return v >= 2 ? "long" : v <= -2 ? "short" : "neutral";
 }
 
 /** 분석 시 나올 시나리오 개수 추정 (LLM 없이 추세·신호로 — 프롬프트 개수 가이드와 동일 논리).
@@ -319,7 +354,7 @@ export function RadarPanel({
               <span className="w-[76px]">코인</span>
               <span className="w-[88px] text-right">가격 · 변동</span>
               <span className="hidden min-w-0 flex-1 sm:block">신호</span>
-              <span className="w-[78px] text-center">진입 · 시나리오</span>
+              <span className="w-[78px] text-center">예상 방향 · 시나리오</span>
               <span className="hidden w-[120px] md:block">예상 손절 · 목표</span>
               <span className="hidden w-[56px] items-center justify-end gap-1 sm:flex">예상폭</span>
               <span className="w-9 text-center">점수</span>
@@ -431,12 +466,27 @@ function CandidateRow({
           ) : null}
         </span>
 
-        {/* 진입 가능 + 예상 시나리오 개수 */}
+        {/* 예상 진입 방향 (추정) + 예상 시나리오 개수 */}
         <span className="flex w-[78px] shrink-0 flex-col items-center gap-0.5">
-          <span className="inline-flex items-center gap-1 rounded-md border border-grade-a/40 bg-grade-a/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
-            <Check className="h-3 w-3" />
-            가능
-          </span>
+          {p.bias === "long" ? (
+            <span className="inline-flex items-center gap-1 rounded-md border border-grade-a/40 bg-grade-a/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
+              <TrendingUp className="h-3 w-3" />
+              롱 예상
+            </span>
+          ) : p.bias === "short" ? (
+            <span className="inline-flex items-center gap-1 rounded-md border border-grade-d/40 bg-grade-d/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-d">
+              <TrendingDown className="h-3 w-3" />
+              숏 예상
+            </span>
+          ) : (
+            <span
+              title="방향 불명확 — 양방향 셋업 가능 (분석 시 확정)"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-foreground/5 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+            >
+              <Minus className="h-3 w-3" />
+              양방향
+            </span>
+          )}
           <span className="text-[9px] text-muted-foreground">시나리오 ~{estScenarios(c)}개</span>
         </span>
 

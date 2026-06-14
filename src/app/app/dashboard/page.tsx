@@ -1,16 +1,15 @@
+import Link from "next/link";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GradeBadge } from "@/components/trade/grade-badge";
 import { EquityCurve } from "./monthly-chart";
-import { ArrowDownRight, ArrowUpRight, TrendingUp } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, History, TrendingUp, Wallet } from "lucide-react";
 import type { Grade } from "@/types/trade";
 import { cn } from "@/lib/utils";
 import { FlowStepper } from "@/components/app/flow-stepper";
-import { ClusterTabs } from "@/components/app/cluster-tabs";
-import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
-import { ModeFilter, parseMode, type TradeMode } from "@/components/app/mode-filter";
+import { parseMode, type TradeMode } from "@/components/app/mode-filter";
 
 interface ClosedRow {
   pre_grade: Grade;
@@ -49,28 +48,29 @@ export default async function DashboardPage({
 }) {
   const sp = await searchParams;
   const tradeMode: TradeMode = parseMode(sp.mode);
+  // 탭: 가상거래(live) / 백테스트(backtest). 실거래(real exchange)는 아직 없음.
+  const activeTab: "live" | "backtest" = tradeMode === "backtest" ? "backtest" : "live";
+  const tabOf = (m: "live" | "backtest" | null) => (m === "backtest" ? "backtest" : "live");
   const supabase = await getSupabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const [tradesRes, wallet] = await Promise.all([
-    (() => {
-      let q = supabase
-        .from("trades")
-        .select(
-          "pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
-        )
-        .not("closed_at", "is", null);
-      // ?mode= 필터 — backtest/live 명시면 그것만, all이면 전체
-      if (tradeMode === "live") q = q.or("mode.eq.live,mode.is.null");
-      else if (tradeMode === "backtest") q = q.eq("mode", "backtest");
-      return q.order("closed_at", { ascending: true });
-    })(),
+    supabase
+      .from("trades")
+      .select(
+        "pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
+      )
+      .not("closed_at", "is", null)
+      .order("closed_at", { ascending: true }),
     user ? getOrCreateWallet(user.id).catch(() => null) : Promise.resolve(null),
   ]);
 
-  const rows = ((tradesRes.data ?? []) as unknown as ClosedRow[]).filter((r) => r.result_r != null);
+  const allClosed = ((tradesRes.data ?? []) as unknown as ClosedRow[]).filter((r) => r.result_r != null);
+  const rows = allClosed.filter((r) => tabOf(r.mode) === activeTab);
+  const liveCount = allClosed.filter((r) => r.mode !== "backtest").length;
+  const backtestCount = allClosed.filter((r) => r.mode === "backtest").length;
   const startingBalance = wallet?.startingBalance ?? 10000;
 
   // ── Headline KPIs ────────────────────────────────────────
@@ -134,30 +134,65 @@ export default async function DashboardPage({
     manual: rows.filter((r) => r.exit_reason === "manual" || !r.exit_reason).length,
   };
 
-  const cluster = clusters.results({
-    rightSlot: <HelpLink href="/app/guide/results" />,
-  });
-
   const hasData = n > 0;
 
   return (
     <div className="space-y-5">
       <FlowStepper current="dashboard" />
-      <ClusterTabs
-        title={cluster.title}
-        description={
-          tradeMode === "backtest"
-            ? `종료된 백테스트 거래 ${n}건 기준.`
-            : tradeMode === "all"
-              ? `종료된 거래 ${n}건 기준 (실거래 + 백테스트).`
-              : `종료된 라이브 거래 ${n}건 기준. 백테스트 결과는 제외됩니다.`
-        }
-        tabs={cluster.tabs}
-        rightSlot={cluster.rightSlot}
-      />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <ModeFilter basePath="/app/dashboard" view="all" current={tradeMode} />
+      {/* 페이지 헤더 — 제목 + 액션 */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">성과 분석</h1>
+          <p className="text-xs text-muted-foreground">
+            {activeTab === "backtest"
+              ? `종료된 백테스트 거래 ${n}건 기준 — 등급·방향·청산 사유 분석.`
+              : `종료된 가상거래 ${n}건 기준 — 등급·방향·청산 사유 분석.`}
+          </p>
+        </div>
+        <HelpLink href="/app/guide/results" />
+      </div>
+
+      {/* 실거래 / 가상거래 / 백테스트 탭 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          title="Bybit 연동 예정"
+          className="flex cursor-default items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 opacity-50"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-grade-a" />
+          <span className="text-sm font-medium text-muted-foreground">실거래</span>
+          <span className="text-[10px] text-muted-foreground/60">Bybit 연동 예정</span>
+        </div>
+        <Link
+          href="/app/dashboard?mode=live"
+          className={cn(
+            "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
+            activeTab === "live"
+              ? "border-ring bg-primary/10 font-bold"
+              : "border-border bg-card font-medium text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Wallet className={cn("h-3.5 w-3.5", activeTab === "live" && "text-primary")} />
+          가상거래
+          <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-primary">
+            {liveCount}
+          </span>
+        </Link>
+        <Link
+          href="/app/dashboard?mode=backtest"
+          className={cn(
+            "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
+            activeTab === "backtest"
+              ? "border-amber-500/60 bg-amber-500/10 font-bold text-amber-300"
+              : "border-border bg-card font-medium text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <History className={cn("h-3.5 w-3.5", activeTab === "backtest" && "text-amber-300")} />
+          백테스트
+          <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-amber-300/90">
+            {backtestCount}
+          </span>
+        </Link>
       </div>
 
       {!hasData ? (

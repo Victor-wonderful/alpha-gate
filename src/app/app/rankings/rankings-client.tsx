@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trophy, Gamepad2, LineChart, Award, Loader2, Gift } from "lucide-react";
+import { LineChart, Award, Loader2, Gift } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type Category = "game" | "trading" | "combined";
+// 게임·통합 랭킹은 네비/UI에서 제외 (2026-06). 트레이딩 랭킹만 노출.
+type Category = "trading";
 type Period = "daily" | "weekly" | "monthly" | "all";
 
 interface RankingEntry {
@@ -24,8 +25,6 @@ interface UserRank {
 }
 
 const CATEGORIES: { id: Category; label: string; icon: React.ReactNode }[] = [
-  { id: "combined", label: "통합", icon: <Trophy className="h-3.5 w-3.5" /> },
-  { id: "game", label: "게임", icon: <Gamepad2 className="h-3.5 w-3.5" /> },
   { id: "trading", label: "트레이딩", icon: <LineChart className="h-3.5 w-3.5" /> },
 ];
 
@@ -37,9 +36,7 @@ const PERIODS: { id: Period; label: string }[] = [
 ];
 
 const REWARDS_INFO: Record<Category, number[]> = {
-  game: [1000, 500, 300, 100, 100, 100, 100, 100, 100, 100],
   trading: [1000, 500, 300, 100, 100, 100, 100, 100, 100, 100],
-  combined: [3000, 1500, 800, 300, 300, 300, 300, 300, 300, 300],
 };
 
 function medal(rank: number) {
@@ -50,7 +47,7 @@ function medal(rank: number) {
 }
 
 export function RankingsClient() {
-  const [category, setCategory] = useState<Category>("combined");
+  const category: Category = "trading";
   const [period, setPeriod] = useState<Period>("weekly");
   const [top, setTop] = useState<RankingEntry[]>([]);
   const [me, setMe] = useState<UserRank | null>(null);
@@ -76,25 +73,6 @@ export function RankingsClient() {
 
   return (
     <div className="space-y-4">
-      {/* 카테고리 탭 */}
-      <div className="flex gap-1.5">
-        {CATEGORIES.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => setCategory(c.id)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              category === c.id
-                ? "bg-primary text-primary-foreground"
-                : "border border-border/40 text-muted-foreground hover:bg-muted/30 hover:text-foreground",
-            )}
-          >
-            {c.icon}
-            {c.label} 랭킹
-          </button>
-        ))}
-      </div>
-
       {/* 기간 탭 */}
       <div className="flex gap-1">
         {PERIODS.map((p) => (
@@ -244,18 +222,15 @@ export function RankingsClient() {
             <Gift className="h-4 w-4 text-yellow-500" />
             주간 보상 (매주 월요일 00:00 KST 자동 지급)
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            {(["game", "trading", "combined"] as Category[]).map((c) => {
+          <div className="grid grid-cols-1 gap-2 text-xs">
+            {(["trading"] as Category[]).map((c) => {
               const rewards = REWARDS_INFO[c];
               const label = CATEGORIES.find((x) => x.id === c)?.label;
               const total = rewards.reduce((s, r) => s + r, 0);
               return (
                 <div
                   key={c}
-                  className={cn(
-                    "rounded-md border border-border/40 p-2",
-                    c === "combined" && "border-primary/40",
-                  )}
+                  className="rounded-md border border-border/40 p-2"
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold">{label}</span>

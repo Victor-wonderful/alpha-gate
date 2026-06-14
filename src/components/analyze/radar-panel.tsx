@@ -10,12 +10,14 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RadarCandidate } from "@/lib/analysis/radar";
 import type { RadarSnapshot } from "@/lib/analysis/radar-persist";
 import type { TradingStyle } from "@/lib/analysis/style";
+import { STYLE_STANDARDS, MIN_STOP_PCT_VS_FEES } from "@/lib/analysis/standards";
 import { refreshRadarAction, getLiveQuotesAction } from "@/app/app/analyze/_radar-actions";
 
 const LIVE_INTERVAL_MS = 25_000;
@@ -36,14 +38,6 @@ function fmtPrice(p: number): string {
   return p.toLocaleString("en-US", { maximumFractionDigits: 6 });
 }
 
-function fmtVol(v: number): string {
-  if (!Number.isFinite(v) || v <= 0) return "—";
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
-  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
-  return `$${v.toFixed(0)}`;
-}
-
 /** 스캔 시점 가격·변동률에서 오늘 UTC 시가를 역산 (라이브 변동률 재계산용). */
 function deriveDayOpen(price: number, changePct: number): number | null {
   const open = price / (1 + changePct / 100);
@@ -56,14 +50,20 @@ const STYLE_LABEL: Record<TradingStyle, string> = {
   swing: "스윙",
   position: "포지션",
 };
-
-// 스타일별 색상 (빠름→느림: 앰버/스카이/바이올렛/에메랄드).
-const STYLE_BADGE: Record<TradingStyle, string> = {
-  scalp: "bg-amber-500/15 text-amber-300 ring-1 ring-inset ring-amber-500/30",
-  day: "bg-sky-500/15 text-sky-300 ring-1 ring-inset ring-sky-500/30",
-  swing: "bg-violet-500/15 text-violet-300 ring-1 ring-inset ring-violet-500/30",
-  position: "bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/30",
+const STYLE_DUR: Record<TradingStyle, string> = {
+  scalp: "수분~수시간",
+  day: "수시간~하루",
+  swing: "며칠~수주",
+  position: "수주~수개월",
 };
+// 스타일별 색상 (빠름→느림: 앰버/스카이/바이올렛/에메랄드).
+const STYLE_RING: Record<TradingStyle, string> = {
+  scalp: "border-amber-500 bg-amber-500/10 text-amber-200",
+  day: "border-sky-500 bg-sky-500/10 text-sky-200",
+  swing: "border-violet-500 bg-violet-500/10 text-violet-200",
+  position: "border-emerald-500 bg-emerald-500/10 text-emerald-200",
+};
+const STYLE_ORDER: TradingStyle[] = ["scalp", "day", "swing", "position"];
 
 // 신호 종류별 색상 — "왜 볼 만한지"를 색으로 빠르게 구분.
 const SIGNAL_COLOR: Record<string, string> = {
@@ -77,34 +77,49 @@ const SIGNAL_COLOR: Record<string, string> = {
   low24h: "bg-foreground/10 text-foreground/70",
 };
 
-/** 셋업이 가장 뚜렷한(핸디캡 적용) 스타일 라벨 — 저장된 best_style 기준으로 통일. */
-function bestStyleLabel(c: RadarCandidate): string {
-  return STYLE_LABEL[c.bestStyle] ?? "스윙";
+/** 선택한 스타일의 손절 하한 (수수료 하한 vs 스타일 표준 하한×0.8 중 큰 값). */
+function styleFloor(style: TradingStyle): number {
+  return Math.max(MIN_STOP_PCT_VS_FEES, STYLE_STANDARDS[style].stopPct.min * 0.8);
 }
 
-const STRENGTH_SHORT: Record<"strong" | "moderate" | "weak", string> = {
-  strong: "강",
-  moderate: "중",
-  weak: "약",
-};
-const STRENGTH_FULL: Record<"strong" | "moderate" | "weak", string> = {
-  strong: "강함",
-  moderate: "보통",
-  weak: "약함",
-};
-// 추세 지속력 칩 색상 — 강할수록 또렷하게.
-const STRENGTH_BADGE: Record<"strong" | "moderate" | "weak", string> = {
-  strong: "bg-amber-500/25 text-amber-200",
-  moderate: "bg-foreground/15 text-foreground/90",
-  weak: "bg-foreground/10 text-muted-foreground",
-};
+interface Preview {
+  atr: number;
+  hasAtr: boolean;
+  tradeable: boolean;
+  dir: "long" | "short";
+  stopPct: number;
+  targetPct: number;
+  entry: number;
+  stop: number;
+  target: number;
+  score: number;
+}
 
-/** 예상 변동폭 — 80% 콘의 반폭(±%). 너무 큰 값은 상한 표기. */
-function rangeText(c: RadarCandidate): string {
-  if (!c.rangeLowPct && !c.rangeHighPct) return "—";
-  const half = (c.rangeHighPct - c.rangeLowPct) / 2;
-  if (half >= 50) return "±50%↑";
-  return `±${half.toFixed(1)}%`;
+/** 선택 스타일 기준 셋업 미리보기 — LLM 없이 ATR·추세에서 결정론적으로 추정.
+ *  실제 정밀 레벨은 클릭 후 본 분석(AI)에서 산출. */
+function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview {
+  const atr = c.styleAtr?.[style] ?? 0;
+  const floor = styleFloor(style);
+  const hasAtr = atr > 0;
+  // 진입 가능 = 구조 손절(~1.5×ATR)이 손절 하한을 넘김 = 수수료/노이즈를 이기는 손절 가능.
+  const tradeable = hasAtr && atr * 1.5 >= floor;
+  const stopPct = Math.max(floor, atr * 1.5);
+  const targetPct = stopPct * STYLE_STANDARDS[style].rr.min;
+  const dir: "long" | "short" = c.trend === "down" ? "short" : "long";
+  const stop = dir === "long" ? price * (1 - stopPct / 100) : price * (1 + stopPct / 100);
+  const target = dir === "long" ? price * (1 + targetPct / 100) : price * (1 - targetPct / 100);
+  return {
+    atr,
+    hasAtr,
+    tradeable,
+    dir,
+    stopPct,
+    targetPct,
+    entry: price,
+    stop,
+    target,
+    score: c.styleFit?.[style] ?? 0,
+  };
 }
 
 function TrendMark({ trend }: { trend: "up" | "down" | "range" }) {
@@ -129,9 +144,13 @@ function TrendMark({ trend }: { trend: "up" | "down" | "range" }) {
 
 export function RadarPanel({
   initial,
+  style,
+  onStyleChange,
   onPick,
 }: {
   initial: RadarSnapshot;
+  style: TradingStyle;
+  onStyleChange: (style: TradingStyle) => void;
   onPick: (symbol: string, style: TradingStyle) => void;
 }) {
   const [snapshot, setSnapshot] = useState<RadarSnapshot>(initial);
@@ -168,19 +187,28 @@ export function RadarPanel({
       setSnapshot({ candidates: r.candidates, scannedAt: r.scannedAt });
       setLive({});
       setExpanded(false);
-      if (!r.error)
-        toast.success(
-          r.candidates.length > 0
-            ? `${r.candidates.length}개 후보 발견`
-            : "지금은 뚜렷한 셋업이 없습니다",
-        );
     });
   }
 
   const { candidates, scannedAt } = snapshot;
   const hasLive = Object.keys(live).length > 0;
-  const hidden = Math.max(0, candidates.length - COLLAPSED_COUNT);
-  const visible = expanded ? candidates : candidates.slice(0, COLLAPSED_COUNT);
+
+  // 스타일별 ATR 데이터가 아직 없는(구 스캔) 경우 — 새로고침 안내.
+  const hasAtrData = candidates.some(
+    (c) => c.styleAtr && Object.keys(c.styleAtr).length > 0,
+  );
+
+  // 선택 스타일로 진입 가능한 코인만, 점수(해당 스타일 신호) 높은 순.
+  const rows = candidates
+    .map((c) => {
+      const price = live[c.symbol] ?? c.price;
+      return { c, price, p: preview(c, style, price) };
+    })
+    .filter((r) => r.p.tradeable)
+    .sort((a, b) => b.p.score - a.p.score);
+
+  const hidden = Math.max(0, rows.length - COLLAPSED_COUNT);
+  const visible = expanded ? rows : rows.slice(0, COLLAPSED_COUNT);
 
   return (
     <Card className="overflow-hidden">
@@ -188,7 +216,7 @@ export function RadarPanel({
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Radar className="h-[18px] w-[18px] text-primary" />
-            후보 레이더 — 지금 볼 만한 코인
+            후보 레이더 — 진입 가능한 코인
           </CardTitle>
           <div className="flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground tabular-nums">
             {hasLive ? (
@@ -197,11 +225,7 @@ export function RadarPanel({
                 실시간
               </span>
             ) : null}
-            {candidates.length > 0 ? (
-              <span className="text-muted-foreground/70">
-                {candidates.length}개 · 신호 {relativeTime(scannedAt)}
-              </span>
-            ) : null}
+            <span className="text-muted-foreground/70">신호 {relativeTime(scannedAt)}</span>
             <button
               type="button"
               onClick={refresh}
@@ -214,17 +238,47 @@ export function RadarPanel({
           </div>
         </div>
         <p className="mt-1.5 text-xs leading-tight text-muted-foreground">
-          거래대금 상위 30개 중 셋업 조건이 잡힌 코인 ·{" "}
-          <span className="text-foreground/60">매수 추천이 아닌 “분석 후보”</span>
+          스타일을 고르면 그 스타일로 <span className="text-foreground/70">진입 가능한 코인</span>만 ·{" "}
+          <span className="text-foreground/50">매수 추천 아님</span>
         </p>
+
+        {/* 스타일 탭 — 선택 시 분석 스타일도 함께 바뀜 */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {STYLE_ORDER.map((s) => {
+            const active = style === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onStyleChange(s)}
+                title={STYLE_DUR[s]}
+                className={
+                  "rounded-lg border px-3.5 py-1.5 text-sm transition-colors " +
+                  (active
+                    ? STYLE_RING[s] + " font-bold"
+                    : "border-border bg-card font-medium text-muted-foreground hover:text-foreground")
+                }
+              >
+                {STYLE_LABEL[s]}
+              </button>
+            );
+          })}
+          <span className="ml-auto text-[11px] font-medium text-grade-a">
+            {STYLE_LABEL[style]} 진입 가능 {rows.length}개
+          </span>
+        </div>
       </CardHeader>
 
       <CardContent className="px-2 pb-2">
-        {candidates.length === 0 ? (
-          <div className="mx-1 mb-1 whitespace-pre-line rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground">
+        {!hasAtrData ? (
+          <div className="mx-1 mb-1 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground">
             {scannedAt
-              ? "지금은 뚜렷한 셋업이 잡힌 코인이 없습니다.\n무리하지 말고 직접 코인을 선택해 분석하세요."
+              ? "레이더에 스타일별 데이터가 아직 없습니다.\n우측 상단 [새로고침]을 눌러 다시 스캔하세요."
               : "레이더 준비 중 — [새로고침]을 눌러 바로 스캔할 수 있습니다."}
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="mx-1 mb-1 whitespace-pre-line rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground">
+            {`지금은 ${STYLE_LABEL[style]}로 진입 가능한 코인이 없습니다 (변동성 부족).\n더 큰 스타일을 고르거나, 변동성이 살아날 때까지 기다리세요.`}
           </div>
         ) : (
           <>
@@ -232,23 +286,23 @@ export function RadarPanel({
             <div className="flex items-center gap-3 border-b border-border/50 px-2 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:gap-4">
               <span className="w-5 text-center">#</span>
               <span className="w-[76px]">코인</span>
-              <span className="hidden w-[58px] sm:block">추세·힘</span>
-              <span className="hidden w-[72px] sm:block">스타일</span>
-              <span className="w-24 text-right">가격</span>
-              <span className="w-[68px] text-right">변동</span>
-              <span className="min-w-0 flex-1">신호 · 왜 볼 만한지</span>
-              <span className="hidden w-[64px] text-right md:block">예상폭</span>
-              <span className="hidden w-12 text-right md:block">점수</span>
-              <span className="hidden w-20 text-right lg:block">거래대금</span>
-              <span className="w-[60px] text-center">분석</span>
+              <span className="w-[88px] text-right">가격 · 변동</span>
+              <span className="hidden min-w-0 flex-1 sm:block">신호</span>
+              <span className="w-[64px] text-center">진입</span>
+              <span className="hidden w-[132px] md:block">진입 · 목표 · 손절</span>
+              <span className="hidden w-[56px] items-center justify-end gap-1 sm:flex">예상폭</span>
+              <span className="w-9 text-center">점수</span>
+              <span className="w-[56px] text-center">분석</span>
             </div>
             <ul className="divide-y divide-border/50">
-              {visible.map((c, i) => (
+              {visible.map((r, i) => (
                 <CandidateRow
-                  key={c.symbol + i}
-                  c={c}
+                  key={r.c.symbol + i}
+                  c={r.c}
+                  price={r.price}
+                  p={r.p}
                   rank={i + 1}
-                  livePrice={live[c.symbol]}
+                  style={style}
                   onPick={onPick}
                 />
               ))}
@@ -279,100 +333,68 @@ export function RadarPanel({
   );
 }
 
+function Level({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: string }) {
+  return (
+    <span className="flex items-center gap-1.5 leading-tight">
+      <span className="w-6 shrink-0 text-[9px] font-medium text-muted-foreground/70">{label}</span>
+      <span className={"font-mono text-[11px] font-semibold tabular-nums " + tone}>{value}</span>
+      {sub ? <span className={"font-mono text-[9px] tabular-nums " + tone}>{sub}</span> : null}
+    </span>
+  );
+}
+
 function CandidateRow({
   c,
+  price,
+  p,
   rank,
-  livePrice,
+  style,
   onPick,
 }: {
   c: RadarCandidate;
+  price: number;
+  p: Preview;
   rank: number;
-  livePrice?: number;
+  style: TradingStyle;
   onPick: (symbol: string, style: TradingStyle) => void;
 }) {
   const base = c.symbol.replace("USDT", "");
-  const strong = c.score >= 6;
-  const styleLabel = bestStyleLabel(c);
 
-  // 라이브 가격이 있으면 변동률을 오늘 시가 대비로 재계산.
-  const price = livePrice ?? c.price;
   const dayOpen = deriveDayOpen(c.price, c.change24hPct);
-  const changePct =
-    livePrice && dayOpen ? ((livePrice - dayOpen) / dayOpen) * 100 : c.change24hPct;
+  const changePct = dayOpen ? ((price - dayOpen) / dayOpen) * 100 : c.change24hPct;
   const up = changePct >= 0;
+  const rangeHalf = (c.rangeHighPct - c.rangeLowPct) / 2;
 
   return (
     <li>
       <button
         type="button"
-        onClick={() => onPick(c.symbol, c.bestStyle)}
+        onClick={() => onPick(c.symbol, style)}
         className="group flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left transition-colors hover:bg-accent/50 sm:gap-4"
       >
         {/* 순위 */}
-        <span
-          className={
-            "w-5 shrink-0 text-center font-mono text-xs tabular-nums " +
-            (strong ? "font-bold text-primary" : "text-muted-foreground")
-          }
-        >
+        <span className="w-5 shrink-0 text-center font-mono text-xs font-bold tabular-nums text-primary">
           {rank}
         </span>
 
-        {/* 심볼 */}
-        <span className="w-[76px] shrink-0 truncate font-mono text-sm font-semibold text-foreground">
-          {base}
-        </span>
-
-        {/* 추세 + 지속력 */}
-        <span className="hidden w-[58px] shrink-0 items-center gap-1 sm:flex">
+        {/* 심볼 + 추세 */}
+        <span className="flex w-[76px] shrink-0 items-center gap-1.5">
           <TrendMark trend={c.trend} />
-          {c.trend !== "range" ? (
-            <span
-              title={`추세 지속력: ${STRENGTH_FULL[c.trendStrength]} (방향 아님 — 이 추세가 이어질 힘)`}
-              className={
-                "rounded px-1 py-0.5 text-[10px] font-bold leading-none " +
-                STRENGTH_BADGE[c.trendStrength]
-              }
-            >
-              {STRENGTH_SHORT[c.trendStrength]}
-            </span>
-          ) : null}
+          <span className="truncate font-mono text-sm font-semibold text-foreground">{base}</span>
         </span>
 
-        {/* 적합 스타일 */}
-        <span
-          title={`${styleLabel} 셋업이 가장 뚜렷합니다`}
-          className="hidden w-[72px] shrink-0 sm:inline-flex"
-        >
-          <span
-            className={
-              "truncate rounded-md px-2 py-0.5 text-[11px] font-semibold " +
-              STYLE_BADGE[c.bestStyle]
-            }
-          >
-            {styleLabel}
+        {/* 가격 · 변동 */}
+        <span className="flex w-[88px] shrink-0 flex-col items-end leading-tight">
+          <span className="font-mono text-[13px] tabular-nums text-foreground">{fmtPrice(price)}</span>
+          <span className={"font-mono text-[11px] tabular-nums " + (up ? "text-grade-a" : "text-grade-d")}>
+            {up ? "+" : ""}
+            {changePct.toFixed(2)}%
           </span>
         </span>
 
-        {/* 가격 */}
-        <span className="w-24 shrink-0 text-right font-mono text-sm tabular-nums text-foreground">
-          {fmtPrice(price)}
-        </span>
-
-        {/* 변동률 */}
-        <span
-          className={
-            "w-[68px] shrink-0 text-right font-mono text-sm tabular-nums " +
-            (up ? "text-grade-a" : "text-grade-d")
-          }
-        >
-          {up ? "+" : ""}
-          {changePct.toFixed(2)}%
-        </span>
-
-        {/* 신호 (왜 볼 만한지) */}
-        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-          {c.signals.slice(0, 3).map((s) => (
+        {/* 신호 */}
+        <span className="hidden min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:flex">
+          {c.signals.slice(0, 2).map((s) => (
             <span
               key={s.key}
               className={
@@ -383,35 +405,51 @@ function CandidateRow({
               {s.label}
             </span>
           ))}
-          {c.signals.length > 3 ? (
-            <span className="text-[11px] text-muted-foreground">+{c.signals.length - 3}</span>
+          {c.signals.length > 2 ? (
+            <span className="text-[11px] text-muted-foreground">+{c.signals.length - 2}</span>
           ) : null}
         </span>
 
-        {/* 예상 변동폭 (몬테카를로 80% 콘) */}
+        {/* 진입 가능 배지 */}
+        <span className="flex w-[64px] shrink-0 items-center justify-center">
+          <span className="inline-flex items-center gap-1 rounded-md border border-grade-a/40 bg-grade-a/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
+            <Check className="h-3 w-3" />
+            가능
+          </span>
+        </span>
+
+        {/* 진입 · 목표 · 손절 (추정) */}
+        <span className="hidden w-[132px] shrink-0 flex-col gap-0.5 md:flex">
+          <Level label="진입" value={fmtPrice(p.entry)} tone="text-foreground" />
+          <Level
+            label="목표"
+            value={fmtPrice(p.target)}
+            sub={`${p.dir === "long" ? "+" : "-"}${p.targetPct.toFixed(1)}%`}
+            tone="text-grade-a"
+          />
+          <Level
+            label="손절"
+            value={fmtPrice(p.stop)}
+            sub={`${p.dir === "long" ? "-" : "+"}${p.stopPct.toFixed(1)}%`}
+            tone="text-grade-d"
+          />
+        </span>
+
+        {/* 예상폭 */}
         <span
-          title={
-            c.rangeLowPct || c.rangeHighPct
-              ? `다음 구간 80% 예상 변동폭: ${c.rangeLowPct.toFixed(1)}% ~ +${c.rangeHighPct.toFixed(1)}% (방향 예측 아님)`
-              : "데이터 부족"
-          }
-          className="hidden w-[64px] shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground md:block"
+          title="다음 구간 80% 예상 변동폭 (방향 예측 아님)"
+          className="hidden w-[56px] shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:block"
         >
-          {rangeText(c)}
+          {rangeHalf > 0 ? (rangeHalf >= 50 ? "±50%↑" : `±${rangeHalf.toFixed(1)}%`) : "—"}
         </span>
 
-        {/* 신호 점수 */}
-        <span className="hidden w-12 shrink-0 text-right text-[11px] text-muted-foreground md:block">
-          점수 <span className="font-mono tabular-nums text-foreground/80">{c.score}</span>
-        </span>
-
-        {/* 거래대금 (24h) */}
-        <span className="hidden w-20 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground lg:block">
-          {fmtVol(c.volume24hUsd)}
+        {/* 점수 (선택 스타일 신호 점수) */}
+        <span className="w-9 shrink-0 text-center font-mono text-base font-bold tabular-nums text-primary">
+          {p.score}
         </span>
 
         {/* 분석 액션 */}
-        <span className="inline-flex w-[60px] shrink-0 items-center justify-center gap-0.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:bg-primary/10 group-hover:text-primary">
+        <span className="inline-flex w-[56px] shrink-0 items-center justify-center gap-0.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:bg-primary/10 group-hover:text-primary">
           분석
           <ChevronRight className="h-3.5 w-3.5" />
         </span>

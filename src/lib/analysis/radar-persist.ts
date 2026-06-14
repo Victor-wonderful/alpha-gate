@@ -14,6 +14,7 @@ export async function saveRadarScan(candidates: RadarCandidate[]): Promise<numbe
     signals: c.signals,
     best_style: c.bestStyle,
     style_fit: c.styleFit,
+    style_atr: c.styleAtr,
     trend: c.trend,
     trend_strength: c.trendStrength,
     range_low_pct: c.rangeLowPct,
@@ -58,7 +59,7 @@ export async function loadLatestRadar(): Promise<RadarSnapshot> {
   const { data, error } = await supabase
     .from("radar_candidates")
     .select(
-      "symbol, score, signals, best_style, style_fit, trend, trend_strength, range_low_pct, range_high_pct, price, change24h_pct, funding_rate, volume24h_usd",
+      "symbol, score, signals, best_style, style_fit, style_atr, trend, trend_strength, range_low_pct, range_high_pct, price, change24h_pct, funding_rate, volume24h_usd",
     )
     .eq("scanned_at", latest.scanned_at)
     .order("score", { ascending: false });
@@ -71,6 +72,7 @@ export async function loadLatestRadar(): Promise<RadarSnapshot> {
     signals: (r.signals as RadarSignal[]) ?? [],
     bestStyle: ((r.best_style as TradingStyle) ?? "swing"),
     styleFit: ((r.style_fit as StyleFit) ?? ({} as StyleFit)),
+    styleAtr: ((r.style_atr as StyleFit) ?? ({} as StyleFit)),
     trend: ((r.trend as "up" | "down" | "range") ?? "range"),
     trendStrength: ((r.trend_strength as "strong" | "moderate" | "weak") ?? "weak"),
     rangeLowPct: r.range_low_pct == null ? 0 : Number(r.range_low_pct),

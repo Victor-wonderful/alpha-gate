@@ -37,6 +37,8 @@ export interface RadarCandidate {
   bestStyle: TradingStyle;
   /** 스타일별 신호 점수 (스캘핑/데이/스윙/포지션). */
   styleFit: StyleFit;
+  /** 스타일별 ATR%(기준 TF, 가격 대비). 진입 가능 판정·손절/목표 추정용. */
+  styleAtr: StyleFit;
   /** best 스타일 TF 기준 현재 추세. */
   trend: "up" | "down" | "range";
   /** 추세 지속력 (ADX/KER/Choppiness 종합). 방향 아님 — "이 추세가 이어질 힘". */
@@ -128,6 +130,20 @@ function median(arr: number[]): number {
   if (arr.length === 0) return 0;
   const s = [...arr].sort((a, b) => a - b);
   return s[Math.floor(s.length / 2)];
+}
+
+/** ATR%(가격 대비) — 마지막 period봉 평균 True Range / 현재가. */
+function atrPct(candles: Candle[], period = 14): number {
+  if (candles.length < period + 1) return 0;
+  let sum = 0;
+  for (let i = candles.length - period; i < candles.length; i++) {
+    const c = candles[i];
+    const prev = candles[i - 1];
+    sum += Math.max(c.high - c.low, Math.abs(c.high - prev.close), Math.abs(c.low - prev.close));
+  }
+  const atr = sum / period;
+  const last = candles[candles.length - 1].close;
+  return last > 0 ? (atr / last) * 100 : 0;
 }
 
 /** True Range 기반 ATR%(가격 대비)의 (현재 / 최근 중앙값) 비율. <1 = 변동성 수축. */
@@ -271,6 +287,7 @@ async function scanCoin(
   UNIQUE_TFS.forEach((tf, i) => (byTf[tf] = klineArr[i]));
 
   const styleFit = {} as StyleFit;
+  const styleAtr = {} as StyleFit;
   let best: { style: TradingStyle; score: number; signals: RadarSignal[]; adj: number } | null =
     null;
 
@@ -281,6 +298,7 @@ async function scanCoin(
       fundingRate,
     });
     styleFit[style] = score;
+    styleAtr[style] = atrPct(candles);
     // 핸디캡 적용한 점수로 스타일 선택 (긴 TF 편향 제거). STYLE_ORDER가 짧은 순이라 동점 시 짧은 쪽 우선.
     const adj = score - STYLE_HANDICAP[style];
     if (!best || adj > best.adj) best = { style, score, signals, adj };
@@ -308,6 +326,7 @@ async function scanCoin(
     signals: best.signals,
     bestStyle: best.style,
     styleFit,
+    styleAtr,
     trend,
     trendStrength,
     rangeLowPct: cone.insufficient ? 0 : cone.lowPct,

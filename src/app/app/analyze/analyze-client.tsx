@@ -240,7 +240,7 @@ function AnalyzeClientInner({
   return (
     <div className="space-y-6">
       <AnalysisInfo />
-      <RadarPanel initial={radar} onPick={pickCandidate} />
+      <RadarPanel initial={radar} style={style} onStyleChange={setStyle} onPick={pickCandidate} />
 
       {/* 분석 설정 — 좌: 트레이딩 스타일 / 우: 분석 대상 (시안 Setup Row) */}
       <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">

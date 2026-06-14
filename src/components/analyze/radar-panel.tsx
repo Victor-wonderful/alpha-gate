@@ -266,7 +266,7 @@ export function RadarPanel({
         </div>
         <p className="mt-1.5 text-xs leading-tight text-muted-foreground">
           스타일을 고르면 그 스타일로 <span className="text-foreground/70">진입 가능한 코인</span>만 ·{" "}
-          <span className="text-foreground/50">매수 추천 아님</span>
+          <span className="text-foreground/50">손절·목표는 추정(분석 시 정밀 레벨 산출) · 매수 추천 아님</span>
         </p>
 
         {/* 스타일 탭 — 선택 시 분석 스타일도 함께 바뀜 */}
@@ -316,7 +316,7 @@ export function RadarPanel({
               <span className="w-[88px] text-right">가격 · 변동</span>
               <span className="hidden min-w-0 flex-1 sm:block">신호</span>
               <span className="w-[78px] text-center">진입 · 시나리오</span>
-              <span className="hidden w-[132px] md:block">진입 · 목표 · 손절</span>
+              <span className="hidden w-[120px] md:block">예상 손절 · 목표</span>
               <span className="hidden w-[56px] items-center justify-end gap-1 sm:flex">예상폭</span>
               <span className="w-9 text-center">점수</span>
               <span className="w-[56px] text-center">분석</span>
@@ -357,16 +357,6 @@ export function RadarPanel({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function Level({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: string }) {
-  return (
-    <span className="flex items-center gap-1.5 leading-tight">
-      <span className="w-6 shrink-0 text-[9px] font-medium text-muted-foreground/70">{label}</span>
-      <span className={"font-mono text-[11px] font-semibold tabular-nums " + tone}>{value}</span>
-      {sub ? <span className={"font-mono text-[9px] tabular-nums " + tone}>{sub}</span> : null}
-    </span>
   );
 }
 
@@ -446,21 +436,21 @@ function CandidateRow({
           <span className="text-[9px] text-muted-foreground">시나리오 ~{estScenarios(c)}개</span>
         </span>
 
-        {/* 진입 · 목표 · 손절 (추정) */}
-        <span className="hidden w-[132px] shrink-0 flex-col gap-0.5 md:flex">
-          <Level label="진입" value={fmtPrice(p.entry)} tone="text-foreground" />
-          <Level
-            label="목표"
-            value={fmtPrice(p.target)}
-            sub={`${p.dir === "long" ? "+" : "-"}${p.targetPct.toFixed(1)}%`}
-            tone="text-grade-a"
-          />
-          <Level
-            label="손절"
-            value={fmtPrice(p.stop)}
-            sub={`${p.dir === "long" ? "-" : "+"}${p.stopPct.toFixed(1)}%`}
-            tone="text-grade-d"
-          />
+        {/* 예상 손절폭 · 목표폭 (추정 — 분석 시 정밀화) */}
+        <span className="hidden w-[120px] shrink-0 flex-col gap-0.5 leading-tight md:flex">
+          <span className="flex items-center gap-1.5">
+            <span className="w-7 shrink-0 text-[9px] font-medium text-muted-foreground/70">손절</span>
+            <span className="font-mono text-[11px] font-semibold tabular-nums text-grade-d">
+              ±{p.stopPct.toFixed(1)}%
+            </span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-7 shrink-0 text-[9px] font-medium text-muted-foreground/70">목표</span>
+            <span className="font-mono text-[11px] font-semibold tabular-nums text-grade-a">
+              ~{p.targetPct.toFixed(1)}%
+            </span>
+            <span className="text-[9px] text-muted-foreground">R:R {STYLE_STANDARDS[style].rr.min}</span>
+          </span>
         </span>
 
         {/* 예상폭 */}

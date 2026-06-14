@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { ArrowRight, History, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { GradeBadge } from "@/components/trade/grade-badge";
@@ -8,7 +8,7 @@ import { FlowStepper } from "@/components/app/flow-stepper";
 import { ResolveTradesButton } from "./resolve-button";
 import { CancelPendingButton } from "./cancel-pending-button";
 import { HelpLink } from "@/components/app/help-link";
-import { ModeFilter, parseMode, type TradeMode } from "@/components/app/mode-filter";
+import { parseMode, type TradeMode } from "@/components/app/mode-filter";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
 import { Suspense } from "react";
 import { ClosedTradesTable, type ClosedTradeRow } from "./closed-trades-table";
@@ -68,23 +68,30 @@ export default async function JournalListPage({
     order_status?: "pending" | "filled" | "canceled" | "expired" | null;
     limit_price?: number | null;
   })[];
-  // Pending limit/stop orders: waiting for price to reach the trigger. Not yet a real position.
+  // 탭: 가상거래(live) / 백테스트(backtest). 실거래(real exchange)는 아직 없음(Bybit 연동 예정).
+  // ?mode=backtest → 백테스트 탭, 그 외(없음/live/all) → 가상거래 탭.
+  const activeTab: "live" | "backtest" = tradeMode === "backtest" ? "backtest" : "live";
+  const tabOf = (m: "live" | "backtest" | null | undefined) => (m === "backtest" ? "backtest" : "live");
+
+  // Pending limit/stop orders + 진행 중 포지션은 라이브(가상거래)에만 존재 — 백테스트는 즉시 청산됨.
   const pendingLimits = trades.filter(
     (t) =>
       !t.closed_at &&
       t.order_status === "pending" &&
-      (t.order_type === "limit" || t.order_type === "stop"),
+      (t.order_type === "limit" || t.order_type === "stop") &&
+      tabOf(t.mode) === activeTab,
   );
   const open = trades.filter(
-    (t) => !t.closed_at && t.order_status !== "pending" && t.order_status !== "canceled" && t.order_status !== "expired",
+    (t) =>
+      !t.closed_at &&
+      t.order_status !== "pending" &&
+      t.order_status !== "canceled" &&
+      t.order_status !== "expired" &&
+      tabOf(t.mode) === activeTab,
   );
   const closedAll = trades.filter((t) => t.closed_at);
-  // 모드 필터 (?mode=live|backtest|all). 모든 KPI/통계/리스트는 이 필터를 거친 데이터 사용.
-  const closed = closedAll.filter((t) => {
-    if (tradeMode === "all") return true;
-    const m = t.mode === "backtest" ? "backtest" : "live"; // legacy null → live
-    return m === tradeMode;
-  });
+  // 모든 KPI/통계/리스트는 활성 탭(live/backtest)으로 필터된 데이터 사용.
+  const closed = closedAll.filter((t) => tabOf(t.mode) === activeTab);
   const liveCount = closedAll.filter((t) => t.mode !== "backtest").length;
   const backtestCount = closedAll.filter((t) => t.mode === "backtest").length;
 
@@ -233,43 +240,63 @@ export default async function JournalListPage({
         <ExpiryBanner />
       </Suspense>
 
-      {/* 페이지 헤더 — 제목 + 모드 필터 */}
+      {/* 페이지 헤더 — 제목 + 액션 */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">거래 일지</h1>
           <p className="text-xs text-muted-foreground">
-            실제 거래와 가상 거래를 분리해 기록합니다 — 청산 결과 · AI 복기 포함
+            실거래 · 가상거래 · 백테스트를 분리해 기록합니다 — 청산 결과 · AI 복기 포함
           </p>
         </div>
-        <ModeFilter
-          basePath="/app/journal"
-          view="all"
-          current={tradeMode}
-          counts={{ all: closedAll.length, live: liveCount, backtest: backtestCount }}
-        />
-      </div>
-
-      {/* 실제 / 가상 거래 탭 + 액션 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div
-          title="Bybit 연동 예정"
-          className="flex cursor-default items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 opacity-60"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-grade-a" />
-          <span className="text-sm font-medium text-muted-foreground">실제 거래</span>
-          <span className="text-[10px] text-muted-foreground/60">Bybit 연동 예정</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl border border-ring bg-primary/10 px-4 py-2.5">
-          <Wallet className="h-3.5 w-3.5 text-primary" />
-          <span className="text-sm font-bold">가상 거래</span>
-          <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] text-primary tabular-nums">
-            {closedAll.length}
-          </span>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <HelpLink href="/app/guide/results" />
           <ResolveTradesButton />
         </div>
+      </div>
+
+      {/* 실거래 / 가상거래 / 백테스트 탭 */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* 실거래 — Bybit 연동 예정 (비활성) */}
+        <div
+          title="Bybit 연동 예정"
+          className="flex cursor-default items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 opacity-50"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-grade-a" />
+          <span className="text-sm font-medium text-muted-foreground">실거래</span>
+          <span className="text-[10px] text-muted-foreground/60">Bybit 연동 예정</span>
+        </div>
+        {/* 가상거래 (live) */}
+        <Link
+          href="/app/journal?mode=live"
+          className={cn(
+            "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
+            activeTab === "live"
+              ? "border-ring bg-primary/10 font-bold"
+              : "border-border bg-card font-medium text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Wallet className={cn("h-3.5 w-3.5", activeTab === "live" && "text-primary")} />
+          가상거래
+          <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-primary">
+            {liveCount}
+          </span>
+        </Link>
+        {/* 백테스트 */}
+        <Link
+          href="/app/journal?mode=backtest"
+          className={cn(
+            "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
+            activeTab === "backtest"
+              ? "border-amber-500/60 bg-amber-500/10 font-bold text-amber-300"
+              : "border-border bg-card font-medium text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <History className={cn("h-3.5 w-3.5", activeTab === "backtest" && "text-amber-300")} />
+          백테스트
+          <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-amber-300/90">
+            {backtestCount}
+          </span>
+        </Link>
       </div>
 
       {/* KPI cards */}

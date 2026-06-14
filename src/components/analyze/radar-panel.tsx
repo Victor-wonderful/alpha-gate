@@ -82,6 +82,15 @@ function styleFloor(style: TradingStyle): number {
   return Math.max(MIN_STOP_PCT_VS_FEES, STYLE_STANDARDS[style].stopPct.min * 0.8);
 }
 
+// ATR 상한 — 이보다 변동성이 크면 저유동성/급등 이상치로 보고 진입 가능에서 제외.
+// (5분봉 ATR 7%, 1분봉 20% 같은 micro-cap 펌핑 코인은 정상 셋업이 안 나옴.)
+const STYLE_ATR_CAP: Record<TradingStyle, number> = {
+  scalp: 2.5,
+  day: 4,
+  swing: 10,
+  position: 25,
+};
+
 interface Preview {
   atr: number;
   hasAtr: boolean;
@@ -101,9 +110,10 @@ function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview
   const atr = c.styleAtr?.[style] ?? 0;
   const floor = styleFloor(style);
   const hasAtr = atr > 0;
-  // 진입 가능 = 구조 손절(~1.5×ATR)이 손절 하한을 넘김 = 수수료/노이즈를 이기는 손절 가능.
-  const tradeable = hasAtr && atr * 1.5 >= floor;
-  const stopPct = Math.max(floor, atr * 1.5);
+  // 진입 가능 = ATR이 손절 하한 이상(LLM이 두는 구조 손절 ~0.8~1×ATR이 floor를 넘김 = 수수료/노이즈 이김)
+  // 이고, ATR이 상한 이하(저유동성 이상치 제외). ×1.1로 약간의 여유.
+  const tradeable = hasAtr && atr >= floor * 1.1 && atr <= STYLE_ATR_CAP[style];
+  const stopPct = Math.max(floor, atr); // 구조 손절 추정 ≈ 1×ATR
   const targetPct = stopPct * STYLE_STANDARDS[style].rr.min;
   const dir: "long" | "short" = c.trend === "down" ? "short" : "long";
   const stop = dir === "long" ? price * (1 - stopPct / 100) : price * (1 + stopPct / 100);

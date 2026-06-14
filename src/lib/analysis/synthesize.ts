@@ -541,6 +541,11 @@ function enforceEntryProximity(
   const proxLimits = PROXIMITY_LIMITS[snapshot.style] ?? PROXIMITY_LIMITS.swing;
   const stopLimits = STOP_RANGES[snapshot.style] ?? STOP_RANGES.swing;
   const mtfAtrPct = snapshot.atr?.find((a) => a.role === "MTF")?.pctOfPrice;
+  // 근접 한도를 ATR(변동성)에 맞춰 확장 — 변동성 큰 코인은 진입가가 고정 한도보다 멀어도
+  // ATR 비례로 도달 가능(후보 레이더의 ATR 기반 "진입 가능" 판정과 정합). 고정값은 하한.
+  const atr = mtfAtrPct ?? 0;
+  const proxImmediate = Math.max(proxLimits.immediate, atr * 0.5);
+  const proxPending = Math.max(proxLimits.pending, atr * 1.2);
 
   const kept: AnalysisReport["scenarios"] = [];
   const dropped: string[] = [];
@@ -548,10 +553,10 @@ function enforceEntryProximity(
     const mid = (s.entryZone.low + s.entryZone.high) / 2;
     const distPct = Math.abs((mid - current) / current) * 100;
 
-    // 1) Proximity gate
+    // 1) Proximity gate (ATR 상대)
     let resolved: "immediate" | "pending";
-    if (distPct <= proxLimits.immediate) resolved = "immediate";
-    else if (distPct <= proxLimits.pending) resolved = "pending";
+    if (distPct <= proxImmediate) resolved = "immediate";
+    else if (distPct <= proxPending) resolved = "pending";
     else {
       dropped.push(`${s.name} (진입가 ${distPct.toFixed(1)}% 떨어짐 — 도달 가능성 낮음)`);
       continue;
@@ -610,7 +615,7 @@ function enforceEntryProximity(
       // Per-tier proximity gate — drop individual tiers that exceed pending limit
       // even if the scenario midpoint passed. This kills "3차 진입" prices that are
       // far enough away to be effectively unreachable.
-      const tierLimit = proxLimits.pending;
+      const tierLimit = proxPending;
       const withinLimit = sorted.filter((e) => {
         const d = Math.abs((e.price - current) / current) * 100;
         if (d <= tierLimit) return true;

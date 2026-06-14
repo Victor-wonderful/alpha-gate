@@ -1,7 +1,6 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { AnalyzeClient } from "./analyze-client";
 import { AnalysisHistory } from "@/components/analyze/analysis-history";
-import { FlowStepper } from "@/components/app/flow-stepper";
 import { HelpLink } from "@/components/app/help-link";
 import { getMoneyContext } from "@/lib/money-management";
 import { loadLatestRadar, type RadarSnapshot } from "@/lib/analysis/radar-persist";
@@ -48,7 +47,6 @@ export default async function AnalyzePage() {
 
   return (
     <div className="space-y-6">
-      <FlowStepper current="analyze" />
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">

@@ -29,26 +29,31 @@
   }
 
   .dark {
-    --background: 252 22% 7%;
-    --foreground: 250 20% 98%;
-    --card: 252 18% 12%;
-    --card-foreground: 250 20% 98%;
-    --card-2: 252 16% 14%;
-    --popover: 252 18% 10%;
-    --popover-foreground: 250 20% 98%;
-    --primary: 199 89% 56%;
-    --primary-foreground: 252 22% 7%;
-    --secondary: 252 12% 16%;
-    --secondary-foreground: 250 20% 98%;
-    --muted: 252 12% 16%;
-    --muted-foreground: 252 8% 60%;
-    --accent: 252 12% 16%;
-    --accent-foreground: 250 20% 98%;
-    --destructive: 0 62.8% 30.6%;
+    /* Alpha Gate dark — violet palette (디자인 시스템 pencil-new.pen 기준) */
+    --background: 240 30% 4%;        /* #07070D */
+    --foreground: 240 30% 96%;       /* #F2F2F8 */
+    --card: 240 24% 8%;              /* #10101A */
+    --card-foreground: 240 30% 96%;
+    --card-2: 240 19% 10%;           /* #15151F hover */
+    --popover: 240 27% 7%;           /* #0C0C15 */
+    --popover-foreground: 240 30% 96%;
+    --primary: 252 89% 86%;          /* #C9BCFB lavender */
+    --primary-foreground: 252 49% 12%; /* #16102F */
+    --secondary: 240 18% 13%;
+    --secondary-foreground: 240 30% 96%;
+    --muted: 240 18% 13%;
+    --muted-foreground: 240 11% 60%; /* #8E8EA5 */
+    --accent: 240 18% 13%;
+    --accent-foreground: 240 30% 96%;
+    --destructive: 347 80% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 252 14% 20%;
-    --input: 252 14% 22%;
-    --ring: 199 89% 56%;
+    --border: 240 19% 14%;           /* #1D1D2B */
+    --input: 240 17% 20%;            /* #2B2B3D */
+    --ring: 247 87% 73%;             /* #8B7CF6 */
+    --grade-a: 158 64% 52%;          /* #34D399 */
+    --grade-b: 199 89% 60%;          /* #38BDF8 */
+    --grade-c: 43 96% 56%;           /* #FBBF24 */
+    --grade-d: 347 95% 71%;          /* #FB6E8C */
   }
 }
 
@@ -96,8 +101,8 @@
   }
   body {
     background:
-      radial-gradient(ellipse 1100px 560px at 50% -180px, hsl(199 89% 56% / 0.07), transparent 60%),
-      radial-gradient(ellipse 900px 500px at 100% 10%, hsl(280 60% 55% / 0.05), transparent 55%),
+      radial-gradient(ellipse 1100px 560px at 50% -180px, hsl(247 87% 73% / 0.06), transparent 60%),
+      radial-gradient(ellipse 900px 500px at 100% 10%, hsl(280 60% 55% / 0.04), transparent 55%),
       radial-gradient(ellipse 700px 500px at 0% 15%, hsl(252 50% 50% / 0.04), transparent 55%),
       hsl(var(--background));
     color: hsl(var(--foreground));

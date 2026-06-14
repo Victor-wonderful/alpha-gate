@@ -24,6 +24,7 @@ export function ScenarioProbability({
   direction,
   closes,
   style,
+  compact = false,
 }: {
   entry: number;
   stop: number;
@@ -31,6 +32,8 @@ export function ScenarioProbability({
   direction: "long" | "short";
   closes: number[];
   style: TradingStyle;
+  /** 시안 카드용 한 줄(라벨 + 바 + 카운트) 표시 */
+  compact?: boolean;
 }) {
   const result = useMemo(
     () =>
@@ -49,6 +52,32 @@ export function ScenarioProbability({
 
   const { pTarget, pStop, pTimeout, expR, p10, p50, p90, medianDrawdownPct, paths } = result;
   const expGood = expR >= 0;
+  const n = (p: number) => Math.round(p * 100);
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-3">
+        <span
+          title={`과거 변동성 분포 부트스트랩(N=${paths.toLocaleString()}) · 방향 가정 없음. 기대값 ${expR >= 0 ? "+" : ""}${expR.toFixed(2)}R`}
+          className="flex-none cursor-help text-xs text-muted-foreground"
+        >
+          도달 확률{" "}
+          <span className="hidden sm:inline text-muted-foreground/60">(몬테카를로)</span>
+        </span>
+        <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
+          <div className="bg-grade-a" style={{ width: pct(pTarget) }} />
+          <div className="bg-muted-foreground/40" style={{ width: pct(pTimeout) }} />
+          <div className="bg-grade-d" style={{ width: pct(pStop) }} />
+        </div>
+        <span className="flex-none font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="text-grade-a">목표 {n(pTarget)}</span>
+          {" · "}미도달 {n(pTimeout)}
+          {" · "}
+          <span className="text-grade-d">손절 {n(pStop)}</span>
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-border bg-background/40 p-4">

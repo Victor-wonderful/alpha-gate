@@ -59,7 +59,7 @@ export default function GuidePage() {
             Icon={CheckCircle2}
             color="text-grade-a"
             bg="bg-grade-a/10"
-            title="주문 검토"
+            title="거래 실행"
             sub="등급 · 사이즈"
           />
           <CycleStep
@@ -98,7 +98,7 @@ export default function GuidePage() {
             href="/app/guide/trading"
             Icon={Wallet}
             iconColor="text-grade-b"
-            title="트레이딩 터미널 사용법"
+            title="가상 거래 사용법"
             desc="시장가/지정가, 5분 자동 정산, 거래 평가의 자금 관리 + 시장 컨텍스트 자동 집계."
           />
           <GuideCard
@@ -136,7 +136,7 @@ export default function GuidePage() {
             title="vUSDT"
             body={
               <>
-                플랫폼 내 가상 화폐. 트레이딩 터미널·차익거래·게임에 사용합니다. 신규 가입 시{" "}
+                플랫폼 내 가상 화폐. 가상 거래·차익거래·게임에 사용합니다. 신규 가입 시{" "}
                 <span className="font-mono font-medium tabular-nums text-foreground">10,000</span> 자동 지급.
               </>
             }
@@ -175,13 +175,13 @@ export default function GuidePage() {
         <h2 className="text-2xl font-bold leading-[1.15] tracking-tight">자주 묻는 질문</h2>
         <div className="mt-4 divide-y divide-border/60 border-y border-border/60">
           <Faq question="자동 정산은 언제 되나요?">
-            5분마다 자동. 손절·목표가 적중하면 거래 종결 + 실현 R 계산 + 알림(Telegram/Discord) 발송. 즉시 확인하려면 내 거래 페이지의 "지금 자동 정산" 버튼.
+            5분마다 자동. 손절·목표가 적중하면 거래 종결 + 실현 R 계산 + 알림(Telegram/Discord) 발송. 즉시 확인하려면 거래 일지 페이지의 "지금 자동 정산" 버튼.
           </Faq>
           <Faq question="시나리오 적중률은 어떻게 계산되나요?">
             분석을 저장하면 시나리오들이 자동으로 트래킹 시스템에 등록됩니다. 사용자가 실제 진입했는지 여부와 무관하게 시스템이 5분마다 entry/target/stop 가격을 추적해 적중률을 누적합니다. (symbol × strategy) 조합별 최근 30일 표본 합산. 표본 3개 이상이면 분석 결과 화면에 "과거 적중률 X%" 표시.
           </Faq>
           <Faq question="거래 평가의 자금 관리는 뭔가요?">
-            주문 검토 페이지에서 자동으로 표시되는 상태 박스. 오늘 거래 N건/누적 R, 진행 중 포지션 리스트, 진행 중 노출 %, 일일 손실 한도(-2R) 근접 경고. 사용자 입력 없이 저널 DB에서 자동 집계. 중복 코인 진입이나 과노출은 등급에 자동 차감.
+            거래 실행 페이지에서 자동으로 표시되는 상태 박스. 오늘 거래 N건/누적 R, 진행 중 포지션 리스트, 진행 중 노출 %, 일일 손실 한도(-2R) 근접 경고. 사용자 입력 없이 저널 DB에서 자동 집계. 중복 코인 진입이나 과노출은 등급에 자동 차감.
           </Faq>
           <Faq question="차익거래는 어떻게 작동하나요?">
             Upbit·Binance 양쪽에 진입 코인 + USDT 절반씩 보유. 김프가 ±임계값(기본 0.5%)에 도달하면 cron이 자동 리밸런싱(인벤토리의 25%). 양방향 모두 수익 가능한 마켓 메이킹 스타일. 7일 백테스트로 코인별 실증 기대 수익 표시.
@@ -190,7 +190,7 @@ export default function GuidePage() {
             코드는 완성됐지만 현재 보류 중입니다. Binance의 IP 제한 정책과 Vercel 서버리스의 고정 IP 부재가 충돌하기 때문입니다. Bybit·프록시 인프라 도입 시 활성화 예정.
           </Faq>
           <Faq question="신규 가입 시 받는 자산이 뭔가요?">
-            vUSDT 10,000과 AI 크레딧 5회. 트레이딩 터미널과 분석을 즉시 시작할 수 있는 분량.
+            vUSDT 10,000과 AI 크레딧 5회. 가상 거래과 분석을 즉시 시작할 수 있는 분량.
           </Faq>
         </div>
       </section>

@@ -1,19 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, Clock, Circle, Target } from "lucide-react";
+import { AlarmClock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TradingStyle } from "@/lib/analysis/style";
-import {
-  analysisEntryLink,
-  classifyLiquidity,
-  entrySuitability,
-  fmtClock,
-  fmtDuration,
-  kstParts,
-  nextPrimeTime,
-  type LiquidityTier,
-} from "@/lib/analysis/sessions";
+import { classifyLiquidity, kstParts, type LiquidityTier } from "@/lib/analysis/sessions";
 
 /** Distance to the next time `H:00` candle close on a given hour cycle.
  *  e.g. for 4h cycle, returns minutes until the next 01/05/09/13/17/21 KST hour. */
@@ -45,12 +36,17 @@ type Status = "optimal" | "good" | "fair" | "avoid";
 
 type Verdict = {
   status: Status;
-  /** 레벨 옆 짧은 사유 */
-  headline: string;
+  /** 캔들 마감 기준 짧은 문구 (예: "4H 마감 직후", "1H 마감 12분 전") */
+  candle: string;
+  /** 호버 툴팁용 한 줄 설명 */
   detail: string;
-  /** 우측 미니 (더 정확해지는 시점 / 재시도) */
-  nextWindow?: string;
-  nextLabel?: string;
+};
+
+const STYLE_LABEL: Record<TradingStyle, string> = {
+  scalp: "스캘핑",
+  day: "데이",
+  swing: "스윙",
+  position: "포지션",
 };
 
 const LEVEL_NAME: Record<Status, string> = {
@@ -59,6 +55,18 @@ const LEVEL_NAME: Record<Status, string> = {
   fair: "보통",
   avoid: "회피",
 };
+
+/** "N분 경과" / "직후" — 막 마감했으면 직후. */
+function elapsed(unit: string, mins: number): string {
+  return mins <= 0 ? `${unit} 마감 직후` : `${unit} 마감 ${mins}분 경과`;
+}
+/** "N분 전" / "X시간 Y분 전" — 다음 마감까지. */
+function until(unit: string, mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const dur = h === 0 ? `${m}분` : m === 0 ? `${h}시간` : `${h}시간 ${m}분`;
+  return `${unit} 마감 ${dur} 전`;
+}
 
 /** 펀딩 정산 ±10분 여부 (Binance 8h: 09 / 17 / 01 KST). */
 function inFundingWindow(h: number, m: number): boolean {
@@ -86,10 +94,8 @@ function evaluate(
   if (inFundingWindow(h, m)) {
     return {
       status: "avoid",
-      headline: "펀딩 정산 ±10분",
+      candle: "펀딩 정산 ±10분",
       detail: "정산 직전·직후 변동성이 폭증해 결과가 흔들립니다. 10분 뒤가 깔끔합니다.",
-      nextWindow: "10분 후",
-      nextLabel: "재시도",
     };
   }
 
@@ -100,28 +106,24 @@ function evaluate(
     if (fresh && liqGood) {
       return {
         status: "optimal",
-        headline: tier === "golden" ? "골든 타임 · 5M 마감 직후" : "5M 마감 직후 · 유동성 양호",
+        candle: elapsed("5M", since5),
         detail: `5M 마감 ${since5}분 경과 · 단기 데이터 안정적.`,
       };
     }
     if (fresh) {
-      // 신선하나 유동성 약함
       return {
         status: tier === "dead" ? "fair" : "good",
-        headline: tier === "dead" ? "5M 마감 직후 · 유동성 낮음" : "5M 마감 직후 · 아시아 한산",
+        candle: elapsed("5M", since5),
         detail:
           tier === "dead"
             ? `5M 마감 ${since5}분 경과. 체결 얇음 — 목표 좁게, 16:00 이후 더 안정적.`
             : `5M 마감 ${since5}분 경과. 박스 잦으니 목표는 좁게.`,
       };
     }
-    // 미마감
     return {
       status: liqGood ? "good" : "fair",
-      headline: liqGood ? "유동성 양호 · 캔들 형성 중" : "분석 가능 · 캔들 형성 중",
+      candle: until("5M", 5 - since5),
       detail: `지금 분석해도 무방. ${5 - since5}분 뒤 5M 마감 시 더 정확.`,
-      nextWindow: `${5 - since5}분 후`,
-      nextLabel: "더 정확",
     };
   }
 
@@ -131,14 +133,14 @@ function evaluate(
     if (fresh && liqGood) {
       return {
         status: "optimal",
-        headline: "1H 마감 직후 · 유동성 양호",
+        candle: elapsed("1H", m),
         detail: `1H 마감 ${m}분 경과 · 안정적.`,
       };
     }
     if (fresh) {
       return {
         status: "good",
-        headline: tier === "dead" ? "1H 마감 직후 · 한산" : "1H 마감 직후",
+        candle: elapsed("1H", m),
         detail:
           tier === "dead"
             ? `1H 마감 ${m}분 경과. 미국 마감 후 복기엔 적합, 신규 진입은 유동성 확인.`
@@ -147,10 +149,8 @@ function evaluate(
     }
     return {
       status: liqGood ? "good" : "fair",
-      headline: liqGood ? "유동성 양호 · 캔들 형성 중" : "분석 가능 · 캔들 형성 중",
+      candle: until("1H", 60 - m),
       detail: `지금 분석해도 무방. ${60 - m}분 뒤 1H 마감 시 더 정확.`,
-      nextWindow: `${60 - m}분 후`,
-      nextLabel: "더 정확",
     };
   }
 
@@ -163,31 +163,29 @@ function evaluate(
     if (since1dAdj <= 60) {
       return {
         status: "optimal",
-        headline: "일봉 마감 직후 — 스윙 최적",
+        candle: elapsed("일봉", since1dAdj),
         detail: `1D 마감 ${since1dAdj}분 경과. 큰 시간대까지 안정적.`,
       };
     }
     if (since4h <= 30) {
       return {
         status: "optimal",
-        headline: "4H 마감 직후",
+        candle: elapsed("4H", since4h),
         detail: `4H 마감 ${since4h}분 경과. 데이터 안정적.`,
       };
     }
     if (since4h <= 120) {
       return {
         status: "good",
-        headline: "4H 마감 후 구간 · 구조 유효",
+        candle: elapsed("4H", since4h),
         detail: `4H 마감 ${since4h}분 경과. 구조는 아직 유효합니다.`,
       };
     }
     const toNext4h = minutesToNextHourCycle(h, m, 4, 1);
     return {
       status: "fair",
-      headline: "분석 가능 · 4H 마감 대기 구간",
+      candle: until("4H", toNext4h),
       detail: `지금 분석해도 무방. ${Math.floor(toNext4h / 60)}시간 ${toNext4h % 60}분 뒤 4H 마감 시 더 정확.`,
-      nextWindow: `${Math.floor(toNext4h / 60)}시간 ${toNext4h % 60}분 후`,
-      nextLabel: "더 정확",
     };
   }
 
@@ -197,42 +195,31 @@ function evaluate(
   if (since1dAdj <= 120) {
     return {
       status: "optimal",
-      headline: "일봉 마감 직후 — 포지션 최적",
+      candle: elapsed("일봉", since1dAdj),
       detail: `1D 마감 ${since1dAdj}분 경과. 포지션 매매에 가장 적합.`,
     };
   }
-  if (minutesSinceLastHourCycle(h, m, 4, 1) <= 30) {
+  const since4hPos = minutesSinceLastHourCycle(h, m, 4, 1);
+  if (since4hPos <= 30) {
     return {
       status: "good",
-      headline: "4H 마감 직후",
+      candle: elapsed("4H", since4hPos),
       detail: "이상적인 시점은 1D 마감(09:00 KST) 직후이지만, 4H 마감 직후도 무방.",
     };
   }
   const toNext1D = (24 * 60 - since1dAdj) % (24 * 60);
   return {
     status: "fair",
-    headline: "분석 가능 · 1D 마감 대기 구간",
+    candle: until("일봉", toNext1D),
     detail: "지금 분석해도 무방. 가장 정확한 시점은 다음 1D 마감(09:00 KST).",
-    nextWindow: `${Math.floor(toNext1D / 60)}시간 ${toNext1D % 60}분 후`,
-    nextLabel: "최적",
   };
 }
 
-const TIER_BADGE: Record<LiquidityTier, { label: string; cls: string }> = {
-  golden: { label: "🌟 골든 타임", cls: "bg-grade-a/15 text-grade-a" },
-  active: { label: "활성 세션", cls: "bg-primary/15 text-primary" },
-  quiet: { label: "한산 (아시아)", cls: "bg-muted/50 text-muted-foreground" },
-  dead: { label: "유동성 낮음", cls: "bg-muted/50 text-muted-foreground" },
-};
-
-const STATUS_STYLE: Record<
-  Status,
-  { box: string; dot: string; text: string; icon: typeof CheckCircle2 }
-> = {
-  optimal: { box: "border-grade-a/40 bg-grade-a/5", dot: "bg-grade-a", text: "text-grade-a", icon: CheckCircle2 },
-  good: { box: "border-primary/30 bg-primary/[0.04]", dot: "bg-primary", text: "text-primary", icon: CheckCircle2 },
-  fair: { box: "border-border bg-card/40", dot: "bg-muted-foreground", text: "text-muted-foreground", icon: Circle },
-  avoid: { box: "border-grade-d/40 bg-grade-d/5", dot: "bg-grade-d", text: "text-grade-d", icon: AlertTriangle },
+const STATUS_STYLE: Record<Status, { pill: string; text: string; icon: typeof AlarmClock }> = {
+  optimal: { pill: "bg-grade-a/10", text: "text-grade-a", icon: AlarmClock },
+  good: { pill: "bg-primary/10", text: "text-primary", icon: AlarmClock },
+  fair: { pill: "bg-muted/40", text: "text-muted-foreground", icon: AlarmClock },
+  avoid: { pill: "bg-grade-d/10", text: "text-grade-d", icon: AlertTriangle },
 };
 
 export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
@@ -251,84 +238,34 @@ export function AnalysisTimingHint({ style }: { style: TradingStyle }) {
     return (
       <div
         suppressHydrationWarning
-        className="flex items-start gap-3 rounded-lg border border-border bg-card/40 px-4 py-3"
+        className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground"
       >
-        <div className="flex flex-none items-center gap-1.5 pt-0.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-muted" />
-          <Clock className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-muted-foreground">분석 적합도 판정 중…</div>
-          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-            현재 시각·세션 기준으로 분석 적합도를 평가합니다.
-          </p>
-        </div>
+        <AlarmClock className="h-4 w-4 flex-none" />
+        분석 적합도 판정 중…
       </div>
     );
   }
 
   const liquidity = classifyLiquidity(parts.totalMin);
   const verdict = evaluate(style, parts, liquidity.tier);
-  const next = nextPrimeTime(style, parts.totalMin);
-  const entry = entrySuitability(parts.totalMin, parts.dow);
-  const entryLink = analysisEntryLink(style, parts.totalMin, entry);
-
   const s = STATUS_STYLE[verdict.status];
   const Icon = s.icon;
-  const timeStr = `${String(parts.h).padStart(2, "0")}:${String(parts.m).padStart(2, "0")} KST`;
-  const tierBadge = TIER_BADGE[liquidity.tier];
+  const styleLabel = STYLE_LABEL[style];
 
   return (
-    <div className={cn("rounded-lg border", s.box)}>
-      <div className="flex items-start gap-3 px-4 py-3">
-        <div className="flex flex-none items-center gap-1.5 pt-0.5">
-          <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", s.dot)} />
-          <Icon className={cn("h-4 w-4", s.text)} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">분석 적합도</span>
-            <span className={cn("text-sm font-bold", s.text)}>{LEVEL_NAME[verdict.status]}</span>
-            <span className="text-xs text-muted-foreground">· {verdict.headline}</span>
-            <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{timeStr}</span>
-          </div>
-          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{verdict.detail}</p>
-        </div>
-        {verdict.nextWindow ? (
-          <div className="flex-none text-right">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              {verdict.nextLabel ?? "참고"}
-            </div>
-            <div className="text-xs font-semibold">{verdict.nextWindow}</div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* 진입 연계 — 스타일별로 분석 실행이 실제 진입과 어떻게 이어지는지 */}
-      <div className="flex items-start gap-1.5 border-t border-border/50 px-4 py-2 text-[11px] text-muted-foreground">
-        <Target className="mt-0.5 h-3 w-3 flex-none text-muted-foreground/70" />
-        <span className="min-w-0">
-          <span className="font-medium text-foreground/80">진입 연계</span> · {entryLink}
+    <div
+      title={verdict.detail}
+      className={cn("flex items-center gap-2 rounded-md px-3 py-2.5 text-sm", s.pill, s.text)}
+    >
+      <Icon className="h-4 w-4 flex-none" />
+      <span className="min-w-0 leading-snug">
+        지금은 <span className="font-semibold">{styleLabel}</span> 분석{" "}
+        <span className="font-bold">{LEVEL_NAME[verdict.status]}</span>
+        <span className="opacity-80">
+          {" "}
+          — {liquidity.label} · {verdict.candle}
         </span>
-      </div>
-
-      {/* 하단: 현재 유동성 등급 + 오늘 다음 추천(최적) 분석 시각 */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border/50 px-4 py-2">
-        <span
-          className={cn(
-            "inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold",
-            tierBadge.cls,
-          )}
-          title={liquidity.note}
-        >
-          {tierBadge.label}
-        </span>
-        <span className="text-[11px] text-muted-foreground">
-          오늘 추천 시각{" "}
-          <span className="font-mono tabular-nums text-foreground">{fmtClock(next.at)} KST</span>
-          <span className="text-muted-foreground/70"> · {fmtDuration(next.minsAhead)} 후</span>
-        </span>
-      </div>
+      </span>
     </div>
   );
 }

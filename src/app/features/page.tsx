@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 export const metadata = {
   title: "기능 · Alpha Gate",
   description:
-    "AI 분석 / 주문 검토 / 내 거래 + AI 복기 / 성과 분석 — Alpha Gate의 4가지 핵심 기능을 자세히 살펴보세요.",
+    "AI 분석 / 거래 실행 / 거래 일지 + AI 복기 / 성과 분석 — Alpha Gate의 4가지 핵심 기능을 자세히 살펴보세요.",
 };
 
 export default function FeaturesPage() {
@@ -149,7 +149,7 @@ const FEATURES: FeatureItem[] = [
   },
   {
     id: "trade",
-    tag: "주문 검토",
+    tag: "거래 실행",
     title: "거래소처럼 입력, 등급으로 답합니다",
     icon: ShieldCheck,
     body: "AI 시나리오를 받아 진입가·손절·목표·계좌·리스크·레버리지를 거래소 주문 화면처럼 입력. A/B/C/D 등급과 행동 권고가 즉시 나옵니다.",
@@ -163,7 +163,7 @@ const FEATURES: FeatureItem[] = [
   },
   {
     id: "journal",
-    tag: "내 거래 · AI 복기",
+    tag: "거래 일지 · AI 복기",
     title: "결과와 결정을 연결합니다",
     icon: BookOpen,
     body: "진입 시 등급·점수·시장 체크 결과가 영구 보존. 청산 후 실제 R을 입력하면 AI가 결정과 실행을 평가해 한국어 코칭 코멘트를 자동 생성합니다.",
@@ -213,7 +213,7 @@ function FeatureMockup({ feature }: { feature: FeatureItem["id"] }) {
   }
   if (feature === "trade") {
     return (
-      <MockupFrame caption="주문 검토 — 등급 결과">
+      <MockupFrame caption="거래 실행 — 등급 결과">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-rose-400/40 bg-gradient-to-br from-rose-500/25 to-rose-700/10 text-2xl font-black text-rose-300 shadow-[0_0_24px_rgba(244,63,94,0.4)]">
             D

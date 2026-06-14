@@ -15,7 +15,7 @@ export default function GuideResultsPage() {
       <GuideSection eyebrow="01" title="3개 탭 구성">
         <div className="grid gap-3 lg:grid-cols-3">
           <TabCard
-            title="내 거래"
+            title="거래 일지"
             desc="진행 중 / 대기 중 지정가 / 종료된 거래 목록. KPI 4개(오늘 R, 진행 중, 미실현, 노출)."
           />
           <TabCard

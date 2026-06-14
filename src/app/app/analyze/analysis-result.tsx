@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -8,13 +8,13 @@ import {
   TrendingDown,
   TrendingUp,
   AlertTriangle,
+  ChartCandlestick,
   Clock,
+  Megaphone,
   RefreshCw,
   Target,
-  Lightbulb,
   ChevronDown,
   Info,
-  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,18 +33,10 @@ import { SpecialSignalCard } from "@/components/analyze/special-signal-card";
 import type { AnalysisSnapshot } from "@/lib/analysis/analyze";
 import type { AnalysisReport } from "@/lib/analysis/synthesize";
 import {
-  STRATEGY_DESCRIPTIONS,
   STRATEGY_LABELS,
   type StrategyResult,
 } from "@/lib/analysis/strategy";
-import {
-  checkRR,
-  checkRiskPct,
-  checkStop,
-  checkTarget,
-  effectiveRR,
-  type CheckStatus,
-} from "@/lib/analysis/standards";
+import { effectiveRR } from "@/lib/analysis/standards";
 import type { TradingStyle } from "@/lib/analysis/style";
 import {
   MARKET_CHECK_KEYS,
@@ -55,22 +47,52 @@ import {
   type TradeInput,
 } from "@/types/trade";
 
-const GRADE_TEXT: Record<"A" | "B" | "C" | "D", string> = {
-  A: "좋은 거래",
-  B: "조건부 진입",
-  C: "비추천 · 축소",
-  D: "강한 자제",
-};
-
 // 예상 변동폭 콘 horizon (스타일 기준 TF 봉 수) — 레이더와 동일.
 const RANGE_HORIZON: Record<TradingStyle, number> = { scalp: 8, day: 12, swing: 20, position: 14 };
 
-/** 등급 헤드라인 — D는 원인(계좌/셋업)에 따라 다른 문구. "금지" 단정 안 함. */
-function gradeHeadline(g: ReturnType<typeof gradeTrade>): string {
-  if (g.grade === "D") return g.dCause === "account" ? "오늘은 보류" : "고위험 · 최소 사이즈";
-  return GRADE_TEXT[g.grade];
+// 시나리오 카드 A/B/C 배지 색 (시안: A 초록 · B 스카이 · C 바이올렛).
+const SCENARIO_BADGE = [
+  "bg-grade-a/15 text-grade-a",
+  "bg-sky-500/15 text-sky-300",
+  "bg-violet-500/15 text-violet-300",
+  "bg-amber-500/15 text-amber-300",
+];
+
+/** 시안 시나리오 카드의 진입가/손절가/목표가/손익비 셀. 값 + 괄호 델타. */
+function StatCell({
+  label,
+  value,
+  delta,
+  tone = "muted",
+}: {
+  label: string;
+  value: string;
+  delta?: string;
+  tone?: "good" | "bad" | "muted";
+}) {
+  return (
+    <div className="rounded-lg bg-muted/30 px-3 py-2.5">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5">
+        <span className="font-mono text-base font-bold tabular-nums">{value}</span>
+        {delta ? (
+          <span
+            className={cn(
+              "font-mono text-xs tabular-nums",
+              tone === "good" && "text-grade-a",
+              tone === "bad" && "text-grade-d",
+              tone === "muted" && "text-muted-foreground",
+            )}
+          >
+            {delta}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
+/** 등급 헤드라인 — D는 원인(계좌/셋업)에 따라 다른 문구. "금지" 단정 안 함. */
 function tradeFormHref(
   symbol: string,
   scenario: AnalysisReport["scenarios"][number],
@@ -196,7 +218,8 @@ export function AnalysisResult({
   money: MoneyContext;
 }) {
   const [activeScenario, setActiveScenario] = useState(0);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(true);
+  const [showChart, setShowChart] = useState(false);
   const [watchStates, setWatchStates] = useState<Record<number, { id: string; watch: boolean; status: string }>>({});
 
   // 시장 컨텍스트 (펀딩비, 정산까지 분) — 심볼 단위로 1회 fetch.
@@ -390,76 +413,35 @@ export function AnalysisResult({
         </CardHeader>
       </Card>
 
-      {/* Trend + AI recommendation — combined 2-col card */}
-      <TrendRecommendationCard
-        trend={report.marketTrend ?? null}
-        metrics={snapshot.trendMetrics}
-        dominance={snapshot.macro.dominanceRegime ?? null}
-        strategy={strategy}
-        report={report}
-        historicalStats={historicalStats}
-      />
-
-      {/* Special strategy signal evidence (rendered for any special strategy active across scenarios) */}
-      <SpecialSignalCard
-        snapshot={snapshot}
-        strategy={strategy}
-        scenarioHints={report.scenarios.map((s) => s.strategyHint)}
-      />
-
-      {/* Chart visualization */}
-      {report.scenarios.length > 0 ? (
-        <Card>
-          <CardHeader className="space-y-3">
-            <div className="flex flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">차트로 보기</CardTitle>
-              {report.scenarios.length > 1 ? (
-                <div className="flex flex-wrap gap-1">
-                  {report.scenarios.map((s, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setActiveScenario(i)}
-                      title={s.name}
-                      className={cn(
-                        "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
-                        activeScenario === i
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
-                      )}
-                    >
-                      {String.fromCharCode(65 + i)} · {s.direction === "long" ? "롱" : "숏"}
-                      {i === 0 ? (
-                        <span className="ml-1 rounded bg-primary/20 px-1 py-0 text-[9px] uppercase tracking-wider text-primary">
-                          메인
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+      {/* 지금 할 일 — 결론 먼저 (시안: ActionNow 배너) */}
+      {report.actionNow ? (
+        <section
+          className={cn(
+            "flex items-start gap-3 rounded-xl border px-5 py-4",
+            strategy.primary === "wait"
+              ? "border-grade-c/40 bg-grade-c/10"
+              : "border-ring/40 bg-ring/10",
+          )}
+        >
+          <Megaphone
+            className={cn(
+              "mt-0.5 h-5 w-5 flex-none",
+              strategy.primary === "wait" ? "text-grade-c" : "text-primary",
+            )}
+          />
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              지금 할 일
             </div>
-            <ScenarioExplainer scenarios={report.scenarios} active={activeScenario} />
-          </CardHeader>
-          <CardContent>
-            <ChartErrorBoundary
-              fallback={
-                <div className="flex h-[480px] items-center justify-center rounded-md border border-border bg-card/30 text-sm text-muted-foreground">
-                  차트를 다시 그리는 중...
-                </div>
-              }
-            >
-              <ScenarioChart
-                snapshot={snapshot}
-                report={report}
-                scenarioIndex={activeScenario}
-              />
-            </ChartErrorBoundary>
-          </CardContent>
-        </Card>
+            <h2 className="mt-1 text-lg font-bold leading-snug sm:text-xl">{report.actionNow}</h2>
+          </div>
+        </section>
       ) : null}
 
-      {/* Simple scenario cards */}
+      {/* 결과 본문 — 좌: 시나리오·차트 / 우: 전략·전문가 레일 (시안 2컬럼) */}
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="min-w-0 space-y-4">
+      {/* Simple scenario cards — 결론 다음, 근거(추세·차트)보다 먼저 */}
       {report.scenarios.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 p-10 text-center">
@@ -473,7 +455,7 @@ export function AnalysisResult({
       ) : (
         <div className="space-y-3">
           {report.scenarios.map((s, i) => {
-            const { entry, grade, sizing, recommended, effectiveRiskPct, isAiRisk } = evaluateScenario(
+            const { entry, grade, effectiveRiskPct } = evaluateScenario(
               snapshot.symbol,
               s,
               accountSize,
@@ -491,21 +473,19 @@ export function AnalysisResult({
                 index={i}
                 symbol={snapshot.symbol}
                 style={snapshot.style}
-                currentPrice={snapshot.ticker.last}
-                mtfAtrPct={snapshot.atr?.find((a) => a.role === "MTF")?.pctOfPrice}
                 mtfCloses={mtfCloses}
                 scenario={s}
-                strategy={strategy}
                 entry={entry}
                 grade={grade}
-                sizing={sizing}
                 accountSize={accountSize}
                 riskPct={effectiveRiskPct}
-                isAiRisk={isAiRisk}
-                recommended={recommended}
-                currency={currency}
                 isActive={activeScenario === i}
                 onHover={() => setActiveScenario(i)}
+                onShowChart={() => {
+                  setActiveScenario(i);
+                  setShowChart(true);
+                }}
+                expectedRangeHalfPct={(rangeCone.highPct - rangeCone.lowPct) / 2}
                 watchState={watchStates[i] ?? null}
                 onToggleWatch={() => toggleWatch(i)}
               />
@@ -513,6 +493,99 @@ export function AnalysisResult({
           })}
         </div>
       )}
+
+      {/* 차트로 보기 — 접힘 (필요할 때만 펼침, 시안 결정) */}
+      {report.scenarios.length > 0 ? (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowChart(!showChart)}
+            className="flex w-full items-center justify-between rounded-lg border border-border bg-card/40 px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30"
+          >
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <ChartCandlestick className="h-4 w-4" />
+              차트로 보기
+              <span className="hidden text-xs font-normal text-muted-foreground/60 sm:inline">
+                — 진입·손절·목표 레벨을 캔들 차트에 표시
+              </span>
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 text-muted-foreground transition-transform",
+                showChart && "rotate-180",
+              )}
+            />
+          </button>
+
+          {showChart ? (
+            <Card className="mt-4">
+              <CardHeader className="space-y-3">
+                <div className="flex flex-row items-center justify-between gap-3">
+                  <CardTitle className="text-base">차트로 보기</CardTitle>
+                  {report.scenarios.length > 1 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {report.scenarios.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setActiveScenario(i)}
+                          title={s.name}
+                          className={cn(
+                            "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                            activeScenario === i
+                              ? "border-primary bg-primary/10"
+                              : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
+                          )}
+                        >
+                          {String.fromCharCode(65 + i)} · {s.direction === "long" ? "롱" : "숏"}
+                          {i === 0 ? (
+                            <span className="ml-1 rounded bg-primary/20 px-1 py-0 text-[9px] uppercase tracking-wider text-primary">
+                              메인
+                            </span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <ScenarioExplainer scenarios={report.scenarios} active={activeScenario} />
+              </CardHeader>
+              <CardContent>
+                <ChartErrorBoundary
+                  fallback={
+                    <div className="flex h-[480px] items-center justify-center rounded-md border border-border bg-card/30 text-sm text-muted-foreground">
+                      차트를 다시 그리는 중...
+                    </div>
+                  }
+                >
+                  <ScenarioChart
+                    snapshot={snapshot}
+                    report={report}
+                    scenarioIndex={activeScenario}
+                  />
+                </ChartErrorBoundary>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
+      </div>
+
+      {/* 우측 레일 — 전략 판정 요약 · 전문가 정보 (시안) */}
+      <div className="min-w-0 space-y-4">
+      <RailVerdictCard
+        symbol={snapshot.symbol}
+        price={snapshot.ticker.last}
+        strategy={strategy}
+        report={report}
+        historicalStats={historicalStats}
+      />
+
+      <SpecialSignalCard
+        snapshot={snapshot}
+        strategy={strategy}
+        scenarioHints={report.scenarios.map((s) => s.strategyHint)}
+      />
 
       {/* Advanced info — collapsed */}
       <div>
@@ -534,87 +607,88 @@ export function AnalysisResult({
         </button>
 
         {showAdvanced ? (
-          <div className="mt-4 space-y-4">
-            <StrategyBanner strategy={strategy} />
+          <div className="mt-3 space-y-2">
+            {report.marketTrend ? (
+              <ExpertRow
+                title="추세 · 지표"
+                summary={`${
+                  report.marketTrend.direction === "up"
+                    ? "상승"
+                    : report.marketTrend.direction === "down"
+                      ? "하락"
+                      : "횡보"
+                }${snapshot.trendMetrics?.adx ? ` · ADX ${snapshot.trendMetrics.adx.value.toFixed(1)}` : ""}${
+                  snapshot.trendMetrics?.ker ? ` · KER ${snapshot.trendMetrics.ker.value.toFixed(2)}` : ""
+                }`}
+              >
+                <MarketTrendBody
+                  trend={report.marketTrend}
+                  metrics={snapshot.trendMetrics}
+                  dominance={snapshot.macro.dominanceRegime ?? undefined}
+                />
+              </ExpertRow>
+            ) : null}
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">시장 구조</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <Row label="큰 시간대 (1D/4H)" value={report.structure.htf} />
-                  <Row label="작은 시간대 (1H/15M)" value={report.structure.ltf} />
-                </CardContent>
-              </Card>
+            <ExpertRow title="시장 구조" summary={report.structure.htf}>
+              <div className="space-y-2 text-sm">
+                <Row label="큰 시간대 (1D/4H)" value={report.structure.htf} />
+                <Row label="작은 시간대 (1H/15M)" value={report.structure.ltf} />
+              </div>
+            </ExpertRow>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">핵심 가격대</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2 text-sm">
-                    {report.keyLevels.map((k, i) => (
-                      <li
-                        key={i}
-                        className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-b-0"
-                      >
-                        <div>
-                          <div className="font-semibold">{k.label}</div>
-                          <div className="text-xs text-muted-foreground">{k.note}</div>
-                        </div>
-                        <div className="font-mono">${formatNumber(k.price)}</div>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+            <ExpertRow title="핵심 가격대" summary={`${report.keyLevels.length}개 레벨`}>
+              <ul className="space-y-2 text-sm">
+                {report.keyLevels.map((k, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-b-0"
+                  >
+                    <div>
+                      <div className="font-semibold">{k.label}</div>
+                      <div className="text-xs text-muted-foreground">{k.note}</div>
+                    </div>
+                    <div className="font-mono">${formatNumber(k.price)}</div>
+                  </li>
+                ))}
+              </ul>
+            </ExpertRow>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">시장 상태</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <Row
-                    label="최근 매수 비율"
-                    value={`${(snapshot.flow1m.buyRatio * 100).toFixed(1)}%`}
-                  />
-                  <Row label="펀딩비" value={snapshot.funding.bias} />
-                  {snapshot.macro.btcDominance != null ? (
-                    <Row label="BTC 도미넌스" value={`${snapshot.macro.btcDominance.toFixed(2)}%`} />
-                  ) : null}
-                  <div className="border-t border-border pt-2 text-xs text-muted-foreground">
-                    {report.flow.note}
-                  </div>
-                </CardContent>
-              </Card>
+            <ExpertRow
+              title="시장 상태"
+              summary={`매수 ${(snapshot.flow1m.buyRatio * 100).toFixed(0)}% · 펀딩 ${snapshot.funding.bias}`}
+            >
+              <div className="space-y-2 text-sm">
+                <Row label="최근 매수 비율" value={`${(snapshot.flow1m.buyRatio * 100).toFixed(1)}%`} />
+                <Row label="펀딩비" value={snapshot.funding.bias} />
+                {snapshot.macro.btcDominance != null ? (
+                  <Row label="BTC 도미넌스" value={`${snapshot.macro.btcDominance.toFixed(2)}%`} />
+                ) : null}
+                <div className="border-t border-border pt-2 text-xs text-muted-foreground">
+                  {report.flow.note}
+                </div>
+              </div>
+            </ExpertRow>
 
-              {report.warnings.length > 0 ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">주의 사항</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2 text-sm">
-                      {report.warnings.map((w, i) => (
-                        <li key={i} className="flex gap-2 text-grade-c">
-                          <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
-                          <span>{w}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              ) : null}
-            </div>
+            {report.warnings.length > 0 ? (
+              <ExpertRow title="주의 사항" summary={`${report.warnings.length}건`}>
+                <ul className="space-y-2 text-sm">
+                  {report.warnings.map((w, i) => (
+                    <li key={i} className="flex gap-2 text-grade-c">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+                      <span>{w}</span>
+                    </li>
+                  ))}
+                </ul>
+              </ExpertRow>
+            ) : null}
 
             {/* Detailed scenario panel (with full checklist + grade actions) */}
             {report.scenarios.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">시나리오 상세 (체크리스트 + 점수)</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+              <ExpertRow
+                title="시나리오 상세"
+                summary={`체크리스트 + 점수 · ${report.scenarios.length}개`}
+              >
+                <div className="space-y-4">
                   {report.scenarios.map((s, i) => {
                     const { entry, grade } = evaluateScenario(
                       snapshot.symbol,
@@ -671,11 +745,13 @@ export function AnalysisResult({
                       </div>
                     );
                   })}
-                </CardContent>
-              </Card>
+                </div>
+              </ExpertRow>
             ) : null}
           </div>
         ) : null}
+      </div>
+      </div>
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
@@ -686,37 +762,138 @@ export function AnalysisResult({
   );
 }
 
-/** Market trend snapshot card — direction + strength */
-function TrendRecommendationCard({
-  trend,
-  metrics,
-  dominance,
+/** 전문가 정보 — 접이식 한 줄 요약 행 (펼치면 상세). 시안의 압축 행 스타일. */
+function ExpertRow({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className="group rounded-lg border border-border bg-card/40">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5">
+        <span className="flex-none text-sm font-medium">{title}</span>
+        {summary ? (
+          <span className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground">
+            {summary}
+          </span>
+        ) : (
+          <span className="flex-1" />
+        )}
+        <ChevronDown className="h-4 w-4 flex-none text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-border/50 px-4 py-3">{children}</div>
+    </details>
+  );
+}
+
+/** 우측 레일 상단 — 심볼·가격 + 전략 판정 + 근거 + 경고 + 제외 전략 (시안). */
+function RailVerdictCard({
+  symbol,
+  price,
   strategy,
   report,
   historicalStats,
 }: {
-  trend: AnalysisReport["marketTrend"] | null;
-  metrics?: AnalysisSnapshot["trendMetrics"];
-  dominance?: NonNullable<AnalysisSnapshot["macro"]>["dominanceRegime"];
+  symbol: string;
+  price: number;
   strategy: StrategyResult;
   report: AnalysisReport;
   historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
 }) {
+  const isWait = strategy.primary === "wait";
+  const dirLabel =
+    strategy.direction === "long"
+      ? "롱"
+      : strategy.direction === "short"
+        ? "숏"
+        : strategy.primary === "range_fade"
+          ? "양방향"
+          : null;
+  const decided = historicalStats ? historicalStats.target + historicalStats.stop : 0;
+  // 내부용 "시나리오 제외:" 로그는 숨기고, 사용자용 경고만 노출.
+  const warnings = report.warnings.filter((w) => !w.startsWith("시나리오 제외"));
+
   return (
-    <Card className="overflow-hidden">
-      <div className="grid lg:grid-cols-2 lg:divide-x divide-border">
-        <div className="flex flex-col p-5">
-          {trend ? (
-            <MarketTrendBody trend={trend} metrics={metrics} dominance={dominance} />
-          ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              추세 데이터 없음
-            </div>
-          )}
+    <Card>
+      <div className="space-y-3 p-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="font-mono text-lg font-bold">{symbol}</h3>
+          <span className="font-mono text-lg font-bold tabular-nums">${formatNumber(price)}</span>
         </div>
-        <div className="flex flex-col border-t lg:border-t-0 border-border p-5">
-          <RecommendationBody strategy={strategy} report={report} historicalStats={historicalStats} />
+
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <Badge
+            className={cn(
+              "border",
+              isWait
+                ? "border-grade-c/40 bg-grade-c/10 text-grade-c"
+                : strategy.direction === "short"
+                  ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
+                  : "border-primary/40 bg-primary/10 text-primary",
+            )}
+          >
+            {STRATEGY_LABELS[strategy.primary]}
+            {dirLabel ? ` · ${dirLabel}` : ""}
+          </Badge>
+          <span className="text-muted-foreground">
+            신뢰도 <span className="font-mono text-foreground">{Math.round(strategy.confidence * 100)}%</span>
+          </span>
+          {historicalStats && decided >= 3 ? (
+            <span className="text-muted-foreground">
+              · 과거 적중률{" "}
+              <span
+                className={cn(
+                  "font-mono font-semibold",
+                  historicalStats.winRate >= 0.6
+                    ? "text-grade-a"
+                    : historicalStats.winRate >= 0.4
+                      ? "text-grade-b"
+                      : "text-grade-d",
+                )}
+              >
+                {Math.round(historicalStats.winRate * 100)}%
+              </span>{" "}
+              ({decided}건)
+            </span>
+          ) : historicalStats && historicalStats.total > 0 ? (
+            <span className="text-[11px] text-muted-foreground">· 과거 표본 {historicalStats.total}개 (부족)</span>
+          ) : null}
         </div>
+
+        <p className="text-sm leading-relaxed text-muted-foreground">{report.summary}</p>
+
+        {warnings.length > 0 ? (
+          <div className="space-y-1 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+            {warnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-1.5 text-[11px] text-amber-300">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                <span>{w}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {strategy.rejected.length > 0 ? (
+          <div className="border-t border-border/50 pt-2.5">
+            <div className="text-[11px] font-semibold text-muted-foreground">검토 후 제외한 전략</div>
+            <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground/80">
+              {strategy.rejected.map((r, i) => (
+                <li key={i}>
+                  <span className="text-foreground/70">
+                    {STRATEGY_LABELS[r.strategy as keyof typeof STRATEGY_LABELS] ?? r.strategy}
+                  </span>{" "}
+                  — {r.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
     </Card>
   );
@@ -851,168 +1028,54 @@ function TrendIndicator({
   );
 }
 
-/** Recommendation body (no Card wrapper) — rendered inside combined trend card */
-function RecommendationBody({
-  strategy,
-  report,
-  historicalStats,
-}: {
-  strategy: StrategyResult;
-  report: AnalysisReport;
-  historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
-}) {
-  const isWait = strategy.primary === "wait";
-  const dotClass = isWait
-    ? "bg-grade-c"
-    : strategy.direction === "short"
-      ? "bg-grade-d"
-      : "bg-primary";
-
-  // 긴 한 문단을 문장 단위로 쪼개서 각각 별도 줄로 렌더링 (가독성).
-  // ". " 또는 한국어 마침표 "다." "음." 패턴을 부드럽게 끊고 빈 항목은 제거.
-  const sentences = report.summary
-    .split(/(?<=[.。!?])\s+/u)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        <span className={cn("inline-block h-1.5 w-1.5 animate-pulse rounded-full", dotClass)} />
-        AI 추천
-      </div>
-      <h2 className="mt-3 text-xl font-bold leading-snug sm:text-2xl">{report.actionNow}</h2>
-      <ul className="mt-4 space-y-2">
-        {sentences.map((s, i) => (
-          <li
-            key={i}
-            className="flex gap-2 text-sm leading-relaxed text-muted-foreground"
-          >
-            <span className="mt-2 inline-block h-1 w-1 flex-none rounded-full bg-muted-foreground/60" />
-            <span>{s}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-auto pt-4 flex flex-wrap items-center gap-2 text-xs">
-        <Badge
-          className={cn(
-            "border",
-            isWait
-              ? "border-grade-c/40 bg-grade-c/10 text-grade-c"
-              : strategy.direction === "short"
-                ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
-                : "border-primary/40 bg-primary/10 text-primary",
-          )}
-        >
-          {STRATEGY_LABELS[strategy.primary]}
-          {strategy.direction
-            ? ` · ${strategy.direction === "long" ? "롱" : "숏"}`
-            : strategy.primary === "range_fade"
-              ? " · 양방향"
-              : ""}
-        </Badge>
-        <span className="text-muted-foreground">
-          AI 자신감 <span className="font-mono">{Math.round(strategy.confidence * 100)}%</span>
-        </span>
-        {historicalStats && historicalStats.target + historicalStats.stop >= 3 ? (
-          <span className="text-muted-foreground border-l border-border/40 pl-3 ml-1">
-            과거 적중률{" "}
-            <span
-              className={cn(
-                "font-mono font-semibold",
-                historicalStats.winRate >= 0.6
-                  ? "text-grade-a"
-                  : historicalStats.winRate >= 0.4
-                    ? "text-grade-b"
-                    : "text-grade-d",
-              )}
-            >
-              {Math.round(historicalStats.winRate * 100)}%
-            </span>
-            <span className="text-[10px] ml-1">
-              ({historicalStats.target}승 {historicalStats.stop}패
-              {historicalStats.avgR !== 0
-                ? `, ${historicalStats.avgR >= 0 ? "+" : ""}${historicalStats.avgR.toFixed(2)}R`
-                : ""}
-              )
-            </span>
-          </span>
-        ) : historicalStats && historicalStats.total > 0 ? (
-          <span className="text-[10px] text-muted-foreground border-l border-border/40 pl-3 ml-1">
-            과거 표본 {historicalStats.total}개 (결정 {historicalStats.target + historicalStats.stop}개, 부족)
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 /** Plain-language scenario card */
 function SimpleScenarioCard({
   index,
   symbol,
   style,
-  currentPrice,
-  mtfAtrPct,
   mtfCloses,
   scenario,
-  strategy,
   entry,
   grade,
-  sizing,
   accountSize,
   riskPct,
-  isAiRisk,
-  recommended,
-  currency,
   isActive,
   onHover,
+  onShowChart,
+  expectedRangeHalfPct,
   watchState,
   onToggleWatch,
 }: {
   index: number;
   symbol: string;
   style: TradingStyle;
-  currentPrice: number;
-  mtfAtrPct?: number;
   mtfCloses: number[];
   scenario: AnalysisReport["scenarios"][number];
-  strategy: StrategyResult;
   entry: number;
   grade: ReturnType<typeof gradeTrade>;
-  sizing: ReturnType<typeof sizePosition>;
   accountSize: number;
-  /** Effective risk % used for sizing (either user override or AI-recommended) */
+  /** Effective risk % used for sizing (tradeFormHref carry-over) */
   riskPct: number;
-  /** True when riskPct comes from AI recommendation (no user override) */
-  isAiRisk: boolean;
-  /** AI-recommended params (always computed; shown alongside override) */
-  recommended: import("@/lib/recommend").RecommendedTradeParams;
-  currency: "USD" | "KRW";
   isActive: boolean;
   onHover: () => void;
+  /** [차트로 보기] — 공유 차트를 열고 이 시나리오를 활성화 */
+  onShowChart: () => void;
+  /** 몬테카를로 예상 변동폭 ±% (헤더 sub용) */
+  expectedRangeHalfPct: number;
   watchState?: { id: string; watch: boolean; status: string } | null;
   onToggleWatch?: () => void;
 }) {
   const isLong = scenario.direction === "long";
   const stopPct = (Math.abs(entry - scenario.invalidation) / entry) * 100;
   const targetPct = (Math.abs(scenario.target - entry) / entry) * 100;
-  // Round-trip taker fee (Binance USDT-M 0.04% × 2). 슬리피지는 체결가에 별도 반영.
-  const ROUND_TRIP = 0.08;
-  const netStopPct = stopPct + ROUND_TRIP;
-  const netTargetPct = Math.max(0, targetPct - ROUND_TRIP);
-  const netRR = netStopPct === 0 ? 0 : netTargetPct / netStopPct;
-  const positionPctOfAccount = sizing.valid
-    ? (sizing.positionSize / accountSize) * 100
-    : 0;
   const effRR = effectiveRR(entry, scenario.invalidation, scenario.target);
-  const effectiveStrategy = scenario.strategyHint ?? strategy.primary;
-  const stopCheck = checkStop(stopPct, style, effectiveStrategy);
-  const targetCheck = checkTarget(targetPct, style, effectiveStrategy);
-  const rrCheck = checkRR(grade.rr, style, effectiveStrategy);
-  const riskCheck = checkRiskPct(riskPct);
-  const allChecks = [stopCheck, targetCheck, rrCheck, riskCheck];
-  const entryVsCurrentPct = ((entry - currentPrice) / currentPrice) * 100;
+  // 주문 유형 라벨 (시안 sub) — orderHint 우선, 없으면 entryType로 추정.
+  const orderTypeLabel =
+    scenario.orderHint === "stop"
+      ? "역지정가"
+      : scenario.orderHint === "market" || scenario.entryType === "immediate"
+        ? "시장가"
+        : "지정가";
 
   return (
     <Card
@@ -1030,136 +1093,62 @@ function SimpleScenarioCard({
         )}
       />
 
-      <div className="space-y-5 p-5 pl-6">
-        {/* Header row */}
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="space-y-3.5 p-5 pl-6">
+        {/* Header — A/B 배지 + 제목 + 알림 (시안) */}
+        <div className="flex items-start gap-3">
           <div
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-md text-white",
-              isLong ? "bg-grade-a" : "bg-grade-d",
+              "flex h-9 w-9 flex-none items-center justify-center rounded-lg text-sm font-bold",
+              SCENARIO_BADGE[index % SCENARIO_BADGE.length],
             )}
           >
-            {isLong ? (
-              <TrendingUp className="h-5 w-5" />
-            ) : (
-              <TrendingDown className="h-5 w-5" />
-            )}
+            {String.fromCharCode(65 + index)}
           </div>
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                시나리오 {String.fromCharCode(65 + index)}
-              </span>
-              <Badge
-                className={cn(
-                  "border",
-                  isLong
-                    ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
-                    : "border-grade-d/40 bg-grade-d/10 text-grade-d",
-                )}
-              >
-                {isLong ? "사기 (롱)" : "팔기 (숏)"}
-              </Badge>
-              {(() => {
-                const absDist = Math.abs(entryVsCurrentPct);
-                // Color tone by distance — closer = green, mid = amber, far = red-ish
-                const tone =
-                  absDist < 0.5
-                    ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
-                    : absDist < 3
-                      ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                      : "border-grade-d/40 bg-grade-d/10 text-grade-d";
-                const typeLabel =
-                  scenario.entryType === "pending"
-                    ? "도달 대기"
-                    : scenario.entryType === "immediate"
-                      ? "지금 진입"
-                      : "진입";
-                return (
-                  <Badge className={cn("border px-2 py-0.5 text-[11px] font-bold", tone)}>
-                    {typeLabel} · 진입까지 {entryVsCurrentPct >= 0 ? "+" : ""}
-                    {entryVsCurrentPct.toFixed(2)}%
-                  </Badge>
-                );
-              })()}
-              {(() => {
-                const sid = scenario.strategyHint ?? strategy.primary;
-                const isAlt = scenario.strategyHint && scenario.strategyHint !== strategy.primary;
-                return (
-                  <Badge
-                    title={STRATEGY_DESCRIPTIONS[sid]}
-                    className={cn(
-                      "border",
-                      isAlt
-                        ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                        : "border-primary/30 bg-primary/5 text-primary",
-                    )}
-                  >
-                    <Sparkles className="mr-1 h-3 w-3" />
-                    {STRATEGY_LABELS[sid]}
-                    {isAlt ? <span className="ml-1 text-[9px] uppercase opacity-70">보조</span> : null}
-                  </Badge>
-                );
-              })()}
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold leading-snug">
+              시나리오 {index + 1} — {scenario.name}
+            </h3>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {orderTypeLabel}
+              {Number.isFinite(expectedRangeHalfPct) && expectedRangeHalfPct > 0
+                ? ` · 예상폭 ±${expectedRangeHalfPct.toFixed(1)}%`
+                : ""}
+              {onToggleWatch ? " · 시나리오 알림 등록 가능" : ""}
             </div>
-            <h3 className="mt-1 text-base font-semibold">{scenario.name}</h3>
           </div>
-          <div className="flex items-center gap-2">
-            <GradeBadge grade={grade.grade} size="sm" />
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">매매 등급</div>
-              <div className="text-sm font-semibold">{gradeHeadline(grade)}</div>
-              {grade.grade === "D" ? (
-                <div className="text-[11px] text-muted-foreground">
-                  {grade.dCause === "account"
-                    ? "셋업 무관 · 계좌 한도 → 워치리스트 권장"
-                    : "막진 않음 · 권장 리스크 10% 축소로만"}
-                </div>
-              ) : null}
-            </div>
-            {onToggleWatch && watchState !== undefined ? (
-              <button
-                type="button"
-                onClick={onToggleWatch}
-                disabled={!watchState}
-                title={
-                  watchState?.watch
-                    ? "알림 해제 (가격 도달 알림 받지 않음)"
-                    : "알림 등록 (entry/target/stop 도달 시 Telegram/Discord 발송)"
-                }
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs transition-colors",
-                  watchState?.watch
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                  !watchState && "opacity-50 cursor-not-allowed",
-                )}
-              >
-                <span>{watchState?.watch ? "🔔" : "🔕"}</span>
-                <span>{watchState?.watch ? "알림 등록됨" : "알림 등록"}</span>
-              </button>
-            ) : null}
-          </div>
+          {onToggleWatch && watchState !== undefined ? (
+            <button
+              type="button"
+              onClick={onToggleWatch}
+              disabled={!watchState}
+              title={
+                watchState?.watch
+                  ? "알림 해제 (가격 도달 알림 받지 않음)"
+                  : "알림 등록 (entry/target/stop 도달 시 Telegram/Discord 발송)"
+              }
+              className={cn(
+                "inline-flex h-8 w-8 flex-none items-center justify-center rounded-full border text-base transition-colors",
+                watchState?.watch
+                  ? "border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20"
+                  : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                !watchState && "cursor-not-allowed opacity-50",
+              )}
+            >
+              {watchState?.watch ? "🔔" : "🔕"}
+            </button>
+          ) : null}
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-2">
-        {/* ===== LEFT — 진입 조건/가격 ===== */}
-        <div className="space-y-4">
-        {/* When to enter */}
-        <div className="rounded-lg border border-border bg-background/40 p-4">
-          <div className="flex items-start gap-2">
-            <Lightbulb className="mt-0.5 h-4 w-4 flex-none text-primary" />
-            <div className="text-sm">
-              <span className="font-semibold">언제: </span>
-              <span className="text-foreground">{scenario.trigger}</span>
-            </div>
-          </div>
+        {/* 트리거 */}
+        <div className="rounded-lg bg-muted/30 px-4 py-3 text-sm leading-relaxed">
+          <span className="font-semibold">트리거</span>
+          <span className="ml-2 text-foreground/90">{scenario.trigger}</span>
         </div>
 
-        {/* Quality issues — soft warnings, let trader decide */}
+        {/* 검토 항목 — 표준 미달 (있을 때만) */}
         {scenario.qualityIssues && scenario.qualityIssues.length > 0 ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-400">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+            <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-400">
               <AlertTriangle className="h-3.5 w-3.5" />
               검토 항목 — 표준 미달 (진입 전 본인 판단)
             </div>
@@ -1171,79 +1160,30 @@ function SimpleScenarioCard({
           </div>
         ) : null}
 
-        {/* Tiered entry plan — if entries provided, show layered scale-in */}
-        {scenario.entries && scenario.entries.length > 0 ? (
-          <div className="space-y-1.5">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {isLong ? "분할 매수 계획" : "분할 매도 계획"}
-            </div>
-            <div className="overflow-hidden rounded-lg border border-border bg-background/40">
-              {scenario.entries.map((e, ei) => {
-                const dist = e.distancePct ?? ((e.price - currentPrice) / currentPrice) * 100;
-                const tierColor = ei === 0 ? "text-primary" : ei === 1 ? "text-foreground" : "text-muted-foreground";
-                return (
-                  <div
-                    key={e.tier}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 text-sm",
-                      ei > 0 && "border-t border-border/50",
-                    )}
-                  >
-                    <span className={cn("flex h-6 w-6 flex-none items-center justify-center rounded text-xs font-bold", tierColor, ei === 0 ? "bg-primary/15" : "bg-muted/40")}>
-                      {e.tier}
-                    </span>
-                    <span className="flex-1 truncate text-xs text-muted-foreground">{e.label} · {e.note}</span>
-                    <span className="font-mono font-semibold tabular-nums">${formatNumber(e.price)}</span>
-                    <span className="w-16 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                      {dist >= 0 ? "+" : ""}{dist.toFixed(2)}%
-                    </span>
-                    <Badge className="border border-border bg-muted/40 text-[10px] text-foreground">
-                      {e.weight}%
-                    </Badge>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              평균 진입가는 단계별 가격 × 비중. 손절·목표는 아래 공유.
-            </div>
-          </div>
-        ) : null}
-
-        {/* Stop / target row */}
-        <div className="grid grid-cols-3 gap-2">
-          <BigNumber
-            color="primary"
-            label={scenario.entries && scenario.entries.length > 0 ? "평균 진입가" : isLong ? "사는 가격" : "파는 가격"}
-            value={`$${formatNumber(entry)}`}
-            sub={
-              Math.abs(entryVsCurrentPct) < 0.05
-                ? "현재가"
-                : `현재가 ${entryVsCurrentPct >= 0 ? "+" : ""}${entryVsCurrentPct.toFixed(2)}%`
-            }
-            sub2=""
+        {/* 진입가 / 손절가 / 목표가 / 손익비 (시안 4칸) */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatCell
+            label={scenario.entries && scenario.entries.length > 0 ? "평균 진입가" : "진입가"}
+            value={formatNumber(entry)}
           />
-          <BigNumber
-            color="grade-d"
-            label="손절"
-            value={`$${formatNumber(scenario.invalidation)}`}
-            sub={`실현 -${netStopPct.toFixed(2)}%`}
-            sub2={`(정가 -${stopPct.toFixed(2)}% + 수수료)`}
+          <StatCell
+            label="손절가"
+            value={formatNumber(scenario.invalidation)}
+            delta={`(-${stopPct.toFixed(1)}%)`}
+            tone="bad"
           />
-          <BigNumber
-            color="grade-a"
-            label="목표"
-            value={`$${formatNumber(scenario.target)}`}
-            sub={`실현 +${netTargetPct.toFixed(2)}% (${netRR.toFixed(1)}배)`}
-            sub2={`(정가 +${targetPct.toFixed(2)}% − 수수료)`}
+          <StatCell
+            label="목표가"
+            value={formatNumber(scenario.target)}
+            delta={`(+${targetPct.toFixed(1)}%)`}
+            tone="good"
           />
-        </div>
-        <div className="-mt-1 text-[10px] text-muted-foreground">
-          ※ "실현"은 왕복 수수료 0.08% (Binance Taker × 2) 차감 + 슬리피지는 체결가에 별도 반영
+          <StatCell label="손익비" value={grade.rr.toFixed(2)} delta={`(실효 ${effRR.toFixed(2)})`} />
         </div>
 
-        {/* 몬테카를로 도달 확률 */}
+        {/* 도달 확률 (몬테카를로) — 한 줄 */}
         <ScenarioProbability
+          compact
           entry={entry}
           stop={scenario.invalidation}
           target={scenario.target}
@@ -1251,214 +1191,29 @@ function SimpleScenarioCard({
           closes={mtfCloses}
           style={style}
         />
-        </div>
-        {/* ===== END LEFT ===== */}
 
-        {/* ===== RIGHT — 사이즈 + CTA ===== */}
-        <div className="flex h-full flex-col gap-4">
-        {/* Backtest simulation result — only in backtest mode */}
+        {/* 백테스트 결과 (백테스트 모드에서만) */}
         {scenario.simulation ? (
           <BacktestSimulationInline sim={scenario.simulation} direction={scenario.direction} />
         ) : null}
-        {/* Position sizing — risk-based */}
-        {sizing.valid ? (
-          <div className="space-y-2">
-            {isAiRisk ? (
-              <div
-                className="rounded-md border border-primary/30 bg-primary/5 p-2.5 text-[11px] leading-relaxed text-foreground/85"
-                title={recommended.reasoning}
-              >
-                <span className="font-medium text-primary">🤖 AI 권장:</span>{" "}
-                리스크 <span className="font-mono font-semibold">{recommended.riskPct.toFixed(2)}%</span>,
-                레버리지 <span className="font-mono font-semibold">{recommended.leverage}x</span>{" "}
-                <span className="text-muted-foreground">— {recommended.reasoning}</span>
-              </div>
-            ) : null}
-            <div className="rounded-lg border border-border bg-card-2/40 p-3 space-y-2.5">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <Cell
-                  label="잃을 한도"
-                  value={`${riskPct.toFixed(2)}%${isAiRisk ? " 🤖" : ""}`}
-                  sub={`${formatCurrency(sizing.maxLoss, currency)} (계좌의)`}
-                  tone="bad"
-                />
-                <Cell
-                  label={`레버리지${isAiRisk ? " 🤖" : ""}`}
-                  value={`${recommended.leverage}x`}
-                  sub={isAiRisk ? "AI 권장" : "주문 검토에서 조정"}
-                />
-                <Cell
-                  label="노출 금액 (Notional)"
-                  value={`${positionPctOfAccount.toFixed(1)}%`}
-                  sub={`${formatCurrency(sizing.positionSize, currency)} (계좌의)`}
-                />
-                <Cell
-                  label="필요 마진"
-                  value={`${(positionPctOfAccount / recommended.leverage).toFixed(2)}%`}
-                  sub={`${formatCurrency(sizing.positionSize / recommended.leverage, currency)} (실제 묶임)`}
-                  tone="good"
-                />
-                <Cell
-                  label="매수 수량"
-                  value={`${formatNumber(sizing.quantity)}`}
-                  sub={`@ $${formatNumber(entry)}`}
-                />
-                <Cell
-                  label="실효 손익비"
-                  value={`${effRR.toFixed(2)}R`}
-                  sub="수수료 차감"
-                  tone={effRR >= 1.5 ? "good" : "bad"}
-                />
-              </div>
-              <div className="text-[10px] text-muted-foreground">
-                계좌 {formatCurrency(accountSize, currency)} 기준. <strong>노출 금액</strong>은 진입가 × 수량 (총 노출), <strong>필요 마진</strong>은 노출 ÷ 레버리지 (실제 묶이는 증거금). 손실은 레버리지와 무관하게 "잃을 한도"만큼만 — 손절이 잘 작동했을 때.
-              </div>
-            </div>
 
-            {/* Standard range badges */}
-            <div className="flex flex-wrap gap-1.5">
-              <StandardBadge check={stopCheck} />
-              <StandardBadge check={targetCheck} />
-              <StandardBadge check={rrCheck} />
-              <StandardBadge check={riskCheck} />
-              {mtfAtrPct ? (
-                (() => {
-                  const atrFloor = mtfAtrPct * 0.7;
-                  const noisy = stopPct < atrFloor;
-                  return (
-                    <Badge
-                      className={cn(
-                        "border text-[10px]",
-                        noisy
-                          ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                          : "border-grade-a/40 bg-grade-a/10 text-grade-a",
-                      )}
-                    >
-                      {noisy ? "⚠" : "✓"} 현재 변동성(ATR) {mtfAtrPct.toFixed(2)}% — 손절{" "}
-                      {stopPct.toFixed(2)}% {noisy ? `< ${atrFloor.toFixed(2)}% (노이즈 위험)` : "안전"}
-                    </Badge>
-                  );
-                })()
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {/* CTA — push to bottom so right column matches left height */}
-        <Link
-          href={tradeFormHref(symbol, scenario, index, accountSize, riskPct)}
-          className="mt-auto block"
-        >
-          <Button className="w-full" size="lg">
-            이 시나리오로 주문 검토
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
+        {/* 액션 — 차트로 보기 / 거래 실행으로 (시안) */}
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
+          <button
+            type="button"
+            onClick={onShowChart}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          >
+            차트로 보기
+            <ChartCandlestick className="h-4 w-4" />
+          </button>
+          <Link href={tradeFormHref(symbol, scenario, index, accountSize, riskPct)}>
+            <Button size="lg">
+              거래 실행으로
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
         </div>
-        {/* ===== END RIGHT ===== */}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function BigNumber({
-  label,
-  value,
-  sub,
-  sub2,
-  color,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  sub2?: string;
-  color: "primary" | "grade-a" | "grade-d";
-}) {
-  const colorClass = {
-    primary: "text-primary",
-    "grade-a": "text-grade-a",
-    "grade-d": "text-grade-d",
-  };
-  return (
-    <div className="rounded-lg border border-border bg-background/40 p-3">
-      <div className={cn("text-[11px] font-medium uppercase tracking-wider", colorClass[color])}>
-        {label}
-      </div>
-      <div className="mt-1 font-mono text-base font-bold leading-tight sm:text-lg">{value}</div>
-      <div className={cn("mt-0.5 text-[10px] font-medium", colorClass[color])}>{sub}</div>
-      {sub2 ? <div className="text-[10px] text-muted-foreground/70">{sub2}</div> : null}
-    </div>
-  );
-}
-
-function StrategyBanner({ strategy }: { strategy: StrategyResult }) {
-  const isWait = strategy.primary === "wait";
-  const confPct = Math.round(strategy.confidence * 100);
-  const directionLabel =
-    strategy.direction === "long"
-      ? "롱"
-      : strategy.direction === "short"
-        ? "숏"
-        : strategy.primary === "range_fade"
-          ? "양방향"
-          : null;
-
-  return (
-    <Card className={cn("overflow-hidden", isWait && "border-grade-c/40")}>
-      <span
-        aria-hidden
-        className={cn(
-          "absolute inset-y-0 left-0 w-1",
-          isWait ? "bg-grade-c" : strategy.direction === "short" ? "bg-grade-d" : "bg-primary",
-        )}
-      />
-      <div className="flex flex-col gap-3 p-4 pl-5 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            AI 전략 진단
-            <span className="text-muted-foreground/70">·</span>
-            <span>자신감 {confPct}%</span>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className="text-base font-semibold">{STRATEGY_LABELS[strategy.primary]}</span>
-            {directionLabel ? (
-              <Badge
-                className={cn(
-                  "border",
-                  strategy.direction === "long"
-                    ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
-                    : "border-grade-d/40 bg-grade-d/10 text-grade-d",
-                )}
-              >
-                {directionLabel}
-              </Badge>
-            ) : null}
-          </div>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            {strategy.reasoning}
-          </p>
-        </div>
-        {strategy.rejected.length > 0 ? (
-          <details className="group sm:max-w-xs">
-            <summary className="cursor-pointer list-none rounded-md border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/30">
-              <span className="flex items-center justify-between gap-2">
-                <span>왜 다른 전략은 아닌가? ({strategy.rejected.length})</span>
-                <span className="transition-transform group-open:rotate-180">▾</span>
-              </span>
-            </summary>
-            <ul className="mt-2 space-y-2 px-1 text-xs">
-              {strategy.rejected.map((r, i) => (
-                <li key={i} className="rounded-md border border-border/60 bg-background/40 p-2">
-                  <div className="font-medium text-foreground/80">
-                    {STRATEGY_LABELS[r.strategy as keyof typeof STRATEGY_LABELS] ?? r.strategy}
-                  </div>
-                  <div className="mt-0.5 text-muted-foreground">{r.reason}</div>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
       </div>
     </Card>
   );
@@ -1493,34 +1248,6 @@ function Row({
       >
         {value}
       </span>
-    </div>
-  );
-}
-
-function Cell({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: "good" | "bad";
-}) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "mt-0.5 font-mono text-sm font-medium",
-          tone === "good" && "text-grade-a",
-          tone === "bad" && "text-grade-d",
-        )}
-      >
-        {value}
-      </div>
-      {sub ? <div className="text-[10px] text-muted-foreground/80">{sub}</div> : null}
     </div>
   );
 }
@@ -1611,30 +1338,6 @@ function BacktestSimulationInline({
   );
 }
 
-function StandardBadge({
-  check,
-}: {
-  check: { status: CheckStatus; label: string };
-}) {
-  const cls =
-    check.status === "ok"
-      ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
-      : check.status === "warn"
-        ? "border-grade-c/40 bg-grade-c/10 text-grade-c"
-        : "border-grade-d/40 bg-grade-d/10 text-grade-d";
-  const icon = check.status === "ok" ? "✓" : check.status === "warn" ? "⚠" : "✕";
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-        cls,
-      )}
-    >
-      <span>{icon}</span>
-      <span>{check.label}</span>
-    </span>
-  );
-}
 
 function ScenarioExplainer({
   scenarios,

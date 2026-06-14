@@ -690,7 +690,7 @@ function TradeFormInner({
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">주문 검토는 AI 분석 후에 사용합니다</h1>
+              <h1 className="text-xl font-bold tracking-tight">거래 실행는 AI 분석 후에 사용합니다</h1>
               <p className="mt-2 text-sm text-muted-foreground">
                 이 페이지는 AI가 만든 시나리오의 등급·사이징·시장 구조를 확인하고 가상 트레이딩에 진입하는 화면입니다.
                 직접 진입하려면 <span className="text-foreground">가상 트레이딩</span>의 주문 패널을 사용하세요.

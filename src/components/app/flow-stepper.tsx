@@ -11,8 +11,8 @@ const STEPS: Array<{
   href: string;
 }> = [
   { key: "analyze", label: "AI 분석", desc: "시장 본다", href: "/app/analyze" },
-  { key: "trade", label: "주문 검토", desc: "이 거래 해도 되나", href: "/app/trade" },
-  { key: "journal", label: "내 거래", desc: "결과 입력 + 복기", href: "/app/journal" },
+  { key: "trade", label: "거래 실행", desc: "이 거래 해도 되나", href: "/app/trade" },
+  { key: "journal", label: "거래 일지", desc: "결과 입력 + 복기", href: "/app/journal" },
   { key: "dashboard", label: "성과 분석", desc: "패턴 발견", href: "/app/dashboard" },
 ];
 

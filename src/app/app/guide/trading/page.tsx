@@ -1,13 +1,13 @@
 import { GuideSubpageLayout, GuideSection, GuideFaq } from "@/components/guide/guide-layout";
 import { AlertTriangle, Lightbulb } from "lucide-react";
 
-export const metadata = { title: "트레이딩 터미널 사용법" };
+export const metadata = { title: "가상 거래 사용법" };
 
 export default function GuideTradingPage() {
   return (
     <GuideSubpageLayout
-      category="트레이딩 터미널"
-      title="트레이딩 터미널 사용법"
+      category="가상 거래"
+      title="가상 거래 사용법"
       description="vUSDT로 거래소처럼 매매하면서 진입·청산 흐름을 익힙니다. 실제 자금 없이 실제와 똑같은 체결가·슬리피지·수수료를 경험합니다. 거래 평가는 자금 관리·시장 컨텍스트를 자동 집계해 등급에 반영합니다."
       next={{ href: "/app/guide/arbitrage", label: "차익거래 사용법 →" }}
     >
@@ -49,7 +49,7 @@ export default function GuideTradingPage() {
             즉시 정산하고 싶을 때
           </div>
           <p className="text-muted-foreground">
-            내 거래 페이지의 "지금 자동 정산" 버튼을 누르면 5분 기다리지 않고 즉시 확인합니다.
+            거래 일지 페이지의 "지금 자동 정산" 버튼을 누르면 5분 기다리지 않고 즉시 확인합니다.
           </p>
         </div>
       </GuideSection>
@@ -57,7 +57,7 @@ export default function GuideTradingPage() {
       {/* 자금 관리 자동 집계 (NEW) */}
       <GuideSection eyebrow="03" title="거래 평가 — 자금 관리 자동 집계">
         <p className="text-sm leading-relaxed text-muted-foreground max-w-2xl">
-          주문 검토 페이지(거래 평가)에 진입 시 사용자가 입력할 필요 없이 자동으로 표시됩니다.
+          거래 실행 페이지(거래 평가)에 진입 시 사용자가 입력할 필요 없이 자동으로 표시됩니다.
           심리 체크리스트 같은 양심 체크는 모두 폐지하고 객관적 자동 집계로 대체했습니다.
         </p>
         <ul className="space-y-2 max-w-2xl text-sm text-muted-foreground mt-3">

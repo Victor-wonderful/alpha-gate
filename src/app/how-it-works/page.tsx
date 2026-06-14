@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 export const metadata = {
   title: "작동 방식 · Alpha Gate",
   description:
-    "Alpha Gate가 어떻게 진입 결정을 검증하는지 — AI 분석 → 주문 검토 → 내 거래 → 성과 분석의 4단계 사이클.",
+    "Alpha Gate가 어떻게 진입 결정을 검증하는지 — AI 분석 → 거래 실행 → 거래 일지 → 성과 분석의 4단계 사이클.",
 };
 
 export default function HowItWorksPage() {
@@ -248,7 +248,7 @@ const STEPS = [
     ],
   },
   {
-    title: "주문 검토",
+    title: "거래 실행",
     icon: ShieldCheck,
     tag: "진입 전",
     body: "AI 분석에서 받은 시나리오를 거래소처럼 입력. A/B/C/D 등급으로 진입 가능 여부를 즉시 판정.",
@@ -260,7 +260,7 @@ const STEPS = [
     ],
   },
   {
-    title: "내 거래",
+    title: "거래 일지",
     icon: BarChart3,
     tag: "진입 후",
     body: "진입한 거래를 저장하고 청산 후 실제 결과를 기록. 진입 시 평가와 실제 결과를 한 화면에서 비교.",

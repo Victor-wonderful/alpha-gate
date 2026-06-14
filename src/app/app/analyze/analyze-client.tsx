@@ -12,12 +12,21 @@ import type { ScenarioStats } from "@/lib/analysis/scenario-stats";
 import { AnalysisResult } from "./analysis-result";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
+import { STYLE_STANDARDS } from "@/lib/analysis/standards";
 import { AnalysisTimingHint } from "@/components/analyze/analysis-timing-hint";
 import { AnalysisInfo } from "@/components/analyze/analysis-info";
 import { RadarPanel } from "@/components/analyze/radar-panel";
-import { SessionsClock } from "@/components/market/sessions-clock";
 import type { RadarSnapshot } from "@/lib/analysis/radar-persist";
 import { kstStringAgo, kstStringToDate, randomKstStringWithin6Months } from "@/lib/analysis/kst";
+
+// 스타일 칩 — 짧은 이름 + 기간(각 1줄)으로 고정해 칩 높이를 균일하게.
+// (멀티 TF 등 상세는 바로 아래 표준 행에 표시되므로 칩에서는 생략)
+const STYLE_CHIPS: Record<TradingStyle, { name: string; dur: string }> = {
+  scalp: { name: "스캘핑", dur: "수분~수시간" },
+  day: { name: "데이", dur: "수시간~하루" },
+  swing: { name: "스윙", dur: "며칠~수주" },
+  position: { name: "포지션", dur: "수주~수개월" },
+};
 
 // Top Binance USDT-Perp by recent volume — wide enough for most use cases.
 const PRESETS = [
@@ -226,30 +235,23 @@ function AnalyzeClientInner({
     toast.success("저장된 분석 결과를 비웠습니다.");
   }
 
+  const isBacktest = mode === "backtest";
+
   return (
     <div className="space-y-6">
       <AnalysisInfo />
-      <SessionsClock />
       <RadarPanel initial={radar} onPick={pickCandidate} />
-      <Card>
-        <CardHeader>
-          <CardTitle>분석 대상</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {/* 모드 토글: 라이브 vs 백테스트 */}
-          <ModeToggle
-            mode={mode}
-            historicalAtKst={historicalAtKst}
-            onModeChange={(m) => setForm({ mode: m, historicalAtKst: m === "live" ? null : (historicalAtKst ?? kstStringAgo({ days: 7 })) })}
-            onHistoricalChange={(v) => setForm({ historicalAtKst: v })}
-          />
-          <div className="grid gap-5 lg:grid-cols-2">
-            {/* LEFT — 트레이딩 스타일 + 분석 가능 여부 */}
-            <section className="flex h-full flex-col gap-3">
-              <label className="text-xs font-medium text-muted-foreground">트레이딩 스타일</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(STYLE_PRESETS) as TradingStyle[]).map((s) => {
-                  const p = STYLE_PRESETS[s];
+
+      {/* 분석 설정 — 좌: 트레이딩 스타일 / 우: 분석 대상 (시안 Setup Row) */}
+      <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>트레이딩 스타일</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col gap-4">
+              <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+                {(Object.keys(STYLE_CHIPS) as TradingStyle[]).map((s) => {
+                  const c = STYLE_CHIPS[s];
                   const active = style === s;
                   return (
                     <button
@@ -257,28 +259,104 @@ function AnalyzeClientInner({
                       type="button"
                       onClick={() => setStyle(s)}
                       className={
-                        "rounded-md border p-3 text-left transition-colors " +
+                        "rounded-lg border p-4 text-left transition-colors " +
                         (active
                           ? "border-primary bg-primary/10"
                           : "border-border bg-background/40 hover:bg-accent/40")
                       }
                     >
-                      <div className="text-sm font-medium">{p.label}</div>
-                      <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{p.description}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base font-semibold">{c.name}</span>
+                        {s === "swing" ? (
+                          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                            권장
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">{c.dur}</div>
                     </button>
                   );
                 })}
               </div>
-              <div className="mt-auto">
-                <AnalysisTimingHint style={style} />
+              <AnalysisTimingHint style={style} />
+              {/* 선택 스타일의 표준 — 멀티 TF · 손절/목표폭 · 최소 R:R (standards.ts).
+                  mt-auto 로 카드 하단에 고정해 좌측 카드 빈 공간을 채운다. */}
+              <div className="mt-auto grid grid-cols-4 gap-3 rounded-lg bg-muted/30 px-4 py-3.5">
+                <div>
+                  <div className="text-xs text-muted-foreground/80">멀티 TF</div>
+                  <div className="mt-1 font-mono text-sm font-semibold uppercase">
+                    {STYLE_PRESETS[style].htf}/{STYLE_PRESETS[style].mtf}/{STYLE_PRESETS[style].ltf}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground/80">손절폭</div>
+                  <div className="mt-1 font-mono text-sm font-semibold">
+                    {STYLE_STANDARDS[style].stopPct.min}~{STYLE_STANDARDS[style].stopPct.max}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground/80">목표폭</div>
+                  <div className="mt-1 font-mono text-sm font-semibold">
+                    {STYLE_STANDARDS[style].targetPct.min}~{STYLE_STANDARDS[style].targetPct.max}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground/80">최소 R:R</div>
+                  <div className="mt-1 font-mono text-sm font-semibold">
+                    {STYLE_STANDARDS[style].rr.min}+
+                  </div>
+                </div>
               </div>
-            </section>
+          </CardContent>
+        </Card>
 
-            {/* RIGHT — 운영 자금/리스크 + 분석할 심볼 */}
-            <section className="flex h-full flex-col gap-4">
+        {/* RIGHT — 분석 대상: 모드 토글 + 심볼 + 자금/리스크 + 실행 */}
+        <Card className="flex flex-col">
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+            <CardTitle>분석 대상</CardTitle>
+            <div className="flex rounded-full border border-border bg-muted/30 p-0.5">
+              <button
+                type="button"
+                onClick={() => setForm({ mode: "live", historicalAtKst: null })}
+                className={
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
+                  (!isBacktest
+                    ? "bg-grade-a/15 text-grade-a"
+                    : "text-muted-foreground hover:text-foreground")
+                }
+              >
+                ● 라이브
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setForm({ mode: "backtest", historicalAtKst: historicalAtKst ?? kstStringAgo({ days: 7 }) })
+                }
+                className={
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
+                  (isBacktest
+                    ? "bg-grade-c/15 text-grade-c"
+                    : "text-muted-foreground hover:text-foreground")
+                }
+              >
+                ⏮ 백테스트
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col gap-4">
+              <div className="space-y-2">
+                <label
+                  htmlFor="symbol-input"
+                  className="text-sm font-medium text-muted-foreground"
+                >
+                  분석할 심볼
+                </label>
+                <SymbolCombobox value={symbol} onChange={setSymbol} />
+              </div>
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-medium text-muted-foreground">
+                  <label className="text-sm font-medium text-muted-foreground">
                     💰 운영 자금 · 리스크
                   </label>
                   {(accountSizeOverride !== null || riskPctOverride !== null) ? (
@@ -302,7 +380,7 @@ function AnalyzeClientInner({
                       const v = e.target.value.trim();
                       setForm({ accountSizeOverride: v === "" ? null : Number(v) });
                     }}
-                    placeholder={`운영 자금 (USD) — 기본 ${accountSize.toLocaleString()}`}
+                    placeholder={`자금 (USD) · 기본 ${accountSize.toLocaleString()}`}
                     className="font-mono"
                   />
                   <Input
@@ -316,11 +394,11 @@ function AnalyzeClientInner({
                       const v = e.target.value.trim();
                       setForm({ riskPctOverride: v === "" ? null : Number(v) });
                     }}
-                    placeholder="거래당 리스크 (%) — 비워두면 AI 자동"
+                    placeholder="리스크 (%) · 비우면 AI 자동"
                     className="font-mono"
                   />
                 </div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {riskPctOverride !== null ? (
                     <>
                       적용: <span className="font-mono text-foreground">${effectiveAccountSize.toLocaleString()}</span> × <span className="font-mono text-foreground">{riskPctOverride}%</span> = 거래당 <span className="font-mono text-foreground">${(effectiveAccountSize * riskPctOverride / 100).toLocaleString()}</span> 손실 한도 (고정)
@@ -333,29 +411,25 @@ function AnalyzeClientInner({
                 </div>
               </div>
 
-              <div className="mt-auto space-y-2">
-                <label
-                  htmlFor="symbol-input"
-                  className="text-xs font-medium text-muted-foreground"
-                >
-                  분석할 심볼
-                </label>
-                <SymbolCombobox value={symbol} onChange={setSymbol} />
-              </div>
-            </section>
-          </div>
+              {isBacktest ? (
+                <BacktestPicker
+                  historicalAtKst={historicalAtKst}
+                  onHistoricalChange={(v) => setForm({ historicalAtKst: v })}
+                />
+              ) : null}
 
-          <div className="flex justify-end">
-            <Button onClick={run} disabled={pending} size="lg">
-              {pending ? "분석 중... (10~20초)" : "분석 실행"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            분석은 Binance 공개 API에서 다중 타임프레임 데이터를 가져온 뒤 Alpha Gate 자체 분석 엔진이 종합합니다.
-            특정 매수/매도 추천이 아닌 시나리오 및 무효화 조건을 제시합니다.
-          </p>
-        </CardContent>
-      </Card>
+              <div className="mt-auto space-y-2">
+                <Button onClick={run} disabled={pending} size="lg" className="w-full">
+                  {pending ? "분석 중... (10~20초)" : "분석 실행"}
+                </Button>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Binance 공개 API 데이터를 Alpha Gate 분석 엔진이 종합합니다. 특정 매수/매도
+                  추천이 아닌 시나리오 및 무효화 조건을 제시합니다.
+                </p>
+              </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {pending ? (
         <Card>
@@ -412,56 +486,16 @@ function AnalyzeClientInner({
   );
 }
 
-/** 라이브 / 백테스트 모드 토글 + KST datetime 피커 + 빠른 선택 */
-function ModeToggle({
-  mode,
+/** 백테스트 기준 시각 — KST datetime 피커 + 빠른 선택 (토글은 카드 헤더의 세그먼트) */
+function BacktestPicker({
   historicalAtKst,
-  onModeChange,
   onHistoricalChange,
 }: {
-  mode: "live" | "backtest";
   historicalAtKst: string | null;
-  onModeChange: (m: "live" | "backtest") => void;
   onHistoricalChange: (v: string) => void;
 }) {
-  const isBacktest = mode === "backtest";
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => onModeChange("live")}
-          className={
-            "rounded-md border p-3 text-left transition-colors " +
-            (!isBacktest
-              ? "border-primary bg-primary/10"
-              : "border-border bg-background/40 hover:bg-accent/40")
-          }
-        >
-          <div className="text-sm font-medium">🟢 라이브</div>
-          <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
-            현재 시점 데이터로 분석
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => onModeChange("backtest")}
-          className={
-            "rounded-md border p-3 text-left transition-colors " +
-            (isBacktest
-              ? "border-primary bg-primary/10"
-              : "border-border bg-background/40 hover:bg-accent/40")
-          }
-        >
-          <div className="text-sm font-medium">⏮ 백테스트</div>
-          <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
-            과거 시점 시뮬 (호가/체결흐름 제외)
-          </div>
-        </button>
-      </div>
-
-      {isBacktest ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2.5">
+    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2.5">
           <div className="flex items-center justify-between gap-3">
             <label className="text-xs font-medium text-amber-300">
               ⏰ 분석 기준 시각 (KST)
@@ -507,8 +541,6 @@ function ModeToggle({
             호가창 · 체결흐름 · 펀딩 · BTC 도미넌스 등 라이브 전용 데이터는 0/빈값.
             AI 분석은 사용 가능한 데이터만으로 진행됩니다.
           </div>
-        </div>
-      ) : null}
     </div>
   );
 }

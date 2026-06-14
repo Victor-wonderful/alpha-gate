@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Radar, RefreshCw, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import {
+  Radar,
+  RefreshCw,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RadarCandidate } from "@/lib/analysis/radar";
@@ -10,6 +19,7 @@ import type { TradingStyle } from "@/lib/analysis/style";
 import { refreshRadarAction, getLiveQuotesAction } from "@/app/app/analyze/_radar-actions";
 
 const LIVE_INTERVAL_MS = 25_000;
+const COLLAPSED_COUNT = 5;
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
@@ -126,6 +136,7 @@ export function RadarPanel({
 }) {
   const [snapshot, setSnapshot] = useState<RadarSnapshot>(initial);
   const [live, setLive] = useState<Record<string, number>>({});
+  const [expanded, setExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
   const symbolsKey = snapshot.candidates.map((c) => c.symbol).join(",");
 
@@ -156,6 +167,7 @@ export function RadarPanel({
       if (r.error) toast.error(r.error);
       setSnapshot({ candidates: r.candidates, scannedAt: r.scannedAt });
       setLive({});
+      setExpanded(false);
       if (!r.error)
         toast.success(
           r.candidates.length > 0
@@ -167,6 +179,8 @@ export function RadarPanel({
 
   const { candidates, scannedAt } = snapshot;
   const hasLive = Object.keys(live).length > 0;
+  const hidden = Math.max(0, candidates.length - COLLAPSED_COUNT);
+  const visible = expanded ? candidates : candidates.slice(0, COLLAPSED_COUNT);
 
   return (
     <Card className="overflow-hidden">
@@ -174,7 +188,7 @@ export function RadarPanel({
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Radar className="h-[18px] w-[18px] text-primary" />
-            지금 볼 만한 코인
+            후보 레이더 — 지금 볼 만한 코인
           </CardTitle>
           <div className="flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground tabular-nums">
             {hasLive ? (
@@ -229,7 +243,7 @@ export function RadarPanel({
               <span className="w-[60px] text-center">분석</span>
             </div>
             <ul className="divide-y divide-border/50">
-              {candidates.map((c, i) => (
+              {visible.map((c, i) => (
                 <CandidateRow
                   key={c.symbol + i}
                   c={c}
@@ -239,6 +253,25 @@ export function RadarPanel({
                 />
               ))}
             </ul>
+            {hidden > 0 ? (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-md border border-border/60 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+              >
+                {expanded ? (
+                  <>
+                    접기
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </>
+                ) : (
+                  <>
+                    더 보기 (+{hidden})
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </>
+                )}
+              </button>
+            ) : null}
           </>
         )}
       </CardContent>

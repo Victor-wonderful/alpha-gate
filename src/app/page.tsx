@@ -324,13 +324,13 @@ const STEPS = [
     body: "Binance 실시간 데이터로 시장 구조·수급·심리를 분석합니다. 시나리오 1~3개와 무효화 조건을 제시합니다.",
   },
   {
-    title: "주문 검토",
+    title: "거래 실행",
     icon: ClipboardCheck,
     tag: "진입 전",
     body: "진입가·손절·목표를 입력하면 A·B·C·D 등급으로 답합니다. 추격·미확정 캔들·BTC 충돌을 자동 감지합니다.",
   },
   {
-    title: "내 거래",
+    title: "거래 일지",
     icon: BookOpen,
     tag: "진입 후",
     body: "진입한 거래를 기록하고 청산 결과를 입력합니다. 결과 입력 후 AI가 한국어 복기 코멘트를 생성합니다.",
@@ -413,7 +413,7 @@ const FEATURES: FeatureItem[] = [
   },
   {
     id: "trade",
-    tag: "주문 검토",
+    tag: "거래 실행",
     title: "거래소처럼 입력합니다",
     body: "진입가·손절·목표·계좌·리스크·레버리지를 거래소 주문 화면처럼 입력합니다. 손익비, 시장 구조, 트리거 검증을 종합해 A·B·C·D 등급과 행동 권고를 제시합니다.",
     bullets: [
@@ -424,7 +424,7 @@ const FEATURES: FeatureItem[] = [
   },
   {
     id: "journal",
-    tag: "내 거래",
+    tag: "거래 일지",
     title: "결정과 결과를 잇습니다",
     body: "진입 시 평가가 영구 보존됩니다. 청산 후 실제 R과 실수 태그를 입력하면 AI가 결정 과정과 실행을 평가해 한국어 코칭 코멘트를 자동 생성합니다.",
     bullets: [
@@ -498,7 +498,7 @@ function FeaturePreview({ kind }: { kind: FeatureItem["id"] }) {
   }
   if (kind === "trade") {
     return (
-      <PreviewCard caption="주문 검토 — 등급 결과">
+      <PreviewCard caption="거래 실행 — 등급 결과">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-rose-400/40 bg-gradient-to-br from-rose-500/25 to-rose-700/10 text-2xl font-black text-rose-300 shadow-[0_0_24px_rgba(244,63,94,0.4)]">
             D

@@ -112,7 +112,7 @@ export default function PricingPage() {
             </div>
             <h3 className="mt-4 text-lg font-bold">AI 분석 횟수만 다릅니다</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/65">
-              주문 검토·내 거래(저널)·성과 분석·AI 복기 코멘트는 모든 플랜에서 <strong className="text-white">제한 없이</strong>
+              거래 실행·거래 일지(저널)·성과 분석·AI 복기 코멘트는 모든 플랜에서 <strong className="text-white">제한 없이</strong>
               {" "}쓰실 수 있습니다. 결제는 매달 분석 횟수가 충전되는 구독 방식이며, 다 쓰지 못한 횟수는 이월되지 않습니다.
             </p>
           </div>
@@ -204,11 +204,11 @@ export default function PricingPage() {
 const FAQS = [
   {
     q: "정말 무료로 시작할 수 있나요?",
-    a: "네. Free 플랜은 영구 무료이며 신용카드 없이 가입 가능합니다. 매월 5회 AI 분석과 주문 검토·내 거래·성과 분석 기능을 제한 없이 쓰실 수 있습니다.",
+    a: "네. Free 플랜은 영구 무료이며 신용카드 없이 가입 가능합니다. 매월 5회 AI 분석과 거래 실행·거래 일지·성과 분석 기능을 제한 없이 쓰실 수 있습니다.",
   },
   {
     q: "플랜 간 차이는 무엇인가요?",
-    a: "월 AI 분석 횟수만 다릅니다. 주문 검토, 내 거래(저널), 성과 분석, AI 복기 코멘트는 모든 플랜에서 무제한입니다.",
+    a: "월 AI 분석 횟수만 다릅니다. 거래 실행, 거래 일지(저널), 성과 분석, AI 복기 코멘트는 모든 플랜에서 무제한입니다.",
   },
   {
     q: "쓰지 못한 분석 횟수는 이월되나요?",
@@ -227,7 +227,7 @@ const FAQS = [
     a: "아니요. Alpha Gate는 시나리오와 무효화 조건을 제시할 뿐 특정 매수/매도를 권유하지 않습니다. 모든 거래 결정과 결과는 사용자 본인의 책임입니다.",
   },
   {
-    q: "내 거래 데이터는 안전한가요?",
+    q: "거래 데이터는 안전한가요?",
     a: "모든 데이터는 Supabase의 Row-Level Security로 사용자별 격리됩니다. 다른 사용자는 코드 버그가 있어도 접근할 수 없으며, 언제든 본인 계정과 모든 데이터를 삭제할 수 있습니다.",
   },
 ];
@@ -283,11 +283,11 @@ function PlanCard({ plan }: { plan: Plan }) {
         <ul className="mt-5 space-y-2.5 text-sm">
           <li className="flex items-start gap-2.5">
             <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-            <span className="text-white/75">주문 검토 무제한</span>
+            <span className="text-white/75">거래 실행 무제한</span>
           </li>
           <li className="flex items-start gap-2.5">
             <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-            <span className="text-white/75">내 거래·성과 분석 무제한</span>
+            <span className="text-white/75">거래 일지·성과 분석 무제한</span>
           </li>
           <li className="flex items-start gap-2.5">
             <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />

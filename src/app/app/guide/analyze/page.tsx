@@ -23,7 +23,7 @@ export default function GuideAnalyzePage() {
       category="AI 분석"
       title="AI 분석 사용법"
       description="언제 분석하면 좋은지, 결과를 어떻게 읽어야 하는지. 트레이딩 스타일과 시장 시간대에 따라 다릅니다."
-      next={{ href: "/app/guide/trading", label: "트레이딩 터미널 사용법 →" }}
+      next={{ href: "/app/guide/trading", label: "가상 거래 사용법 →" }}
     >
       {/* 1. 언제 분석하나 */}
       <GuideSection eyebrow="01" title="언제 분석하면 좋은가">

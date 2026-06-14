@@ -1614,7 +1614,7 @@ function PositionsTabs({
         ) : (
           <div className="py-6 text-center text-xs text-muted-foreground">
             <Link href="/app/journal" className="text-primary underline-offset-2 hover:underline">
-              내 거래 페이지
+              거래 일지 페이지
             </Link>
             에서 전체 종료 거래를 확인하세요.
           </div>

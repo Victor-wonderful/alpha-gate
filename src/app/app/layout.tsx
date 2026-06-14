@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { TopNav } from "@/components/app/topnav";
+import { AppShell } from "@/components/app/app-shell";
 import { ScrollToTop } from "@/components/app/scroll-to-top";
 import { getBalance, getAiCredits } from "@/lib/paper-wallet";
 import { isAdminEmail } from "@/lib/admin/guard";
@@ -30,17 +30,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   return (
-    <div className="min-h-screen">
-      <TopNav
+    <>
+      <AppShell
         email={user.email ?? ""}
         balance={balance}
         credits={credits}
         isAdmin={isAdminEmail(user.email)}
-      />
-      <main>
-        <div className="mx-auto w-full max-w-[1600px] px-4 py-5 lg:px-6 lg:py-6">{children}</div>
-      </main>
+      >
+        {children}
+      </AppShell>
       <ScrollToTop />
-    </div>
+    </>
   );
 }

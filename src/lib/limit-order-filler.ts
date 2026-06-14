@@ -175,6 +175,9 @@ export async function checkAndFillLimitOrders(): Promise<number> {
         entry_actual: currentPrice,
         order_status: "filled",
         order_type: kind,
+        // 체결 시각 기록 — resolve-trades 가 이 시점부터 캔들을 훑어야
+        // 체결 전 대기 구간의 가짜 손절/목표를 잡지 않는다.
+        filled_at: new Date().toISOString(),
       })
       .eq("id", order.trade_id);
 

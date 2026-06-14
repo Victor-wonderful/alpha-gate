@@ -438,6 +438,7 @@ export async function saveTradeAction(args: {
       paper_margin: margin,
       order_type: "market",
       order_status: "filled",
+      filled_at: new Date().toISOString(),
       grade_override: !!args.gradeOverride,
     })
     .select("id, pre_grade")

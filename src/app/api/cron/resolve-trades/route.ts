@@ -63,6 +63,8 @@ interface OpenTrade {
   paper_margin: number | null;
   is_paper: boolean | null;
   created_at: string;
+  /** 실제 체결 시각. 예약주문은 체결까지 대기하므로 created_at 보다 늦다. null이면 created_at 사용(레거시/시장가). */
+  filled_at: string | null;
   /** 사용자가 +24h 연장 시 갱신되는 절대 만료시각. null이면 created_at + TIMEOUT_MS 적용. */
   extended_until: string | null;
   expiry_warned_first_at: string | null;
@@ -142,7 +144,7 @@ export async function GET(req: NextRequest) {
   const { data: openTrades, error } = await svc
     .from("trades")
     .select(
-      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, mode, extended_until, expiry_warned_first_at, expiry_warned_final_at, market_type",
+      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, filled_at, mode, extended_until, expiry_warned_first_at, expiry_warned_final_at, market_type",
     )
     .is("closed_at", null)
     .neq("mode", "backtest")
@@ -295,9 +297,12 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      // Fetch candles starting just before created_at to "now"
+      // Fetch candles starting just before the FILL time (not order placement).
+      // 예약주문(STOP/LIMIT)은 체결 전 대기 구간에 포지션이 없으므로, 그 구간 캔들이
+      // 손절/목표선을 스쳐도 무시해야 한다. filled_at 이 없으면(레거시/시장가) created_at 사용.
+      const fillMs = t.filled_at ? new Date(t.filled_at).getTime() : createdMs;
       const candles = await fetchKlines(t.symbol, INTERVAL_MAP[tf], 1000, {
-        startTime: createdMs - 60_000, // small buffer in case of clock skew
+        startTime: fillMs - 60_000, // small buffer in case of clock skew
       });
       if (!candles || candles.length === 0) {
         results.push({ id: t.id, note: "no candles" });

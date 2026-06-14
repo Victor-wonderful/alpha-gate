@@ -345,6 +345,7 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
       is_paper: true,
       order_type: "market",
       order_status: "filled",
+      filled_at: new Date().toISOString(),
       market_type: isSpot ? "spot" : "futures",
     })
     .select("id")

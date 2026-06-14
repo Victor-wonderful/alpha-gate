@@ -664,16 +664,29 @@ function TradeFormInner({
         : cp <= entryNumV);
   const orderKindLabel = orderType === "stop" ? "역지정가" : "지정가";
   // 예약 주문 UX: 사용자에겐 "지금 바로 / 예약 주문" 2택만 노출.
-  // 내부 주문유형(limit=되돌림 대기 / stop=돌파 추격)은 AI orderHint로 자동 결정.
+  // 내부 주문유형(limit=되돌림 대기 / stop=돌파 추격)은 예약가 vs 현재가 방향으로 실시간 자동 판정.
+  // - 롱: 예약가 ≤ 현재가 → 지정가(내려오면 체결) / 예약가 > 현재가 → 역지정가(돌파 체결)
+  // - 숏: 예약가 ≥ 현재가 → 지정가(올라오면 체결) / 예약가 < 현재가 → 역지정가(이탈 체결)
+  // 현재가/예약가를 못 구하면 AI orderHint(없으면 limit)로 폴백.
   const isScheduled = orderType !== "market";
-  const scheduledKind: "limit" | "stop" =
-    orderType === "stop"
+  const canAutoKind = !!(currentPrice && currentPrice > 0 && entryNumV > 0);
+  const scheduledKind: "limit" | "stop" = canAutoKind
+    ? direction === "long"
+      ? entryNumV <= currentPrice! ? "limit" : "stop"
+      : entryNumV >= currentPrice! ? "limit" : "stop"
+    : orderType === "stop"
       ? "stop"
       : orderType === "limit"
         ? "limit"
         : activeScenario?.orderHint === "stop"
           ? "stop"
           : "limit";
+  // 예약 모드에서 사용자가 예약가를 반대편으로 옮기면 limit↔stop을 자동 재전환.
+  // (가격값은 그대로 두고 주문유형 라벨만 맞춤 — 평행이동/복원 없음)
+  useEffect(() => {
+    if (orderType === "market" || !canAutoKind) return;
+    if (scheduledKind !== orderType) setOrderType(scheduledKind);
+  }, [orderType, canAutoKind, scheduledKind]);
   function setBooking(next: "now" | "scheduled") {
     changeOrderType(next === "now" ? "market" : scheduledKind);
   }

@@ -783,9 +783,26 @@ function TradeFormInner({
     );
   }
 
+  // ── 시안(XWTFa) 파생값 ──
+  const g = grade.grade as "A" | "B" | "C" | "D";
+  const gc = GRADE_CLASSES[g];
+  const passCount = grade.reasons.filter((r) => r.points > 0).length;
+  const warnReasons = grade.reasons.filter((r) => r.points < 0);
+  const warnCount = warnReasons.length;
+  const warnSummary = warnReasons.map((r) => r.label).slice(0, 3).join(" · ");
+  const effRR =
+    Math.abs(stopPct) > 0 && Math.abs(targetPct) > 0
+      ? (Math.abs(targetPct) - ROUND_TRIP_COST_PCT) / (Math.abs(stopPct) + ROUND_TRIP_COST_PCT)
+      : 0;
+  const coinName = symbol.replace(/USDT$/, "");
+  const reqMargin = sizing.valid && leverage > 0 ? sizing.positionSize / leverage : 0;
+  const dirLabel = direction === "long" ? "롱" : "숏";
+  const paperInsufficient =
+    mode === "paper" && paperWallet != null && sizing.valid && reqMargin > paperWallet.available;
+
   return (
-    <div className="space-y-6">
-      {/* 백테스트 모드 배너 — 라이브 거래 차단 + 자동 시뮬 안내 */}
+    <div className="space-y-5">
+      {/* 백테스트 모드 배너 */}
       {isBacktestMode ? (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm">
           <div className="flex flex-wrap items-center gap-2">
@@ -798,992 +815,492 @@ function TradeFormInner({
           </div>
         </div>
       ) : null}
-      {/* ① 요약바 — 등급 결론 (시안) */}
-      <SummaryBar
-        grade={grade}
-        symbol={symbol}
-        direction={direction}
-        entry={entryNumV}
-        stop={stopNumV}
-        target={targetNumV}
-        scenarioName={activeScenario?.name ?? null}
-      />
 
-    <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-      <div className="space-y-6">
-        {/* AI 분석 시나리오 컨텍스트 — 분석 페이지에서 넘어왔을 때만 표시 */}
-        {activeScenario ? (
-          <ScenarioContextCard
-            scenario={activeScenario}
-            strategyLabel={activeStrategy ? STRATEGY_LABELS[activeStrategy.primary] : null}
-            strategyConfidence={activeStrategy ? activeStrategy.confidence : null}
-            trend={activeTrend}
-            selectedTier={selectedTier}
-            onSelectTier={selectTier}
-            recommendation={recommendation}
-            grade={grade.grade}
-            sizing={sizing}
-            currency={currency}
-            accountSize={Number(accountSize) || 0}
-            riskPct={Number(riskPct) || 0}
-            leverage={leverage}
-            onApplyRecommendation={() => {
-              if (!recommendation) return;
-              setRiskPct(recommendation.riskPct.toFixed(2));
-              setLeverage(recommendation.leverage);
-              setUserOverride(false); // 다시 권장값 따르기로 — 이후 tier 변경 시 자동 동기화
-            }}
-            mcResult={mcResult}
-            mtfTf={analysisResult?.snapshot.atr?.find((a) => a.role === "MTF")?.tf ?? null}
-          />
-        ) : null}
+      {/* 페이지 타이틀 */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">거래 실행</h1>
+        <p className="text-sm text-muted-foreground">
+          진입 전 마지막 관문 — 셋업·자금·시장 컨텍스트를 한 번에 평가합니다
+        </p>
+      </div>
 
-        {/* 1. 주문 입력 — 거래소 스타일 */}
-        <Card className="overflow-hidden">
-          {/* Header: symbol + futures meta */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/40 px-5 py-3">
-            <div className="flex items-center gap-2">
-              <Select
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value)}
-                className="h-8 w-auto min-w-[120px] border-border bg-background font-mono text-sm font-bold"
-              >
-                {(SYMBOLS.includes(symbol) ? SYMBOLS : [symbol, ...SYMBOLS]).map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </Select>
-              <span className="rounded border border-border bg-background/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Perpetual
-              </span>
-              <span className="rounded border border-border bg-background/60 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
-                {leverage}x
-              </span>
-            </div>
-            <div className="flex items-center gap-3 text-xs">
-              {!aiMode ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">TF</span>
-                  <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/60 p-0.5">
-                    {TIMEFRAMES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setTimeframe(t)}
-                        className={cn(
-                          "rounded px-2 py-0.5 font-mono text-[11px] font-semibold transition-colors",
-                          timeframe === t
-                            ? "bg-primary/15 text-primary"
-                            : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-                        )}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {currentPrice ? (
-                <div className="font-mono text-xs">
-                  <span className="text-muted-foreground">현재가</span>{" "}
-                  <span className="font-semibold text-foreground">${currentPrice.toLocaleString()}</span>
-                </div>
-              ) : null}
-            </div>
+      {/* ① 요약바 — 등급 결론 */}
+      <div className={cn("rounded-xl border bg-card px-4 py-3", gc.border)}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div
+            className={cn(
+              "flex h-10 w-10 flex-none items-center justify-center rounded-lg text-lg font-black text-white shadow-sm",
+              gc.bg,
+            )}
+          >
+            {g}
           </div>
-
-          {/* Big direction buttons */}
-          <div className="grid grid-cols-2 gap-2 p-4">
-            <button
-              type="button"
-              onClick={() => setDirection("long")}
-              className={cn(
-                "rounded-md py-3 text-sm font-bold uppercase tracking-wide transition-all",
-                direction === "long"
-                  ? "bg-grade-a text-white shadow-md shadow-grade-a/30"
-                  : "border border-border bg-background/40 text-muted-foreground hover:bg-grade-a/10 hover:text-grade-a",
-              )}
-            >
-              롱 매수 / Long
-            </button>
-            <button
-              type="button"
-              onClick={() => setDirection("short")}
-              className={cn(
-                "rounded-md py-3 text-sm font-bold uppercase tracking-wide transition-all",
-                direction === "short"
-                  ? "bg-grade-d text-white shadow-md shadow-grade-d/30"
-                  : "border border-border bg-background/40 text-muted-foreground hover:bg-grade-d/10 hover:text-grade-d",
-              )}
-            >
-              숏 매도 / Short
-            </button>
-          </div>
-
-          <CardContent className="space-y-4 pt-0">
-            {/* Order method toggle — 시안: 지금 바로 / 예약 주문 (2택) */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-[11px] font-semibold">주문 방식</Label>
-                <span className="text-[10px] text-muted-foreground">
-                  {!isScheduled
-                    ? "현재가로 즉시 체결"
-                    : scheduledKind === "stop"
-                      ? "목표 가격 돌파 시 자동 진입 (24시간 유효)"
-                      : "목표 가격 도달 시 자동 진입 (24시간 유효)"}
+          <div className="min-w-0">
+            <div className={cn("text-sm font-bold leading-tight", gc.text)}>
+              {GRADE_VERDICT[g]} — {grade.score}점
+              {warnCount > 0 ? (
+                <span className="font-medium text-muted-foreground">
+                  {" · "}경고 {warnCount}개를 해결하면 상향 가능
                 </span>
-              </div>
-              <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-background/40 p-0.5">
-                {([
-                  { key: "now", label: "지금 바로", active: !isScheduled },
-                  { key: "scheduled", label: "예약 주문", active: isScheduled },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => setBooking(opt.key)}
-                    className={cn(
-                      "rounded px-2 py-1.5 text-xs font-semibold transition-colors",
-                      opt.active
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              {isScheduled ? (
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  예약 주문은 지정한 가격에 도달하면 자동으로 진입합니다.{" "}
-                  {scheduledKind === "stop"
-                    ? `가격이 ${isLongDir ? "위로 돌파" : "아래로 이탈"}할 때 진입(돌파 추종)`
-                    : `가격이 ${isLongDir ? "내려와" : "올라와"} 도달할 때 진입(되돌림 대기)`}하도록
-                  AI 시나리오 기준으로 자동 설정됩니다.
-                </p>
               ) : null}
             </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-muted-foreground tabular-nums">
+              <span className="font-semibold text-foreground">{symbol}</span>
+              <span>· {dirLabel} {leverage}x</span>
+              <span>· 진입 {formatPriceForInput(entryNumV) || "—"}</span>
+              <span className="text-grade-a">· 목표 {formatPriceForInput(targetNumV) || "—"}</span>
+              <span className="text-grade-d">· 손절 {formatPriceForInput(stopNumV) || "—"}</span>
+              <span>· 실효 손익비 <span className={cn("font-semibold", effRR >= 1.5 ? "text-grade-a" : "text-foreground")}>{effRR > 0 ? `${effRR.toFixed(2)}R` : "—"}</span></span>
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="flex items-center gap-1 rounded-md border border-grade-a/30 bg-grade-a/10 px-2 py-1 text-[11px] font-semibold text-grade-a">
+              ✓ 자동 점검 통과 {passCount}
+            </span>
+            {warnCount > 0 ? (
+              <span className="flex items-center gap-1 rounded-md border border-grade-c/30 bg-grade-c/10 px-2 py-1 text-[11px] font-semibold text-grade-c">
+                ⚠ 경고 {warnCount}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
 
-            {/* Price inputs with auto-% */}
-            <div className="space-y-2">
-              {orderType === "market" ? (
-                <div
-                  className={cn(
-                    "flex items-center justify-between gap-3 rounded-md border bg-background/40 px-3 py-2.5",
-                    ENTRY_ACCENT,
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      진입가
-                    </span>
-                    <span className="font-mono text-base font-bold tabular-nums">
-                      {currentPrice ? `$${currentPrice.toLocaleString()}` : "—"}
-                    </span>
+      {/* 메인 그리드 */}
+      <div className="grid gap-5 lg:grid-cols-[1.65fr_1fr]">
+        {/* ── LEFT: 주문 정보 ── */}
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border bg-background/40 px-5 py-3">
+            <h2 className="text-sm font-bold">주문 정보</h2>
+            {activeScenario ? (
+              <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                AI 시나리오에서 불러옴
+              </span>
+            ) : null}
+          </div>
+          <CardContent className="space-y-4 p-5">
+            {/* 심볼 + 방향 + 주문 방식 + 레버리지 */}
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">심볼 / 방향</Label>
+                <div className="flex items-center gap-1.5">
+                  <Select
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value)}
+                    className="h-9 w-auto min-w-[118px] border-border bg-background font-mono text-sm font-bold"
+                  >
+                    {(SYMBOLS.includes(symbol) ? SYMBOLS : [symbol, ...SYMBOLS]).map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </Select>
+                  <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/60 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setDirection("long")}
+                      className={cn(
+                        "rounded px-2.5 py-1.5 text-xs font-bold transition-colors",
+                        direction === "long" ? "bg-grade-a text-white" : "text-muted-foreground hover:text-grade-a",
+                      )}
+                    >롱</button>
+                    <button
+                      type="button"
+                      onClick={() => setDirection("short")}
+                      className={cn(
+                        "rounded px-2.5 py-1.5 text-xs font-bold transition-colors",
+                        direction === "short" ? "bg-grade-d text-white" : "text-muted-foreground hover:text-grade-d",
+                      )}
+                    >숏</button>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    시장가 · 체결 시점 가격으로 진입
-                  </span>
                 </div>
-              ) : (
-                <PriceRow
-                  label="예약가"
-                  value={entry}
-                  onChange={setEntry}
-                  accent={ENTRY_ACCENT}
-                  hint={
-                    currentPrice && entryNumV > 0
-                      ? `현재가 대비 ${(((entryNumV - currentPrice) / currentPrice) * 100).toFixed(2)}%`
-                      : null
-                  }
-                />
-              )}
-              <PriceRow
-                label="손절 SL"
-                value={stop}
-                onChange={setStop}
-                accent={STOP_ACCENT}
-                hint={
-                  entryNumV > 0 && stopNumV > 0
-                    ? `${stopPct.toFixed(2)}% (${formatRPreview(entryNumV, stopNumV, targetNumV, "stop")})`
-                    : null
-                }
-              />
-              <PriceRow
-                label="익절 TP"
-                value={target}
-                onChange={setTarget}
-                accent={TARGET_ACCENT}
-                hint={
-                  entryNumV > 0 && targetNumV > 0
-                    ? `${targetPct >= 0 ? "+" : ""}${targetPct.toFixed(2)}% (${formatRPreview(entryNumV, stopNumV, targetNumV, "target")})`
-                    : null
-                }
-              />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">주문 방식</Label>
+                <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/40 p-0.5">
+                  {([
+                    { key: "now", label: "지금 바로", active: !isScheduled },
+                    { key: "scheduled", label: "예약 주문 — 자동", active: isScheduled },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setBooking(opt.key)}
+                      className={cn(
+                        "rounded px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                        opt.active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >{opt.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">레버리지</Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={leverage}
+                    onChange={(e) => { setLeverage(Math.max(1, Number(e.target.value) || 1)); setUserOverride(true); }}
+                    className="h-9 w-16 font-mono text-sm font-bold"
+                  />
+                  <span className="text-xs text-muted-foreground">x</span>
+                </div>
+              </div>
             </div>
 
-            {/* 대기 주문(지정가/역지정가) 무효 경고 — 현재가가 이미 트리거를 통과한 경우 */}
-            {orderCrossed ? (
-              <div
-                className={cn(
-                  "space-y-2 rounded-md border p-3 text-xs",
-                  mktStopPassed || mktTargetPassed
-                    ? "border-grade-d/40 bg-grade-d/10"
-                    : "border-amber-500/40 bg-amber-500/10",
-                )}
-              >
-                <p className="font-semibold text-foreground">
-                  ⚠️ {orderKindLabel}가 무효입니다 — 현재가($
-                  {cp.toLocaleString()})가 이미 {orderKindLabel}($
-                  {entryNumV.toLocaleString()})를 {crossedDirWord} 통과했습니다.
-                </p>
-                <p className="text-muted-foreground leading-relaxed">
-                  {orderType === "stop"
-                    ? `${isLongDir ? "롱" : "숏"} 역지정가는 가격이 ${isLongDir ? "올라가" : "내려가"} 트리거를 돌파할 때 진입하는 주문입니다. 이미 통과해 지금 걸면 즉시 체결됩니다.`
-                    : `${isLongDir ? "롱" : "숏"} 지정가는 가격이 ${isLongDir ? "내려와" : "올라와"} 도달하길 기다리는 주문입니다. 이미 통과해 거래소에 걸어도 즉시 체결(시장가와 동일)됩니다.`}
-                </p>
-
-                {mktStopPassed ? (
-                  <p className="font-medium text-grade-d">
-                    현재가가 손절가($
-                    {stopNumV.toLocaleString()})도 통과했습니다. <span className="font-semibold">진입 거부</span> — 새 셋업을 기다리세요.
-                  </p>
-                ) : mktTargetPassed ? (
-                  <p className="font-medium text-grade-d">
-                    현재가가 목표가($
-                    {targetNumV.toLocaleString()})를 이미 통과했습니다. <span className="font-semibold">추격 금지</span> — 목표를 다시 잡거나 포기하세요.
-                  </p>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between rounded bg-background/40 px-2 py-1.5">
-                      <span className="text-muted-foreground">
-                        현재가로 진입 시 손익비 (손절·목표 유지)
-                      </span>
-                      <span
-                        className={cn(
-                          "font-mono font-bold tabular-nums",
-                          mktRR >= 1.5 ? "text-grade-a" : "text-grade-d",
-                        )}
-                      >
-                        {mktRR.toFixed(2)} R
-                      </span>
-                    </div>
-                    {mktRR < 1.5 ? (
-                      <p className="text-grade-d">
-                        목표가가 너무 가까워 손익비가 나오지 않습니다. 시장가로 들어가도 불리한 거래입니다 — 목표 재조정 또는 포기를 권장합니다.
-                      </p>
-                    ) : (
-                      <p className="text-muted-foreground">
-                        손익비는 유효합니다. 시장가로 전환해 현재가에 진입할 수 있습니다.
-                      </p>
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={switchToMarketAtCurrent}
-                    >
-                      시장가로 전환 (진입가 → 현재가, 손익비 {mktRR.toFixed(2)}R)
-                    </Button>
-                  </>
-                )}
+            {/* 예약 주문 안내 */}
+            {isScheduled && currentPrice ? (
+              <div className="flex gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                <span className="text-primary">ℹ</span>
+                <span>
+                  예약 주문은 고른 방식대로 자동돼요 — 진입가 <span className="font-mono text-foreground">{formatPriceForInput(entryNumV)}</span>가 현재가 <span className="font-mono text-foreground">{formatPriceForInput(currentPrice)}</span>
+                  {scheduledKind === "limit"
+                    ? `보다 ${isLongDir ? "낮아 “가격이 내려오면 체결”" : "높아 “가격이 올라오면 체결”"}`
+                    : `대비 ${isLongDir ? "위로 돌파하면 체결" : "아래로 이탈하면 체결"}`}
+                  로 걸어둡니다. 불리한 방향이면 돌파 추격으로 자동 전환됩니다.
+                </span>
               </div>
             ) : null}
 
-            {/* Leverage slider — 거래소 순서대로 사이즈 위에 배치 */}
-            <div className="space-y-2 rounded-md border border-border bg-background/30 p-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold">레버리지</Label>
-                <span className="font-mono text-sm font-bold text-foreground">{leverage}x</span>
-              </div>
-              {liqPrice > 0 ? (
-                <div className="flex items-center justify-between rounded bg-muted/30 px-2 py-1 text-[11px]">
-                  <span className="text-muted-foreground">청산가 (대략 · Isolated)</span>
-                  <span className="font-mono text-amber-400">${formatPriceForInput(liqPrice)}</span>
+            {/* 진입가 / 손절가 / 목표가 */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className={cn("rounded-md border bg-background/40 p-3", ENTRY_ACCENT)}>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {isScheduled ? "예약가" : "진입가 (시장가)"}
                 </div>
-              ) : null}
-              <input
-                type="range"
-                min={1}
-                max={50}
-                step={1}
-                value={leverage}
-                onChange={(e) => { setLeverage(Number(e.target.value)); setUserOverride(true); }}
-                className="w-full accent-primary"
-              />
-              <div className="flex flex-wrap gap-1">
-                {[1, 3, 5, 10, 20, 50].map((lv) => (
-                  <button
-                    key={lv}
-                    type="button"
-                    onClick={() => { setLeverage(lv); setUserOverride(true); }}
-                    className={cn(
-                      "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
-                      leverage === lv
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
-                    )}
-                  >
-                    {lv}x
-                  </button>
-                ))}
+                {isScheduled ? (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    value={entry}
+                    onChange={(e) => setEntry(e.target.value)}
+                    className="mt-1 w-full border-0 bg-transparent p-0 font-mono text-base font-bold tabular-nums outline-none focus:ring-0"
+                  />
+                ) : (
+                  <div className="mt-1 font-mono text-base font-bold tabular-nums">
+                    {currentPrice ? formatPriceForInput(currentPrice) : "—"}
+                  </div>
+                )}
+                <div className="text-[10px] text-muted-foreground">USDT</div>
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                레버리지는 손익비/등급과 무관. 필요 마진만 달라집니다.
-              </p>
+              <div className={cn("rounded-md border bg-background/40 p-3", STOP_ACCENT)}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">손절가</span>
+                  <span className="font-mono text-[10px] font-semibold text-grade-d">
+                    {entryNumV > 0 && stopNumV > 0 ? `${stopPct.toFixed(1)}%` : ""}
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={stop}
+                  onChange={(e) => setStop(e.target.value)}
+                  className="mt-1 w-full border-0 bg-transparent p-0 font-mono text-base font-bold tabular-nums text-grade-d outline-none focus:ring-0"
+                />
+                <div className="text-[10px] text-muted-foreground">USDT</div>
+              </div>
+              <div className={cn("rounded-md border bg-background/40 p-3", TARGET_ACCENT)}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">목표가</span>
+                  <span className="font-mono text-[10px] font-semibold text-grade-a">
+                    {entryNumV > 0 && targetNumV > 0 ? `${targetPct >= 0 ? "+" : ""}${targetPct.toFixed(1)}%` : ""}
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  className="mt-1 w-full border-0 bg-transparent p-0 font-mono text-base font-bold tabular-nums text-grade-a outline-none focus:ring-0"
+                />
+                <div className="text-[10px] text-muted-foreground">USDT</div>
+              </div>
             </div>
 
-            {/* 수수료 가드 인라인 경고 — 진입 클릭 전에 표시 */}
+            {/* 수수료 가드 경고 */}
             {feeUnsafe ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-xs">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-grade-d" />
-                <span className="flex-1 text-grade-d">
-                  손절폭 {absStopPct.toFixed(3)}%가 수수료의 3배({MIN_STOP_PCT_VS_FEES.toFixed(2)}%) 미만 —
-                  손절 적중 시 수수료 포함 약 <strong>{realizedRIfStopped.toFixed(1)}R</strong> 손실(계획 1R 대비). 이대로는 진입이 차단됩니다.
+              <div className="flex items-center justify-between gap-2 rounded-md border border-grade-d/40 bg-grade-d/10 px-3 py-2 text-[11px]">
+                <span className="text-grade-d">
+                  손절폭({absStopPct.toFixed(2)}%)이 수수료 안전선({MIN_STOP_PCT_VS_FEES}%) 미만 — 손절 적중 시 약 {realizedRIfStopped.toFixed(1)}R 손실(계획 1R).
                 </span>
-                <button
-                  type="button"
-                  onClick={widenStopToFeeSafe}
-                  className="shrink-0 rounded border border-grade-d/50 bg-grade-d/10 px-2.5 py-1 font-medium text-grade-d transition-colors hover:bg-grade-d/20"
-                >
-                  손절 자동 넓히기
+                <button type="button" onClick={widenStopToFeeSafe} className="flex-none rounded border border-grade-d/50 bg-grade-d/20 px-2 py-1 font-semibold text-foreground hover:bg-grade-d/30">
+                  손절 넓히기
                 </button>
               </div>
             ) : null}
 
-            {/* Size / quantity section */}
-            <div className="space-y-2 rounded-md border border-border bg-background/30 p-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-foreground">사이즈 (리스크 기반)</span>
-                <span className="font-mono text-muted-foreground">
-                  {previewQty > 0 ? `${formatNumber(previewQty, { maximumFractionDigits: 4 })} ${symbol.replace("USDT", "")}` : "—"}
-                </span>
+            {/* 사이즈 바 + 주문 금액 + 청산가 */}
+            <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-muted-foreground">사이즈 — 리스크 예산 대비</span>
+                <span className="font-mono font-semibold text-foreground">{sizing.valid ? "100%" : "—"}</span>
               </div>
-              {/* 거래소식 사이즈 슬라이더 (계좌 노출 % 기준) */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={Math.min(100, Math.max(0, Math.round(notionalPctOfAccount)))}
-                  onChange={(e) => applyAccountPct(Number(e.target.value))}
-                  className="w-full accent-primary"
-                  aria-label="포지션 사이즈 (계좌 대비 %)"
-                />
-                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
-                  {notionalPctOfAccount.toFixed(0)}%
-                </span>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/40">
+                <div className="h-full rounded-full bg-primary" style={{ width: sizing.valid ? "100%" : "0%" }} />
               </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-muted-foreground">계좌의:</span>
-                {[10, 25, 50, 100].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => applyAccountPct(pct)}
-                    className={cn(
-                      "rounded border px-2 py-0.5 font-mono text-[11px] transition-colors",
-                      Math.abs(notionalPctOfAccount - pct) < 1
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
-                    )}
-                  >
-                    {pct === 100 ? "Max" : `${pct}%`}
-                  </button>
-                ))}
-                <span className="ml-auto font-mono text-[11px] text-muted-foreground">
-                  노출 {notionalPctOfAccount.toFixed(1)}%
-                </span>
-              </div>
-
-              {/* 실제 USDT 금액 — 수량/노출/마진/잃을 한도 */}
-              {previewQty > 0
-                ? (() => {
-                    const acct = Math.max(Number(accountSize) || 0, 0);
-                    const notionalUsd = acct * (notionalPctOfAccount / 100);
-                    const riskUsd = acct * (Number(riskPct) / 100);
-                    const marginUsd = leverage > 0 ? notionalUsd / leverage : notionalUsd;
-                    const base = symbol.replace("USDT", "");
-                    return (
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-md bg-muted/30 px-2.5 py-2 text-[11px] sm:grid-cols-4">
-                        <div>
-                          <div className="text-muted-foreground">수량</div>
-                          <div className="font-mono text-foreground">
-                            {formatNumber(previewQty, { maximumFractionDigits: 4 })} {base}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-muted-foreground">노출 금액</div>
-                          <div className="font-mono text-foreground">
-                            {formatCurrency(notionalUsd, currency)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-muted-foreground">필요 마진</div>
-                          <div className="font-mono text-foreground">
-                            {formatCurrency(marginUsd, currency)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-muted-foreground">잃을 한도</div>
-                          <div className="font-mono text-grade-d">
-                            {formatCurrency(riskUsd, currency)}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()
-                : null}
-
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                <div className="space-y-1">
-                  <Label className="text-[11px]">주문 금액 (USDT)</Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    value={notionalDraft ?? (previewNotional > 0 ? String(Math.round(previewNotional)) : "")}
-                    onFocus={() =>
-                      setNotionalDraft(previewNotional > 0 ? String(Math.round(previewNotional)) : "")
-                    }
-                    onChange={(e) => {
-                      setNotionalDraft(e.target.value);
-                      const usd = Number(e.target.value) || 0;
-                      const pct = accountNumV > 0 ? (usd / accountNumV) * 100 : 0;
-                      applyAccountPct(pct);
-                    }}
-                    onBlur={() => setNotionalDraft(null)}
-                    placeholder="노출 USDT"
-                    className="h-9 font-mono"
-                  />
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">주문 금액</div>
+                  <div className="font-mono text-sm font-bold tabular-nums">
+                    {sizing.valid ? `${formatNumber(sizing.positionSize)} ` : "— "}
+                    <span className="text-[10px] font-normal text-muted-foreground">USDT</span>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-[11px]">계좌 ({currency})</Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    value={accountSize}
-                    onChange={(e) => setAccountSize(e.target.value)}
-                    className="h-9 font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[11px]">리스크 / 거래 (%)</Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.1"
-                    value={riskPct}
-                    onChange={(e) => { setRiskPct(e.target.value); setUserOverride(true); }}
-                    className="h-9 font-mono"
-                  />
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">청산가 (대략)</div>
+                  <div className="font-mono text-sm font-bold tabular-nums">
+                    {liqPrice > 0 ? `≈ ${formatPriceForInput(liqPrice)}` : "—"}
+                  </div>
                 </div>
               </div>
             </div>
-
           </CardContent>
         </Card>
 
-        {/* 2. 시장 구조 체크리스트 — AI 모드에서는 분석이 이미 평가했으므로 숨김 */}
-        {!aiMode ? (
-        <details open className="group">
-          <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
-            <span className="transition-transform group-open:rotate-90">▶</span>
-            시장 구조 체크리스트
-          </summary>
-          <div className="mt-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>시장 구조 체크리스트</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1">
-                {MARKET_CHECK_KEYS.map((k) => (
-                  <Checkbox
-                    key={k}
-                    checked={market[k]}
-                    onChange={(e) => setMarket({ ...market, [k]: e.target.checked })}
-                    label={MARKET_CHECK_LABELS[k]}
-                  />
+        {/* ── RIGHT: 어떻게 실행할까요? + 매매 평가 상세 ── */}
+        <div className="space-y-4">
+          <Card className="overflow-hidden">
+            <div className="border-b border-border bg-background/40 px-5 py-3">
+              <h2 className="text-sm font-bold">어떻게 실행할까요?</h2>
+            </div>
+            <CardContent className="space-y-3 p-5">
+              {/* 3 미니 지표 */}
+              <div className="grid grid-cols-3 gap-2">
+                <ExecStat label="잃을 한도" value={sizing.valid ? formatCurrency(sizing.maxLoss, currency) : "—"} sub={`${(Number(riskPct) || 0).toFixed(1)}%`} tone="bad" />
+                <ExecStat label="수량" value={sizing.valid ? `${formatNumber(sizing.quantity)}` : "—"} sub={coinName} />
+                <ExecStat label="필요 증거금" value={sizing.valid ? formatCurrency(reqMargin, currency) : "—"} sub={`${leverage}x`} />
+              </div>
+
+              {/* 3 실행 버튼 */}
+              <button
+                type="button"
+                disabled
+                title="현재 비활성 — Binance IP 제한 정책 때문에 자동 주문 불가. 추후 프록시 인프라 도입 시 활성화."
+                className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-md bg-primary/40 px-4 py-2.5 text-sm font-bold text-primary-foreground opacity-60"
+              >
+                ✦ 실거래 주문
+                <span className="rounded bg-black/20 px-1.5 py-0.5 text-[9px] uppercase">준비 중</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setExecMode("paper"); save(); }}
+                disabled={pending || paperInsufficient}
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-4 py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                🖥 {pending ? "처리 중..." : isScheduled ? "가상 예약 주문 등록 (vUSDT)" : "가상 거래로 실행 (vUSDT)"}
+              </button>
+              <button
+                type="button"
+                onClick={registerAlert}
+                disabled={alertPending || alertRegistered}
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-border bg-background/40 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
+              >
+                🔔 {alertPending ? "등록 중..." : alertRegistered ? "알림 등록됨 ✓" : "알림만 등록하고 대기"}
+              </button>
+
+              {paperInsufficient ? (
+                <p className="rounded border border-grade-d/40 bg-grade-d/10 p-2 text-[10px] text-grade-d">
+                  가상 잔액 부족 — 필요 증거금 {formatCurrency(reqMargin, currency)}, 사용 가능 {formatCurrency(paperWallet?.available ?? 0, currency)}.{" "}
+                  <Link href="/app/virtual-trade/wallet" className="underline">가상 자금 추가</Link> 또는 레버리지·리스크 조정.
+                </p>
+              ) : (
+                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                  실거래는 거래소 주문 패널이 따로 동작합니다. 지금은 가상 거래로 동일한 체결·수수료·마진을 학습하거나, 알림만 받고 대기할 수 있어요.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 매매 평가 상세 (접힘) */}
+          <details className="group rounded-lg border border-border bg-card">
+            <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-4 py-2.5 text-sm hover:bg-muted/30">
+              <span className="transition-transform group-open:rotate-90">▶</span>
+              <span className="font-semibold text-foreground">매매 평가 상세</span>
+              <span className="text-xs text-muted-foreground">점수 · 보너스 · 패널티 — 펼쳐서 보기</span>
+            </summary>
+            <div className="border-t border-border px-4 py-3">
+              <ul className="space-y-1.5 text-sm">
+                {grade.reasons.map((r, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">{r.label}</span>
+                    <span className={cn("font-mono font-semibold", r.points > 0 ? "text-grade-a" : r.points < 0 ? "text-grade-d" : "text-muted-foreground")}>
+                      {r.points > 0 ? `+${r.points}` : r.points}
+                    </span>
+                  </li>
                 ))}
-              </CardContent>
-            </Card>
-          </div>
-        </details>
-        ) : null}
-
-        {/* ③ 자동 점검 — 자금 관리 상태 (접힘, 자동 집계) */}
-        <details className="group">
-          <summary className="cursor-pointer select-none rounded-md border border-border bg-background/40 px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-2">
-            <span className="transition-transform group-open:rotate-90">▶</span>
-            <span className="font-semibold text-foreground">자동 점검</span>
-            <span className="text-xs">— 자금 관리 상태</span>
-            {(money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ||
-              money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT) ? (
-              <span className="ml-auto rounded bg-grade-d/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-d">
-                ⚠️ 주의
-              </span>
-            ) : (
-              <span className="ml-auto rounded bg-grade-a/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
-                이상 없음
-              </span>
-            )}
-          </summary>
-          <div className="mt-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>자금 관리 상태</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="grid grid-cols-3 gap-3">
-                  <StatCell
-                    label="오늘 거래"
-                    value={`${money.todayClosedCount}건`}
-                    sub="종료된 건수"
-                  />
-                  <StatCell
-                    label="오늘 누적"
-                    value={`${money.todayCumulativeR >= 0 ? "+" : ""}${money.todayCumulativeR.toFixed(2)}R`}
-                    sub={`한도 ${DAILY_LOSS_LIMIT_R}R`}
-                    tone={
-                      money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5
-                        ? "bad"
-                        : money.todayCumulativeR < 0
-                          ? undefined
-                          : "good"
-                    }
-                  />
-                  <StatCell
-                    label="진행 중 노출"
-                    value={`${money.openExposurePct.toFixed(0)}%`}
-                    sub={`${money.openPositions.length}개 포지션`}
-                    tone={money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? "bad" : undefined}
-                  />
+              </ul>
+              {grade.actions.length > 0 ? (
+                <div className="mt-3 border-t border-border/60 pt-3">
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">지금 해야 할 행동</div>
+                  <ul className="space-y-1.5 text-xs">
+                    {grade.actions.map((a, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="mt-1 inline-block h-1.5 w-1.5 flex-none rounded-full bg-primary" />
+                        <span>{a}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                {money.openPositions.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <div className="text-[11px] uppercase text-muted-foreground">진행 중 포지션</div>
-                    <div className="space-y-1">
-                      {money.openPositions.slice(0, 5).map((p) => {
-                        const isDuplicate = p.symbol === symbol;
-                        return (
-                          <div
-                            key={p.id}
-                            className={cn(
-                              "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs",
-                              isDuplicate
-                                ? "border-amber-500/40 bg-amber-500/5"
-                                : "border-border bg-background/30",
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-semibold">{p.symbol}</span>
-                              <span
-                                className={cn(
-                                  "rounded px-1.5 py-0.5 text-[10px] uppercase",
-                                  p.direction === "long"
-                                    ? "bg-emerald-500/10 text-emerald-400"
-                                    : "bg-red-500/10 text-red-400",
-                                )}
-                              >
-                                {p.direction}
-                              </span>
-                              {isDuplicate ? (
-                                <span className="text-[10px] text-amber-400">⚠️ 현재 입력과 중복</span>
-                              ) : null}
-                            </div>
-                            <span className="font-mono tabular-nums text-muted-foreground">
-                              ${p.positionSize.toFixed(0)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                      {money.openPositions.length > 5 ? (
-                        <div className="text-[10px] text-muted-foreground text-center">
-                          + {money.openPositions.length - 5}개 더
-                        </div>
-                      ) : null}
-                    </div>
+              ) : null}
+            </div>
+          </details>
+
+          {/* D 등급 override 모달 */}
+          {showDOverride ? (
+            <Card className="border-grade-d/60 bg-grade-d/10">
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center gap-2 text-grade-d">
+                  <AlertTriangle className="h-4 w-4" />
+                  <div className="text-sm font-semibold">D등급 — 강한 자제 (원하면 축소 사이즈로 진입 가능)</div>
+                </div>
+                <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs leading-relaxed">
+                  <div className="mb-2 font-semibold text-foreground">이 거래가 D등급인 이유:</div>
+                  <ul className="space-y-1 font-mono text-muted-foreground">
+                    {grade.reasons.filter((r) => r.points < 0).map((r, i) => (
+                      <li key={i} className="text-grade-d">{r.points}점 · {r.label}</li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
+                    D등급은 통계상 손실 확률이 높은 패턴입니다. 사이즈가 평소의 10%로 작게 잡혀있어도 추천하지 않습니다.
                   </div>
-                ) : null}
-                {money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ? (
-                  <WarnBar
-                    text={`오늘 누적 ${money.todayCumulativeR.toFixed(2)}R — 일일 손실 한도(${DAILY_LOSS_LIMIT_R}R) 근접. 추가 진입은 신중히.`}
-                  />
-                ) : null}
-                {money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? (
-                  <WarnBar
-                    text={`진행 중 포지션이 계좌의 ${money.openExposurePct.toFixed(0)}%를 차지. 추가 진입은 과노출.`}
-                  />
-                ) : null}
+                </div>
+                <div>
+                  <Label className="text-[11px]">계속 진행하시려면 아래에 <strong>D 진입</strong> 을 정확히 입력하세요:</Label>
+                  <Input value={dConfirmText} onChange={(e) => setDConfirmText(e.target.value)} placeholder="D 진입" className="mt-1 font-mono" autoComplete="off" />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => { setShowDOverride(false); setDConfirmText(""); }} disabled={pending}>취소 (권장)</Button>
+                  <Button className="flex-1 bg-grade-d hover:bg-grade-d/90" onClick={() => { setShowDOverride(false); setDConfirmText(""); save(true); }} disabled={pending || dConfirmText.trim() !== "D 진입"}>진행 (override)</Button>
+                </div>
               </CardContent>
             </Card>
-          </div>
-        </details>
+          ) : null}
 
-        {/* 4. 시장 컨텍스트 — AI 모드에서는 분석 결과에 이미 포함되므로 숨김 */}
-        {!aiMode ? (
-        <details open className="group">
-          <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
-            <span className="transition-transform group-open:rotate-90">▶</span>
-            시장 컨텍스트 (BTC/펀딩비)
-          </summary>
-          <div className="mt-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>시장 컨텍스트</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+          {/* 실거래 확인 다이얼로그 */}
+          {showLiveConfirm ? (
+            <Card className="border-grade-d/60 bg-grade-d/10">
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center gap-2 text-grade-d">
+                  <AlertTriangle className="h-4 w-4" />
+                  <div className="text-sm font-semibold">실거래 최종 확인</div>
+                </div>
+                <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs font-mono leading-relaxed">
+                  <div>심볼: <span className="text-foreground">{input.symbol}</span></div>
+                  <div>방향: <span className="text-foreground">{input.direction === "long" ? "롱 (BUY)" : "숏 (SELL)"}</span></div>
+                  <div>수량: <span className="text-foreground">{sizing.quantity}</span></div>
+                  <div>레버리지: <span className="text-foreground">{leverage}×</span></div>
+                  <div>진입: <span className="text-foreground">${formatNumber(Number(entry) || 0)}</span></div>
+                  <div>손절: <span className="text-grade-d">${formatNumber(Number(stop) || 0)}</span></div>
+                  <div>목표: <span className="text-grade-a">${formatNumber(Number(target) || 0)}</span></div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setShowLiveConfirm(false)} disabled={pending}>취소</Button>
+                  <Button className="flex-1 bg-grade-d hover:bg-grade-d/90" onClick={executeLiveTrade} disabled={pending}>확인 — 실제 주문 전송</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ③ 자동 점검 (접힘, 전체 폭) */}
+      <details className="group rounded-lg border border-border bg-card">
+        <summary className="flex cursor-pointer select-none list-none flex-wrap items-center gap-2 px-4 py-3 text-sm hover:bg-muted/30">
+          <span className="transition-transform group-open:rotate-90">▶</span>
+          <span className="font-semibold text-foreground">자동 점검</span>
+          <span className="text-xs text-muted-foreground">시장 구조 · 자금 관리 · 시장 컨텍스트 — AI와 일지에서 자동으로 채워집니다</span>
+          <span className="ml-auto flex items-center gap-2">
+            <span className="rounded bg-grade-a/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">✓ 통과 {passCount}</span>
+            {warnCount > 0 ? (
+              <span className="rounded bg-grade-c/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-c">⚠ 경고 {warnCount}{warnSummary ? ` — ${warnSummary}` : ""}</span>
+            ) : null}
+          </span>
+        </summary>
+        <div className="grid gap-4 border-t border-border p-4 lg:grid-cols-2">
+          {/* 자금 관리 */}
+          <div className="space-y-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">자금 관리 상태</div>
+            <div className="grid grid-cols-3 gap-3">
+              <StatCell label="오늘 거래" value={`${money.todayClosedCount}건`} sub="종료된 건수" />
+              <StatCell
+                label="오늘 누적"
+                value={`${money.todayCumulativeR >= 0 ? "+" : ""}${money.todayCumulativeR.toFixed(2)}R`}
+                sub={`한도 ${DAILY_LOSS_LIMIT_R}R`}
+                tone={money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ? "bad" : money.todayCumulativeR < 0 ? undefined : "good"}
+              />
+              <StatCell
+                label="진행 중 노출"
+                value={`${money.openExposurePct.toFixed(0)}%`}
+                sub={`${money.openPositions.length}개 포지션`}
+                tone={money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? "bad" : undefined}
+              />
+            </div>
+            {money.openPositions.length > 0 ? (
+              <div className="space-y-1">
+                {money.openPositions.slice(0, 4).map((p) => {
+                  const isDuplicate = p.symbol === symbol;
+                  return (
+                    <div key={p.id} className={cn("flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs", isDuplicate ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-background/30")}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-semibold">{p.symbol}</span>
+                        <span className={cn("rounded px-1.5 py-0.5 text-[10px] uppercase", p.direction === "long" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400")}>{p.direction}</span>
+                        {isDuplicate ? <span className="text-[10px] text-amber-400">⚠️ 중복</span> : null}
+                      </div>
+                      <span className="font-mono tabular-nums text-muted-foreground">${p.positionSize.toFixed(0)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+            {money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ? (
+              <WarnBar text={`오늘 누적 ${money.todayCumulativeR.toFixed(2)}R — 일일 손실 한도(${DAILY_LOSS_LIMIT_R}R) 근접. 추가 진입은 신중히.`} />
+            ) : null}
+            {money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? (
+              <WarnBar text={`진행 중 포지션이 계좌의 ${money.openExposurePct.toFixed(0)}%를 차지. 추가 진입은 과노출.`} />
+            ) : null}
+          </div>
+
+          {/* 시장 컨텍스트 */}
+          <div className="space-y-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">시장 컨텍스트</div>
             <div className="grid grid-cols-3 gap-3">
               <StatCell
                 label="BTC"
                 value={marketCtx.btcPrice ? `$${marketCtx.btcPrice.toLocaleString()}` : "—"}
-                sub={
-                  marketCtx.btc24hChangePct !== null
-                    ? `24h ${marketCtx.btc24hChangePct >= 0 ? "+" : ""}${marketCtx.btc24hChangePct.toFixed(2)}%`
-                    : ""
-                }
-                tone={
-                  marketCtx.btc24hChangePct === null
-                    ? undefined
-                    : marketCtx.btc24hChangePct >= 0
-                    ? "good"
-                    : "bad"
-                }
+                sub={marketCtx.btc24hChangePct !== null ? `24h ${marketCtx.btc24hChangePct >= 0 ? "+" : ""}${marketCtx.btc24hChangePct.toFixed(2)}%` : ""}
+                tone={marketCtx.btc24hChangePct === null ? undefined : marketCtx.btc24hChangePct >= 0 ? "good" : "bad"}
               />
               <StatCell
-                label={`${symbol} 펀딩비`}
-                value={
-                  marketCtx.fundingRate !== null
-                    ? `${(marketCtx.fundingRate * 100).toFixed(4)}%`
-                    : "—"
-                }
-                sub={
-                  marketCtx.fundingRate !== null
-                    ? marketCtx.fundingRate > 0
-                      ? "롱이 숏에 지급"
-                      : "숏이 롱에 지급"
-                    : ""
-                }
-                tone={
-                  marketCtx.fundingRate !== null && Math.abs(marketCtx.fundingRate) >= 0.0005
-                    ? "bad"
-                    : undefined
-                }
+                label={`${coinName} 펀딩비`}
+                value={marketCtx.fundingRate !== null ? `${(marketCtx.fundingRate * 100).toFixed(4)}%` : "—"}
+                sub={marketCtx.fundingRate !== null ? (marketCtx.fundingRate > 0 ? "롱이 숏에 지급" : "숏이 롱에 지급") : ""}
+                tone={marketCtx.fundingRate !== null && Math.abs(marketCtx.fundingRate) >= 0.0005 ? "bad" : undefined}
               />
               <StatCell
                 label="다음 펀딩"
-                value={
-                  marketCtx.minutesToFunding !== null
-                    ? `${marketCtx.minutesToFunding}분`
-                    : "—"
-                }
+                value={marketCtx.minutesToFunding !== null ? `${marketCtx.minutesToFunding}분` : "—"}
                 sub="정산까지"
-                tone={
-                  marketCtx.minutesToFunding !== null && marketCtx.minutesToFunding <= 10
-                    ? "bad"
-                    : undefined
-                }
+                tone={marketCtx.minutesToFunding !== null && marketCtx.minutesToFunding <= 10 ? "bad" : undefined}
               />
             </div>
             {marketCtx.minutesToFunding !== null && marketCtx.minutesToFunding <= 10 ? (
               <WarnBar text="펀딩 정산이 10분 이내입니다. 정산 직전 진입은 슬리피지/펀딩비 부담이 큽니다." />
             ) : null}
-          </CardContent>
-        </Card>
-          </div>
-        </details>
-        ) : null}
-      </div>
-
-      <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-        <ResultPanel
-          grade={grade}
-          sizing={sizing}
-          currency={currency}
-          accountSize={Number(accountSize) || 0}
-          riskPct={Number(riskPct) || 0}
-          leverage={leverage}
-          onApplyLeverage={(lv) => { setLeverage(lv); setUserOverride(true); }}
-        />
-
-        {/* ④ 실행 방법 — 3택: 가상 진입 / 실거래 / 알림 (시안) */}
-        <Card className="overflow-hidden">
-          <CardContent className="space-y-3 p-4">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                주문 방법을 선택하세요
-              </div>
-              <div className="mt-2 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setExecMode("paper")}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
-                    execMode === "paper"
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-background/40 hover:bg-muted/30",
-                  )}
-                >
-                  <span className="text-lg">🧪</span>
-                  <span className="min-w-0">
-                    <span className={cn("block text-sm font-semibold", execMode === "paper" ? "text-primary" : "text-foreground")}>
-                      가상 거래 진입
-                    </span>
-                    <span className="block text-[10px] text-muted-foreground">
-                      실제 자금 없이 동일한 체결·수수료로 학습
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  className="flex w-full cursor-not-allowed items-center gap-3 rounded-md border border-border bg-background/20 px-3 py-2.5 text-left opacity-60"
-                  title="현재 비활성 — Binance IP 제한 정책 때문에 자동 주문 불가. 추후 프록시 인프라 도입 시 활성화."
-                >
-                  <span className="text-lg grayscale">⚡</span>
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground/60">
-                      실거래 주문
-                      <span className="rounded bg-muted/60 px-1 py-0.5 text-[9px] uppercase">준비 중</span>
-                    </span>
-                    <span className="block text-[10px] text-muted-foreground/50">
-                      거래소에 실제 시장가 주문 전송
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setExecMode("alert")}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
-                    execMode === "alert"
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-background/40 hover:bg-muted/30",
-                  )}
-                >
-                  <span className="text-lg">🔔</span>
-                  <span className="min-w-0">
-                    <span className={cn("block text-sm font-semibold", execMode === "alert" ? "text-primary" : "text-foreground")}>
-                      알림만 받기
-                    </span>
-                    <span className="block text-[10px] text-muted-foreground">
-                      진입가·손절·목표 도달 시 텔레그램 알림 {alertRegistered ? "· 등록됨 ✓" : ""}
-                    </span>
-                  </span>
-                </button>
+            {/* 시장 구조 체크리스트 */}
+            <div className="space-y-1 pt-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">시장 구조 (AI 자동 확인)</div>
+              <div className="grid grid-cols-2 gap-x-3">
+                {MARKET_CHECK_KEYS.map((k) => (
+                  <Checkbox key={k} checked={market[k]} onChange={(e) => setMarket({ ...market, [k]: e.target.checked })} label={MARKET_CHECK_LABELS[k]} />
+                ))}
               </div>
             </div>
-
-            {/* Paper-mode wallet preview */}
-            {execMode === "paper" && paperWallet ? (() => {
-              const requiredMargin = sizing.valid && leverage > 0 ? sizing.positionSize / leverage : 0;
-              const afterAvailable = paperWallet.available - requiredMargin;
-              const insufficient = requiredMargin > paperWallet.available;
-              return (
-                <div className="space-y-2">
-                  <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs">
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        가상 지갑 미리보기
-                      </span>
-                      <Link
-                        href="/app/virtual-trade/wallet"
-                        className="text-[10px] text-primary underline-offset-2 hover:underline"
-                      >
-                        지갑 관리 →
-                      </Link>
-                    </div>
-                    <div className="space-y-0.5 font-mono tabular-nums">
-                      <Row label="vUSDT 잔액" value={formatCurrency(paperWallet.balance, "USD")} />
-                      <Row label="사용 가능" value={formatCurrency(paperWallet.available, "USD")} />
-                      <Row
-                        label="필요 마진"
-                        value={formatCurrency(requiredMargin, "USD")}
-                        tone={insufficient ? "bad" : "default"}
-                      />
-                      <Row
-                        label="진입 후 사용 가능"
-                        value={formatCurrency(Math.max(0, afterAvailable), "USD")}
-                        tone={insufficient ? "bad" : "default"}
-                      />
-                    </div>
-                    {insufficient ? (
-                      <div className="mt-2 rounded border border-grade-d/40 bg-grade-d/10 p-2 text-[11px] text-grade-d">
-                        <div className="flex items-center gap-1 font-semibold">
-                          <AlertTriangle className="h-3 w-3" />
-                          가상 잔액 부족
-                        </div>
-                        <p className="mt-0.5 text-grade-d/80">
-                          필요 마진 {formatCurrency(requiredMargin, "USD")}, 사용 가능 {formatCurrency(paperWallet.available, "USD")}.{" "}
-                          <Link href="/app/virtual-trade/wallet" className="underline">가상 자금 추가</Link>하거나 리스크%·레버리지를 조정하세요.
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })() : null}
-
-            <p className="text-[10px] text-muted-foreground">
-              {execMode === "alert"
-                ? "알림만 받기: 지금은 진입하지 않고, 가격이 시나리오 레벨에 도달하면 텔레그램으로 알려드립니다. 텔레그램 미연결 시 설정에서 연결하세요."
-                : <>가상 거래: 실제 자금 없이 거래소와 동일한 흐름(체결가·슬리피지·수수료·마진)으로 학습. 진입 후 <Link href="/app/virtual-trade" className="text-primary underline-offset-2 hover:underline">가상 거래 화면</Link>에서 포지션이 추적됩니다.</>}
-            </p>
-          </CardContent>
-        </Card>
-
-        {execMode === "alert" ? (
-          <Button
-            className="w-full"
-            size="lg"
-            variant="outline"
-            onClick={registerAlert}
-            disabled={alertPending || alertRegistered}
-          >
-            {alertPending ? "알림 등록 중..." : alertRegistered ? "🔔 알림 등록됨" : "🔔 가격 도달 알림 설정"}
-          </Button>
-        ) : (
-          <Button
-            className="w-full"
-            size="lg"
-            onClick={() => save()}
-            disabled={
-              pending ||
-              (mode === "paper" && paperWallet != null && sizing.valid && (sizing.positionSize / Math.max(leverage, 1)) > paperWallet.available)
-            }
-          >
-            {pending
-              ? isScheduled
-                ? "예약 주문 등록 중..."
-                : "진입 처리 중..."
-              : isScheduled
-                ? aiMode
-                  ? "이 계획으로 예약 주문"
-                  : "예약 주문 등록"
-                : aiMode
-                  ? "이 계획으로 가상 진입"
-                  : "가상 진입"}
-          </Button>
-        )}
-        {aiMode ? (
-          <p className="text-center text-[11px] text-muted-foreground">
-            진입가·손절·목표는 AI 분석에서 가져왔습니다. 위 단계 버튼으로 진입 시점을 바꿀 수 있습니다.
-          </p>
-        ) : null}
-
-        {/* D 등급 override 모달 */}
-        {showDOverride ? (
-          <Card className="border-grade-d/60 bg-grade-d/10">
-            <CardContent className="space-y-3 p-4">
-              <div className="flex items-center gap-2 text-grade-d">
-                <AlertTriangle className="h-4 w-4" />
-                <div className="text-sm font-semibold">
-                  D등급 — 강한 자제 (원하면 축소 사이즈로 진입 가능)
-                </div>
-              </div>
-              <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs leading-relaxed">
-                <div className="mb-2 font-semibold text-foreground">
-                  이 거래가 D등급인 이유:
-                </div>
-                <ul className="space-y-1 font-mono text-muted-foreground">
-                  {grade.reasons
-                    .filter((r) => r.points < 0)
-                    .map((r, i) => (
-                      <li key={i} className="text-grade-d">
-                        {r.points}점 · {r.label}
-                      </li>
-                    ))}
-                </ul>
-                <div className="mt-2 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-                  D등급은 통계상 손실 확률이 높은 패턴입니다. 사이즈가 평소의
-                  10%로 작게 잡혀있어도 추천하지 않습니다.
-                </div>
-              </div>
-              <div>
-                <Label className="text-[11px]">
-                  계속 진행하시려면 아래에 <strong>D 진입</strong> 을 정확히
-                  입력하세요:
-                </Label>
-                <Input
-                  value={dConfirmText}
-                  onChange={(e) => setDConfirmText(e.target.value)}
-                  placeholder="D 진입"
-                  className="mt-1 font-mono"
-                  autoComplete="off"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setShowDOverride(false);
-                    setDConfirmText("");
-                  }}
-                  disabled={pending}
-                >
-                  취소 (권장)
-                </Button>
-                <Button
-                  className="flex-1 bg-grade-d hover:bg-grade-d/90"
-                  onClick={() => {
-                    setShowDOverride(false);
-                    setDConfirmText("");
-                    save(true);
-                  }}
-                  disabled={pending || dConfirmText.trim() !== "D 진입"}
-                >
-                  진행 (override)
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* Live trade confirmation dialog */}
-        {showLiveConfirm ? (
-          <Card className="border-grade-d/60 bg-grade-d/10">
-            <CardContent className="space-y-3 p-4">
-              <div className="flex items-center gap-2 text-grade-d">
-                <AlertTriangle className="h-4 w-4" />
-                <div className="text-sm font-semibold">실거래 최종 확인</div>
-              </div>
-              <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs font-mono leading-relaxed">
-                <div>심볼: <span className="text-foreground">{input.symbol}</span></div>
-                <div>방향: <span className="text-foreground">{input.direction === "long" ? "롱 (BUY)" : "숏 (SELL)"}</span></div>
-                <div>수량: <span className="text-foreground">{sizing.quantity}</span></div>
-                <div>레버리지: <span className="text-foreground">{leverage}×</span></div>
-                <div>진입: <span className="text-foreground">${formatNumber(Number(entry) || 0)}</span></div>
-                <div>손절: <span className="text-grade-d">${formatNumber(Number(stop) || 0)}</span></div>
-                <div>목표: <span className="text-grade-a">${formatNumber(Number(target) || 0)}</span></div>
-                <div className="mt-1.5 border-t border-border/60 pt-1.5">
-                  노출 금액: <span className="text-foreground">{formatCurrency(sizing.positionSize, currency)}</span> ({((sizing.positionSize / Math.max(Number(accountSize), 1)) * 100).toFixed(1)}%)
-                </div>
-                <div>최대 손실: <span className="text-grade-d">{formatCurrency(sizing.maxLoss, currency)}</span> ({riskPct}% of 계좌)</div>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                이 버튼을 누르면 거래소에 즉시 시장가 진입이 전송됩니다.
-                손절·익절 주문이 자동으로 등록되며, 한 번 진입한 후에는 거래소에서 직접 관리해야 합니다.
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setShowLiveConfirm(false)} disabled={pending}>
-                  취소
-                </Button>
-                <Button
-                  className="flex-1 bg-grade-d hover:bg-grade-d/90"
-                  onClick={executeLiveTrade}
-                  disabled={pending}
-                >
-                  확인 — 실제 주문 전송
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-      </aside>
-    </div>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -1884,6 +1401,16 @@ function SummaryBar({
           {action}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function ExecStat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "bad" }) {
+  return (
+    <div className="rounded-md border border-border bg-background/40 p-2 text-center">
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={cn("mt-0.5 font-mono text-xs font-bold tabular-nums", tone === "bad" ? "text-grade-d" : "text-foreground")}>{value}</div>
+      {sub ? <div className="text-[9px] text-muted-foreground/80">{sub}</div> : null}
     </div>
   );
 }

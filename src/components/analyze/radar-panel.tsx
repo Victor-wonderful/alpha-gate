@@ -343,7 +343,7 @@ export function RadarPanel({
               <span className="w-[76px]">코인</span>
               <span className="w-[88px] text-right">가격 · 변동</span>
               <span className="hidden min-w-0 flex-1 sm:block">신호</span>
-              <span className="w-[78px] text-center">예상 방향 · 시나리오</span>
+              <span className="w-[78px] text-center">방향 · 시나리오</span>
               <span className="hidden w-[120px] md:block">예상 손절 · 목표</span>
               <span className="hidden w-[56px] items-center justify-end gap-1 sm:flex">예상폭</span>
               <span className="w-9 text-center">점수</span>

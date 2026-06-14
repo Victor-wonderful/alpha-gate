@@ -2,10 +2,8 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowLeftRight,
   CheckCircle2,
   Coins,
-  Gamepad2,
   LineChart as LineChartIcon,
   Plus,
   Sparkles,
@@ -102,20 +100,6 @@ export default function GuidePage() {
             desc="시장가/지정가, 5분 자동 정산, 거래 평가의 자금 관리 + 시장 컨텍스트 자동 집계."
           />
           <GuideCard
-            href="/app/guide/arbitrage"
-            Icon={ArrowLeftRight}
-            iconColor="text-amber-400"
-            title="차익거래 사용법"
-            desc="김프 리밸런싱 인벤토리 모델. 기대 수익 랭킹·백테스트·인벤토리 분포 해석."
-          />
-          <GuideCard
-            href="/app/guide/game"
-            Icon={Gamepad2}
-            iconColor="text-grade-c"
-            title="가격 예측 게임 사용법"
-            desc="베팅 페이즈, 다음 캔들 시가→종가 판정, 배당과 정산."
-          />
-          <GuideCard
             href="/app/guide/results"
             Icon={LineChartIcon}
             iconColor="text-grade-a"
@@ -136,7 +120,7 @@ export default function GuidePage() {
             title="vUSDT"
             body={
               <>
-                플랫폼 내 가상 화폐. 가상 거래·차익거래·게임에 사용합니다. 신규 가입 시{" "}
+                플랫폼 내 가상 화폐. 가상 거래에 사용합니다. 신규 가입 시{" "}
                 <span className="font-mono font-medium tabular-nums text-foreground">10,000</span> 자동 지급.
               </>
             }
@@ -182,9 +166,6 @@ export default function GuidePage() {
           </Faq>
           <Faq question="거래 평가의 자금 관리는 뭔가요?">
             거래 실행 페이지에서 자동으로 표시되는 상태 박스. 오늘 거래 N건/누적 R, 진행 중 포지션 리스트, 진행 중 노출 %, 일일 손실 한도(-2R) 근접 경고. 사용자 입력 없이 저널 DB에서 자동 집계. 중복 코인 진입이나 과노출은 등급에 자동 차감.
-          </Faq>
-          <Faq question="차익거래는 어떻게 작동하나요?">
-            Upbit·Binance 양쪽에 진입 코인 + USDT 절반씩 보유. 김프가 ±임계값(기본 0.5%)에 도달하면 cron이 자동 리밸런싱(인벤토리의 25%). 양방향 모두 수익 가능한 마켓 메이킹 스타일. 7일 백테스트로 코인별 실증 기대 수익 표시.
           </Faq>
           <Faq question="실거래(Binance 등)도 가능한가요?">
             코드는 완성됐지만 현재 보류 중입니다. Binance의 IP 제한 정책과 Vercel 서버리스의 고정 IP 부재가 충돌하기 때문입니다. Bybit·프록시 인프라 도입 시 활성화 예정.

@@ -139,20 +139,13 @@ export default async function WalletPage() {
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
             vUSDT 사용처
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <Link
               href="/app/virtual-trade"
               className="flex flex-col items-center gap-1.5 rounded-md border border-border/40 p-3 hover:bg-muted/30 transition-colors"
             >
               <Coins className="h-5 w-5 text-primary" />
               <span className="text-xs">가상 트레이딩</span>
-            </Link>
-            <Link
-              href="/app/game"
-              className="flex flex-col items-center gap-1.5 rounded-md border border-border/40 p-3 hover:bg-muted/30 transition-colors"
-            >
-              <TrendingUp className="h-5 w-5 text-primary" />
-              <span className="text-xs">가격 예측 게임</span>
             </Link>
             <Link
               href="/app/credits"

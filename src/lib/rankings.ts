@@ -269,7 +269,8 @@ export async function distributeWeeklyRewards(): Promise<{
 
   const results: { category: Category; paid: number; totalReward: number }[] = [];
 
-  for (const category of ["game", "trading", "combined"] as Category[]) {
+  // 게임·통합 랭킹 제외 (2026-06) — 트레이딩 랭킹만 주간 보상 지급.
+  for (const category of ["trading"] as Category[]) {
     const aggs = await aggregate(category, start, end);
     aggs.sort((a, b) => b.score - a.score);
     const rewards = WEEKLY_REWARDS[category];

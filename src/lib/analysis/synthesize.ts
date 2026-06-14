@@ -4,7 +4,7 @@ import type { AnalysisSnapshot } from "./analyze";
 import { STYLE_PRESETS } from "./style";
 import { STRATEGY_LABELS, type StrategyId, type StrategyResult } from "./strategy";
 import { parseJsonLoose } from "./json-extract";
-import { MIN_STOP_PCT_VS_FEES } from "./standards";
+import { MIN_STOP_PCT_VS_FEES, ROUND_TRIP_COST_PCT } from "./standards";
 
 const SYSTEM_PROMPT = `당신은 암호화폐 무기한 선물 시장을 분석하는 트레이딩 코치입니다.
 
@@ -243,7 +243,7 @@ entryType 의미:
 
 ★★ 절대 하한 — 어떤 스타일/전략에서도 위반 금지 ★★
 - 손절폭은 진입가의 **최소 0.24%** (수수료 왕복 0.08% × 3) 이상이어야 한다.
-- 0.24% 미만이면 손절 적중 시 수수료가 1R 이상을 차지해 -2R 이상 손실이 확정된다.
+- 손절폭이 좁을수록 손절 적중 시 수수료가 손절(1R) 대비 큰 비중을 차지한다. 0.24%에서도 수수료 포함 약 1.3R 손실이며, 그보다 좁으면 더 커지므로 0.24%가 절대 하한이다.
 - 이는 모든 스타일·모든 전략에 적용된다. liquidity_grab·session_open_drive 같은 예외 전략도 0.24% 절대 하한은 못 넘는다.
 - 만약 구조상 자연 손절이 0.24% 안에 있다면, 그 시나리오는 만들지 마라 (wait 또는 다른 셋업 찾기).
 
@@ -565,8 +565,9 @@ function enforceEntryProximity(
 
     // 하드 가드 1: 손절폭이 수수료×3 미만 → 폐기 (어떤 스타일/전략에서도 불허용)
     if (stopPct < MIN_STOP_PCT_VS_FEES) {
+      const realizedR = (stopPct + ROUND_TRIP_COST_PCT) / stopPct;
       dropped.push(
-        `${s.name} (손절폭 ${stopPct.toFixed(3)}% < 수수료×3 ${MIN_STOP_PCT_VS_FEES.toFixed(2)}% — 손절 적중 시 -2R 이상 손실)`,
+        `${s.name} (손절폭 ${stopPct.toFixed(3)}% < 수수료×3 ${MIN_STOP_PCT_VS_FEES.toFixed(2)}% — 손절 적중 시 수수료 포함 약 ${realizedR.toFixed(1)}R 손실)`,
       );
       continue;
     }

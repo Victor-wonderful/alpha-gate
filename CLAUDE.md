@@ -173,7 +173,7 @@ pnpm exec tsc --noEmit      # 타입체크만
 - 출력 JSON: `{ summary, structure, keyLevels, flow, scenarios[], actionNow, warnings }`
 - 시나리오에 `marketAssessment` 자동 채움 (거래 평가 prefill용)
 - max_tokens: 3000 (응답 자름 방지)
-- **스타일별 표준 손절/목표 범위 강제** (스캘핑 R:R 2+, 스윙 2+ 등)
+- **스타일별 표준 손절/목표 범위 강제** (스캘핑 R:R 1.3+, 스윙 2+ 등)
 - 차트 이미지 첨부 시: 보조 컨텍스트로만 사용, 데이터가 ground truth
 
 ### Stage 4 — Persist (코드)
@@ -203,16 +203,18 @@ pnpm exec tsc --noEmit      # 타입체크만
 
 [`standards.ts`](src/lib/analysis/standards.ts)
 
-- 왕복 비용 가정: **0.12%** (BTC/ETH 기준, 시장가 + 슬리피지)
+- 왕복 비용 가정: **0.08%** (테이커 0.04%×2). 슬리피지는 체결가(entry_actual/exit_actual)에서 별도 처리 — 이중차감 방지. 절대 손절 하한 = 0.08%×3 = **0.24%**.
 
 | 스타일 | 손절폭 | 목표폭 | 최소 R:R |
 |--------|--------|--------|---------|
-| 스캘핑 | 0.3~0.7% | 0.7~1.5% | 2+ |
+| 스캘핑 | 0.3~1.2% (MTF ATR 1.5~2배) | 0.4~2% | **1.3+** |
 | 데이 | 0.7~1.5% | 1.5~3% | 1.5+ |
 | 스윙 | 2~5% | 5~15% | 2+ |
 | 포지션 | 5~15% | 15~50% | 3+ |
 
 Strategy Agent + Scenario Generator 둘 다 이 범위를 강제. 벗어나면 `wait` 또는 시나리오 거부.
+
+> **스캘핑 밴드 (2026-06 갱신)**: 구 0.3~0.7%/RR2는 손절이 노이즈 대비 너무 좁아 수수료 출혈(0.27R) + RR 역전 문제. 6코인 ~2년 A/B 백테스트 결과 스캘핑만 ATR 상대 손절 + RR 1.3으로 개선(순R +0.067) 검증되어 반영. 데이·스윙·포지션은 검증 미통과로 현행 유지. (검증 하니스: `scripts/measure-bands.mjs`, `scripts/ab-bands.mjs`)
 
 ---
 
@@ -262,7 +264,7 @@ positionSize = quantity × entry
 - "노출 금액" = positionSize (계좌 대비 %)
 - "매수 수량" = quantity (코인 개수)
 - "필요 마진" = positionSize / leverage (계좌 대비 %)
-- "실효 손익비" = 수수료 0.12% 차감 후 R
+- "실효 손익비" = 수수료 0.08% (왕복) 차감 후 R
 
 ---
 

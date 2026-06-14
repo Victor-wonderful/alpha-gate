@@ -1,0 +1,42 @@
+{
+  "nav": {
+    "dashboard": "대시보드",
+    "market": "시장 현황",
+    "analyze": "AI 분석",
+    "trade": "거래 실행",
+    "virtualTrade": "가상 거래",
+    "journal": "거래 일지",
+    "performance": "성과 분석",
+    "guide": "가이드",
+    "settings": "설정",
+    "blog": "Victor Alpha 블로그"
+  },
+  "topbar": {
+    "newAnalysis": "새 분석",
+    "search": "코인 · 분석 기록 · 거래 검색",
+    "wallet": "지갑",
+    "credits": "AI 크레딧",
+    "account": "내 계정",
+    "deposit": "vUSDT 충전",
+    "buyCredits": "AI 크레딧 구매",
+    "apiKeys": "거래소 API 키",
+    "admin": "어드민",
+    "notifications": "알림 설정",
+    "logout": "로그아웃",
+    "language": "언어"
+  },
+  "brand": {
+    "tagline": "매매 전 의사결정 체크"
+  },
+  "unit": {
+    "credits": "크레딧"
+  },
+  "common": {
+    "long": "롱",
+    "short": "숏",
+    "loading": "불러오는 중...",
+    "save": "저장",
+    "cancel": "취소",
+    "confirm": "확인"
+  }
+}

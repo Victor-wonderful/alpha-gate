@@ -40,29 +40,32 @@ import {
 } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
+import { LanguageSwitcher } from "./language-switcher";
 import { Logo } from "./logo";
 
 type NavItem = {
   href: string;
-  label: string;
+  /** i18n 키 (nav.*) */
+  labelKey: string;
   Icon: React.ComponentType<{ className?: string }>;
   /** 같은 메뉴로 활성 처리할 형제 경로 */
   matchPaths?: string[];
 };
 
 const NAV: NavItem[] = [
-  { href: "/app", label: "대시보드", Icon: LayoutDashboard },
-  { href: "/app/market", label: "시장 현황", Icon: ChartCandlestick },
-  { href: "/app/analyze", label: "AI 분석", Icon: Sparkles },
-  { href: "/app/trade", label: "거래 실행", Icon: ShieldCheck },
-  { href: "/app/virtual-trade", label: "가상 거래", Icon: Wallet },
-  { href: "/app/journal", label: "거래 일지", Icon: NotebookPen },
-  { href: "/app/dashboard", label: "성과 분석", Icon: ChartLine, matchPaths: ["/app/rankings"] },
+  { href: "/app", labelKey: "nav.dashboard", Icon: LayoutDashboard },
+  { href: "/app/market", labelKey: "nav.market", Icon: ChartCandlestick },
+  { href: "/app/analyze", labelKey: "nav.analyze", Icon: Sparkles },
+  { href: "/app/trade", labelKey: "nav.trade", Icon: ShieldCheck },
+  { href: "/app/virtual-trade", labelKey: "nav.virtualTrade", Icon: Wallet },
+  { href: "/app/journal", labelKey: "nav.journal", Icon: NotebookPen },
+  { href: "/app/dashboard", labelKey: "nav.performance", Icon: ChartLine, matchPaths: ["/app/rankings"] },
 ];
 
 const NAV_BOTTOM: NavItem[] = [
-  { href: "/app/guide", label: "가이드", Icon: BookOpen },
-  { href: "/app/settings/notify", label: "설정", Icon: Settings, matchPaths: ["/app/settings"] },
+  { href: "/app/guide", labelKey: "nav.guide", Icon: BookOpen },
+  { href: "/app/settings/notify", labelKey: "nav.settings", Icon: Settings, matchPaths: ["/app/settings"] },
 ];
 
 const BLOG_URL = "https://victor-alpha-neon.vercel.app/";
@@ -86,11 +89,13 @@ function NavLink({
   onNavigate?: () => void;
 }) {
   const { Icon } = item;
+  const t = useT();
+  const label = t(item.labelKey);
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
-      title={collapsed ? item.label : undefined}
+      title={collapsed ? label : undefined}
       className={cn(
         "group flex items-center gap-2.5 rounded-lg text-sm transition-colors",
         collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
@@ -105,7 +110,7 @@ function NavLink({
           active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
         )}
       />
-      {!collapsed ? <span className="truncate">{item.label}</span> : null}
+      {!collapsed ? <span className="truncate">{label}</span> : null}
     </Link>
   );
 }
@@ -119,6 +124,8 @@ function SidebarNav({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
+  const t = useT();
+  const blogLabel = t("nav.blog");
   return (
     <>
       <nav className={cn("flex-1 space-y-1 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
@@ -146,14 +153,14 @@ function SidebarNav({
           href={BLOG_URL}
           target="_blank"
           rel="noopener noreferrer"
-          title={collapsed ? "Victor Alpha 블로그" : undefined}
+          title={collapsed ? blogLabel : undefined}
           className={cn(
             "flex items-center gap-2.5 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground",
             collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
           )}
         >
           <ExternalLink className="h-[18px] w-[18px] flex-none" />
-          {!collapsed ? <span className="truncate">Victor Alpha 블로그</span> : null}
+          {!collapsed ? <span className="truncate">{blogLabel}</span> : null}
         </a>
       </div>
     </>
@@ -176,6 +183,7 @@ function UserDropdown({
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
+  const t = useT();
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -197,10 +205,10 @@ function UserDropdown({
   }
 
   const items = [
-    { href: "/app/account", label: "내 계정", Icon: Shield },
-    { href: "/app/deposit", label: "vUSDT 충전", Icon: Coins },
-    { href: "/app/credits", label: "AI 크레딧 구매", Icon: Sparkles },
-    { href: "/app/settings/api-keys", label: "거래소 API 키", Icon: KeyRound },
+    { href: "/app/account", label: t("topbar.account"), Icon: Shield },
+    { href: "/app/deposit", label: t("topbar.deposit"), Icon: Coins },
+    { href: "/app/credits", label: t("topbar.buyCredits"), Icon: Sparkles },
+    { href: "/app/settings/api-keys", label: t("topbar.apiKeys"), Icon: KeyRound },
   ];
 
   return (
@@ -241,7 +249,7 @@ function UserDropdown({
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <Sparkles className="h-3 w-3 text-grade-c" />
               <span className="font-mono font-bold tabular-nums text-foreground">{credits}</span>
-              크레딧
+              {t("unit.credits")}
             </span>
           </Link>
           {items.map(({ href, label, Icon }) => (
@@ -262,7 +270,7 @@ function UserDropdown({
               className="flex items-center gap-2 border-t border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <Shield className="h-3.5 w-3.5 text-primary" />
-              어드민
+              {t("topbar.admin")}
             </Link>
           ) : null}
           <button
@@ -271,7 +279,7 @@ function UserDropdown({
             className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-sm text-destructive hover:bg-muted"
           >
             <LogOut className="h-3.5 w-3.5" />
-            로그아웃
+            {t("topbar.logout")}
           </button>
         </div>
       ) : null}
@@ -293,6 +301,7 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const t = useT();
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -332,13 +341,13 @@ export function AppShell({
             collapsed ? "justify-center px-0" : "gap-2.5 px-4",
           )}
         >
-          <Link href="/app" className="flex items-center gap-2.5" title="대시보드로">
+          <Link href="/app" className="flex items-center gap-2.5" title={t("nav.dashboard")}>
             <Logo size={28} />
             {!collapsed ? (
               <span className="leading-[1.15]">
                 <span className="block text-[15px] font-bold tracking-tight">Alpha Gate</span>
                 <span className="block text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                  매매 전 의사결정 체크
+                  {t("brand.tagline")}
                 </span>
               </span>
             ) : null}
@@ -425,12 +434,13 @@ export function AppShell({
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">새 분석</span>
+                <span className="hidden sm:inline">{t("topbar.newAnalysis")}</span>
               </Link>
+              <LanguageSwitcher className="hidden sm:flex" />
               <Link
                 href="/app/wallet"
                 className="hidden items-center gap-2.5 rounded-full border border-border bg-card px-3.5 py-1.5 transition-colors hover:bg-card-2 sm:flex"
-                title="지갑"
+                title={t("topbar.wallet")}
               >
                 <span className="inline-flex items-center gap-1.5">
                   <Coins className="h-3.5 w-3.5 text-primary" />
@@ -447,7 +457,7 @@ export function AppShell({
               <Link
                 href="/app/settings/notify"
                 className="rounded-full border border-border bg-card p-2 text-muted-foreground transition-colors hover:bg-card-2 hover:text-foreground"
-                title="알림 설정"
+                title={t("topbar.notifications")}
               >
                 <Bell className="h-4 w-4" />
               </Link>

@@ -1,0 +1,42 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "market": "Markets",
+    "analyze": "AI Analysis",
+    "trade": "Execute Trade",
+    "virtualTrade": "Paper Trading",
+    "journal": "Journal",
+    "performance": "Performance",
+    "guide": "Guide",
+    "settings": "Settings",
+    "blog": "Victor Alpha Blog"
+  },
+  "topbar": {
+    "newAnalysis": "New Analysis",
+    "search": "Search coins · analyses · trades",
+    "wallet": "Wallet",
+    "credits": "AI Credits",
+    "account": "Account",
+    "deposit": "Top up vUSDT",
+    "buyCredits": "Buy AI Credits",
+    "apiKeys": "Exchange API Keys",
+    "admin": "Admin",
+    "notifications": "Notifications",
+    "logout": "Log out",
+    "language": "Language"
+  },
+  "brand": {
+    "tagline": "Pre-trade decision check"
+  },
+  "unit": {
+    "credits": "credits"
+  },
+  "common": {
+    "long": "Long",
+    "short": "Short",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  }
+}

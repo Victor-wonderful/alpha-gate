@@ -5,6 +5,8 @@ import Script from "next/script";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { getLocale } from "@/lib/i18n/server";
+import { I18nProvider } from "@/lib/i18n/context";
 
 export const metadata: Metadata = {
   title: {
@@ -53,12 +55,13 @@ const SUPPRESS_DISPOSED = `
 })();
 `;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const locale = await getLocale();
   return (
     <html
-      lang="ko"
+      lang={locale}
       className={`dark ${GeistSans.variable} ${GeistMono.variable}`}
       suppressHydrationWarning
     >
@@ -69,7 +72,9 @@ export default function RootLayout({
         <Script id="suppress-disposed" strategy="beforeInteractive">
           {SUPPRESS_DISPOSED}
         </Script>
-        <Providers>{children}</Providers>
+        <I18nProvider locale={locale}>
+          <Providers>{children}</Providers>
+        </I18nProvider>
         <Toaster position="top-right" richColors theme="dark" />
       </body>
     </html>

@@ -132,6 +132,23 @@ function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview
   };
 }
 
+/** 분석 시 나올 시나리오 개수 추정 (LLM 없이 추세·신호로 — 프롬프트 개수 가이드와 동일 논리).
+ *  추세장: 눌림목 + (스윕→유동성사냥) + (돌파 임박). 횡보장: 양 끝 fade + (돌파). */
+function estScenarios(c: RadarCandidate): number {
+  const sig = new Set(c.signals.map((s) => s.key));
+  let n: number;
+  if (c.trend === "range") {
+    n = 2; // 박스 양 끝 fade
+    if (sig.has("compression")) n += 1; // 돌파 임박
+  } else {
+    n = 1; // 추세 눌림목
+    if (sig.has("sweep")) n += 1; // 유동성 사냥
+    if (sig.has("compression") || sig.has("vah") || sig.has("val")) n += 1; // 돌파
+    if (c.trendStrength === "strong") n += 1;
+  }
+  return Math.min(4, Math.max(1, n));
+}
+
 function TrendMark({ trend }: { trend: "up" | "down" | "range" }) {
   if (trend === "up")
     return (
@@ -298,7 +315,7 @@ export function RadarPanel({
               <span className="w-[76px]">코인</span>
               <span className="w-[88px] text-right">가격 · 변동</span>
               <span className="hidden min-w-0 flex-1 sm:block">신호</span>
-              <span className="w-[64px] text-center">진입</span>
+              <span className="w-[78px] text-center">진입 · 시나리오</span>
               <span className="hidden w-[132px] md:block">진입 · 목표 · 손절</span>
               <span className="hidden w-[56px] items-center justify-end gap-1 sm:flex">예상폭</span>
               <span className="w-9 text-center">점수</span>
@@ -420,12 +437,13 @@ function CandidateRow({
           ) : null}
         </span>
 
-        {/* 진입 가능 배지 */}
-        <span className="flex w-[64px] shrink-0 items-center justify-center">
+        {/* 진입 가능 + 예상 시나리오 개수 */}
+        <span className="flex w-[78px] shrink-0 flex-col items-center gap-0.5">
           <span className="inline-flex items-center gap-1 rounded-md border border-grade-a/40 bg-grade-a/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
             <Check className="h-3 w-3" />
             가능
           </span>
+          <span className="text-[9px] text-muted-foreground">시나리오 ~{estScenarios(c)}개</span>
         </span>
 
         {/* 진입 · 목표 · 손절 (추정) */}

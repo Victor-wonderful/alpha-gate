@@ -32,6 +32,7 @@ import { sizePosition } from "@/lib/sizing";
 import { ResultPanel } from "./result-panel";
 import { saveTradeAction } from "@/app/app/_actions";
 import { placeLiveTradeAction } from "@/app/app/trade/_actions";
+import { loadScenarioWatchStatesAction, toggleScenarioWatchAction } from "@/app/app/analyze/_actions";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STRATEGY_LABELS } from "@/lib/analysis/strategy";
 import type { AnalysisReport } from "@/lib/analysis/synthesize";
@@ -339,11 +340,62 @@ function TradeFormInner({
 
   // Live-trading state
   const tradableKeys = apiKeys.filter((k) => k.canTrade && k.exchange === "binance");
-  const [mode, setMode] = useState<"paper" | "live">("paper");
+  // 실행 방식 3택: 가상 진입 / 실거래(준비 중) / 알림(가격 도달 시 텔레그램).
+  const [execMode, setExecMode] = useState<"paper" | "live" | "alert">("paper");
+  const mode = execMode === "live" ? "live" : "paper"; // 지갑·라이브 로직은 paper/live만 사용
   const [selectedKeyId, setSelectedKeyId] = useState<string>(() => tradableKeys[0]?.id ?? "");
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
   const [showDOverride, setShowDOverride] = useState(false);
   const [dConfirmText, setDConfirmText] = useState("");
+  // 알림(가격 도달) — 이 시나리오에 해당하는 scenario_outcomes 행 id + 등록 상태.
+  const analysisId = analysisResult?.analysisId;
+  const scenarioOutcomeRef = useRef<{ id: string; watch: boolean } | null>(null);
+  const [alertRegistered, setAlertRegistered] = useState(false);
+  const [alertPending, setAlertPending] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    scenarioOutcomeRef.current = null;
+    setAlertRegistered(false);
+    const idx = scenarioIdx != null ? Number(scenarioIdx) : NaN;
+    if (!analysisId || !Number.isInteger(idx) || idx < 0) return;
+    loadScenarioWatchStatesAction(analysisId)
+      .then((res) => {
+        if (!alive || !res.states) return;
+        const st = res.states[idx];
+        if (st) {
+          scenarioOutcomeRef.current = { id: st.id, watch: st.watch };
+          setAlertRegistered(st.watch);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [analysisId, scenarioIdx]);
+
+  async function registerAlert() {
+    const row = scenarioOutcomeRef.current;
+    if (!row) {
+      toast.error("이 시나리오는 알림 등록을 지원하지 않습니다 (분석이 저장되지 않았거나 관망 시나리오).", {
+        duration: 7000,
+      });
+      return;
+    }
+    if (alertRegistered) {
+      toast("이미 알림이 등록돼 있습니다. 가격 도달 시 텔레그램으로 알려드려요.", { icon: "🔔" });
+      return;
+    }
+    setAlertPending(true);
+    const res = await toggleScenarioWatchAction({ scenarioId: row.id, watch: true });
+    setAlertPending(false);
+    if (res.error) {
+      toast.error(res.error, { duration: 7000 });
+      return;
+    }
+    scenarioOutcomeRef.current = { ...row, watch: true };
+    setAlertRegistered(true);
+    toast.success("알림 등록 완료 — 진입가·손절·목표 도달 시 텔레그램으로 알려드립니다.", { duration: 6000 });
+  }
   useEffect(() => {
     // Default to first key if nothing selected after keys load.
     if (!selectedKeyId && tradableKeys.length > 0) {
@@ -611,6 +663,20 @@ function TradeFormInner({
         ? cp >= entryNumV
         : cp <= entryNumV);
   const orderKindLabel = orderType === "stop" ? "역지정가" : "지정가";
+  // 예약 주문 UX: 사용자에겐 "지금 바로 / 예약 주문" 2택만 노출.
+  // 내부 주문유형(limit=되돌림 대기 / stop=돌파 추격)은 AI orderHint로 자동 결정.
+  const isScheduled = orderType !== "market";
+  const scheduledKind: "limit" | "stop" =
+    orderType === "stop"
+      ? "stop"
+      : orderType === "limit"
+        ? "limit"
+        : activeScenario?.orderHint === "stop"
+          ? "stop"
+          : "limit";
+  function setBooking(next: "now" | "scheduled") {
+    changeOrderType(next === "now" ? "market" : scheduledKind);
+  }
   // 통과 방향 문구: LIMIT은 진입가 아래/위로 빠짐, STOP은 위/아래로 돌파.
   const crossedDirWord =
     orderType === "stop"
@@ -732,23 +798,16 @@ function TradeFormInner({
           </div>
         </div>
       ) : null}
-      {/* 모드 배너 + 동적 헤더 */}
-      <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <Sparkles className="h-4 w-4 flex-none text-primary" />
-          <span className="font-semibold text-primary">AI 분석 시나리오 모드</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-xs text-muted-foreground">
-            진입가·손절·목표·리스크·레버리지가 자동 적용됐습니다. 단계 버튼으로 진입 시점을 조정할 수 있습니다.
-          </span>
-        </div>
-      </div>
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">AI 시나리오 실행</h1>
-        <p className="text-sm text-muted-foreground">
-          AI가 추천한 진입·손절·목표와 자동 사이징을 확인하고 가상 트레이딩에 진입하세요.
-        </p>
-      </div>
+      {/* ① 요약바 — 등급 결론 (시안) */}
+      <SummaryBar
+        grade={grade}
+        symbol={symbol}
+        direction={direction}
+        entry={entryNumV}
+        stop={stopNumV}
+        target={targetNumV}
+        scenarioName={activeScenario?.name ?? null}
+      />
 
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
       <div className="space-y-6">
@@ -863,31 +922,30 @@ function TradeFormInner({
           </div>
 
           <CardContent className="space-y-4 pt-0">
-            {/* Order type toggle */}
+            {/* Order method toggle — 시안: 지금 바로 / 예약 주문 (2택) */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] font-semibold">주문 유형</Label>
+                <Label className="text-[11px] font-semibold">주문 방식</Label>
                 <span className="text-[10px] text-muted-foreground">
-                  {orderType === "market"
+                  {!isScheduled
                     ? "현재가로 즉시 체결"
-                    : orderType === "stop"
-                      ? "트리거 돌파 시 자동 체결 (24시간 유효)"
-                      : "지정가 도달 시 자동 체결 (24시간 유효)"}
+                    : scheduledKind === "stop"
+                      ? "목표 가격 돌파 시 자동 진입 (24시간 유효)"
+                      : "목표 가격 도달 시 자동 진입 (24시간 유효)"}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background/40 p-0.5">
+              <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-background/40 p-0.5">
                 {([
-                  { key: "market", label: "시장가" },
-                  { key: "limit", label: "지정가" },
-                  { key: "stop", label: "역지정가" },
+                  { key: "now", label: "지금 바로", active: !isScheduled },
+                  { key: "scheduled", label: "예약 주문", active: isScheduled },
                 ] as const).map((opt) => (
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => changeOrderType(opt.key)}
+                    onClick={() => setBooking(opt.key)}
                     className={cn(
                       "rounded px-2 py-1.5 text-xs font-semibold transition-colors",
-                      orderType === opt.key
+                      opt.active
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
                     )}
@@ -896,22 +954,13 @@ function TradeFormInner({
                   </button>
                 ))}
               </div>
-              {orderType === "stop" ? (
+              {isScheduled ? (
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  역지정가(STOP)는 가격이 트리거를 <span className="font-semibold">{isLongDir ? "위로 돌파" : "아래로 이탈"}</span>할 때 진입하는 돌파 추종 주문입니다.
-                </p>
-              ) : null}
-              {aiMode && activeScenario && !orderTypeTouched ? (
-                <p className="text-[10px] text-muted-foreground">
-                  AI 시나리오 기준{" "}
-                  <span className="font-semibold">
-                    {orderType === "stop"
-                      ? "돌파 추격(역지정가)"
-                      : orderType === "limit"
-                        ? "되돌림 대기(지정가)"
-                        : "즉시 진입(시장가)"}
-                  </span>
-                  로 자동 설정됐습니다. 필요하면 직접 바꿀 수 있어요.
+                  예약 주문은 지정한 가격에 도달하면 자동으로 진입합니다.{" "}
+                  {scheduledKind === "stop"
+                    ? `가격이 ${isLongDir ? "위로 돌파" : "아래로 이탈"}할 때 진입(돌파 추종)`
+                    : `가격이 ${isLongDir ? "내려와" : "올라와"} 도달할 때 진입(되돌림 대기)`}하도록
+                  AI 시나리오 기준으로 자동 설정됩니다.
                 </p>
               ) : null}
             </div>
@@ -939,7 +988,7 @@ function TradeFormInner({
                 </div>
               ) : (
                 <PriceRow
-                  label={orderType === "stop" ? "트리거가" : "지정가"}
+                  label="예약가"
                   value={entry}
                   onChange={setEntry}
                   accent={ENTRY_ACCENT}
@@ -1264,11 +1313,22 @@ function TradeFormInner({
         </details>
         ) : null}
 
-        {/* 3. 자금 관리 상태 — 자동 집계 (저널 DB) */}
-        <details open className="group">
-          <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-1">
+        {/* ③ 자동 점검 — 자금 관리 상태 (접힘, 자동 집계) */}
+        <details className="group">
+          <summary className="cursor-pointer select-none rounded-md border border-border bg-background/40 px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 list-none flex items-center gap-2">
             <span className="transition-transform group-open:rotate-90">▶</span>
-            자금 관리 상태 (자동)
+            <span className="font-semibold text-foreground">자동 점검</span>
+            <span className="text-xs">— 자금 관리 상태</span>
+            {(money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ||
+              money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT) ? (
+              <span className="ml-auto rounded bg-grade-d/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-d">
+                ⚠️ 주의
+              </span>
+            ) : (
+              <span className="ml-auto rounded bg-grade-a/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
+                이상 없음
+              </span>
+            )}
           </summary>
           <div className="mt-2">
             <Card>
@@ -1448,39 +1508,76 @@ function TradeFormInner({
           onApplyLeverage={(lv) => { setLeverage(lv); setUserOverride(true); }}
         />
 
-        {/* Trade execution mode (virtual paper vs real exchange) */}
+        {/* ④ 실행 방법 — 3택: 가상 진입 / 실거래 / 알림 (시안) */}
         <Card className="overflow-hidden">
           <CardContent className="space-y-3 p-4">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                실행 모드
+                주문 방법을 선택하세요
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-2">
+              <div className="mt-2 space-y-2">
                 <button
                   type="button"
-                  onClick={() => setMode("paper")}
+                  onClick={() => setExecMode("paper")}
                   className={cn(
-                    "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
-                    mode === "paper"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
+                    "flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
+                    execMode === "paper"
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background/40 hover:bg-muted/30",
                   )}
                 >
-                  가상 트레이딩
+                  <span className="text-lg">🧪</span>
+                  <span className="min-w-0">
+                    <span className={cn("block text-sm font-semibold", execMode === "paper" ? "text-primary" : "text-foreground")}>
+                      가상 거래 진입
+                    </span>
+                    <span className="block text-[10px] text-muted-foreground">
+                      실제 자금 없이 동일한 체결·수수료로 학습
+                    </span>
+                  </span>
                 </button>
                 <button
                   type="button"
                   disabled
-                  className="cursor-not-allowed rounded-md border border-border bg-background/20 px-3 py-2 text-sm font-medium text-muted-foreground/50 opacity-60"
+                  className="flex w-full cursor-not-allowed items-center gap-3 rounded-md border border-border bg-background/20 px-3 py-2.5 text-left opacity-60"
                   title="현재 비활성 — Binance IP 제한 정책 때문에 자동 주문 불가. 추후 프록시 인프라 도입 시 활성화."
                 >
-                  실거래 <span className="ml-1 rounded bg-muted/60 px-1 py-0.5 text-[9px] uppercase">준비 중</span>
+                  <span className="text-lg grayscale">⚡</span>
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground/60">
+                      실거래 주문
+                      <span className="rounded bg-muted/60 px-1 py-0.5 text-[9px] uppercase">준비 중</span>
+                    </span>
+                    <span className="block text-[10px] text-muted-foreground/50">
+                      거래소에 실제 시장가 주문 전송
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExecMode("alert")}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
+                    execMode === "alert"
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background/40 hover:bg-muted/30",
+                  )}
+                >
+                  <span className="text-lg">🔔</span>
+                  <span className="min-w-0">
+                    <span className={cn("block text-sm font-semibold", execMode === "alert" ? "text-primary" : "text-foreground")}>
+                      알림만 받기
+                    </span>
+                    <span className="block text-[10px] text-muted-foreground">
+                      진입가·손절·목표 도달 시 텔레그램 알림 {alertRegistered ? "· 등록됨 ✓" : ""}
+                    </span>
+                  </span>
                 </button>
               </div>
             </div>
 
             {/* Paper-mode wallet preview */}
-            {mode === "paper" && paperWallet ? (() => {
+            {execMode === "paper" && paperWallet ? (() => {
               const requiredMargin = sizing.valid && leverage > 0 ? sizing.positionSize / leverage : 0;
               const afterAvailable = paperWallet.available - requiredMargin;
               const insufficient = requiredMargin > paperWallet.available;
@@ -1530,39 +1627,46 @@ function TradeFormInner({
             })() : null}
 
             <p className="text-[10px] text-muted-foreground">
-              가상 트레이딩: 실제 자금 없이 거래소와 동일한 흐름(체결가·슬리피지·수수료·마진)으로 학습.
-              진입 후 <Link href="/app/virtual-trade" className="text-primary underline-offset-2 hover:underline">가상 트레이딩 화면</Link>에서 포지션이 추적됩니다.
+              {execMode === "alert"
+                ? "알림만 받기: 지금은 진입하지 않고, 가격이 시나리오 레벨에 도달하면 텔레그램으로 알려드립니다. 텔레그램 미연결 시 설정에서 연결하세요."
+                : <>가상 거래: 실제 자금 없이 거래소와 동일한 흐름(체결가·슬리피지·수수료·마진)으로 학습. 진입 후 <Link href="/app/virtual-trade" className="text-primary underline-offset-2 hover:underline">가상 거래 화면</Link>에서 포지션이 추적됩니다.</>}
             </p>
           </CardContent>
         </Card>
 
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={() => save()}
-          disabled={
-            pending ||
-            (mode === "paper" && paperWallet != null && sizing.valid && (sizing.positionSize / Math.max(leverage, 1)) > paperWallet.available)
-          }
-        >
-          {pending
-            ? orderType === "limit"
-              ? "지정가 주문 등록 중..."
-              : orderType === "stop"
-                ? "역지정가 주문 등록 중..."
+        {execMode === "alert" ? (
+          <Button
+            className="w-full"
+            size="lg"
+            variant="outline"
+            onClick={registerAlert}
+            disabled={alertPending || alertRegistered}
+          >
+            {alertPending ? "알림 등록 중..." : alertRegistered ? "🔔 알림 등록됨" : "🔔 가격 도달 알림 설정"}
+          </Button>
+        ) : (
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={() => save()}
+            disabled={
+              pending ||
+              (mode === "paper" && paperWallet != null && sizing.valid && (sizing.positionSize / Math.max(leverage, 1)) > paperWallet.available)
+            }
+          >
+            {pending
+              ? isScheduled
+                ? "예약 주문 등록 중..."
                 : "진입 처리 중..."
-            : orderType === "limit"
-              ? aiMode
-                ? "이 계획으로 지정가 주문"
-                : "지정가 주문 등록"
-              : orderType === "stop"
+              : isScheduled
                 ? aiMode
-                  ? "이 계획으로 역지정가 주문"
-                  : "역지정가 주문 등록"
+                  ? "이 계획으로 예약 주문"
+                  : "예약 주문 등록"
                 : aiMode
                   ? "이 계획으로 가상 진입"
                   : "가상 진입"}
-        </Button>
+          </Button>
+        )}
         {aiMode ? (
           <p className="text-center text-[11px] text-muted-foreground">
             진입가·손절·목표는 AI 분석에서 가져왔습니다. 위 단계 버튼으로 진입 시점을 바꿀 수 있습니다.
@@ -1680,6 +1784,106 @@ function TradeFormInner({
         ) : null}
       </aside>
     </div>
+    </div>
+  );
+}
+
+const GRADE_VERDICT: Record<"A" | "B" | "C" | "D", string> = {
+  A: "진입 가능",
+  B: "조건부 진입",
+  C: "비추천 · 축소",
+  D: "강한 자제",
+};
+
+// Tailwind JIT는 동적 조합 클래스를 생성하지 못하므로 전체 문자열을 정적으로 둔다.
+const GRADE_CLASSES: Record<"A" | "B" | "C" | "D", { bg: string; text: string; border: string; soft: string }> = {
+  A: { bg: "bg-grade-a", text: "text-grade-a", border: "border-grade-a/40", soft: "bg-grade-a/10" },
+  B: { bg: "bg-grade-b", text: "text-grade-b", border: "border-grade-b/40", soft: "bg-grade-b/10" },
+  C: { bg: "bg-grade-c", text: "text-grade-c", border: "border-grade-c/40", soft: "bg-grade-c/10" },
+  D: { bg: "bg-grade-d", text: "text-grade-d", border: "border-grade-d/40", soft: "bg-grade-d/10" },
+};
+
+/** ① 요약바 — 등급 결론을 한 줄로. 시안의 상단 바. */
+function SummaryBar({
+  grade,
+  symbol,
+  direction,
+  entry,
+  stop,
+  target,
+  scenarioName,
+}: {
+  grade: ReturnType<typeof gradeTrade>;
+  symbol: string;
+  direction: Direction;
+  entry: number;
+  stop: number;
+  target: number;
+  scenarioName: string | null;
+}) {
+  const g = grade.grade as "A" | "B" | "C" | "D";
+  const rr =
+    entry > 0 && stop > 0 && target > 0 && Math.abs(entry - stop) > 0
+      ? Math.abs(target - entry) / Math.abs(entry - stop)
+      : grade.rr || 0;
+  const action = grade.actions[0] ?? null;
+  const gc = GRADE_CLASSES[g];
+  return (
+    <div className={cn("rounded-xl border px-4 py-3", gc.border, gc.soft)}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              "flex h-11 w-11 flex-none items-center justify-center rounded-lg text-xl font-black text-white shadow-sm",
+              gc.bg,
+            )}
+          >
+            {g}
+          </div>
+          <div className="min-w-0">
+            <div className={cn("text-base font-bold leading-tight", gc.text)}>
+              {GRADE_VERDICT[g]}
+              <span className="ml-2 text-xs font-medium text-muted-foreground">
+                {grade.score >= 0 ? "+" : ""}
+                {grade.score}점
+              </span>
+            </div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="font-mono font-semibold text-foreground">{symbol}</span>
+              <span
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+                  direction === "long"
+                    ? "bg-grade-a/15 text-grade-a"
+                    : "bg-grade-d/15 text-grade-d",
+                )}
+              >
+                {direction === "long" ? "롱" : "숏"}
+              </span>
+              {scenarioName ? <span className="truncate">· {scenarioName}</span> : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="ml-auto flex items-center gap-4">
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">손익비</div>
+            <div
+              className={cn(
+                "font-mono text-lg font-bold tabular-nums",
+                rr >= 1.5 ? "text-grade-a" : rr > 0 ? "text-grade-c" : "text-muted-foreground",
+              )}
+            >
+              {rr > 0 ? `${rr.toFixed(2)}R` : "—"}
+            </div>
+          </div>
+        </div>
+      </div>
+      {action ? (
+        <p className="mt-2 border-t border-border/40 pt-2 text-xs leading-relaxed text-muted-foreground">
+          {action}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -146,6 +146,10 @@ export async function GET(req: NextRequest) {
     )
     .is("closed_at", null)
     .neq("mode", "backtest")
+    // 실제 진입(체결)된 거래만 청산. 미체결 예약 주문(order_status='pending')이나
+    // 취소/만료된 주문은 포지션이 없으므로 손절/목표 정산 대상이 아니다.
+    // (시장가 즉시 진입·filler 체결 모두 order_status='filled')
+    .eq("order_status", "filled")
     .order("created_at", { ascending: true })
     .limit(200);
 

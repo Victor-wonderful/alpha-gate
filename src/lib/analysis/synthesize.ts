@@ -250,9 +250,9 @@ entryType 의미:
 스타일별 손절/목표 표준 (위 절대 하한 위에 추가로 적용 — Binance taker 0.08% + 슬리피지 별도):
 
 스캘핑 (scalp):
-- 손절폭: 진입가의 0.3~0.7%. 0.3% 미만은 노이즈에 잡힘 → 금지.
-- 목표폭: 진입가의 0.7~1.5%. 0.5% 미만은 수수료에 까임 → 절대 금지.
-- 손익비 (reward/risk): 최소 2 이상.
+- 손절폭: 진입가의 0.3~1.2%. ★ MTF ATR의 1.5~2배 부근으로 잡아 노이즈 생존력을 확보하라 (손절을 0.3%에 억지로 붙이지 마라 — 변동성이 크면 0.6~1.0%가 정상). 0.3% 미만 금지.
+- 목표폭: 진입가의 0.4~2.0%. 0.4% 미만은 수수료에 까임 → 금지.
+- 손익비 (reward/risk): 최소 1.3 이상. (스캘핑은 고승률·저손익비가 정상 — 무리하게 2+를 요구하면 시간대가 줄 수 없는 보상을 강제해 셋업이 전부 죽는다.)
 
 데이 (day):
 - 손절폭: 0.7~1.5%. 0.5% 미만 금지.
@@ -433,6 +433,14 @@ export interface AnalysisReport {
   }[];
   actionNow: string;
   warnings: string[];
+  /** 시나리오가 0개일 때 그 이유. "wait" = 신호 자체 부재, "filtered" = 방향은 잡혔으나
+   *  손절폭/수수료/근접 기준 미달로 셋업이 전부 폐기됨. UI가 둘을 다르게 안내한다. */
+  noEntry?: {
+    kind: "wait" | "filtered";
+    direction: "long" | "short" | null;
+    reasons: string[];
+    suggestion: string;
+  };
 }
 
 export async function synthesizeAnalysis(
@@ -490,8 +498,16 @@ export async function synthesizeAnalysis(
   if (!result || "error" in result) {
     throw new Error(`시나리오 응답 파싱 실패: ${result?.error}\n\n원문: ${result?.raw}`);
   }
-  return enforceEntryProximity(result.data, snapshot);
+  return enforceEntryProximity(result.data, snapshot, strategy);
 }
+
+// 저변동 장세에서 셋업이 안 나올 때 한 단계 큰 스타일을 권한다.
+const BIGGER_STYLE: Record<string, string> = {
+  scalp: "데이 또는 스윙",
+  day: "스윙",
+  swing: "포지션",
+  position: "",
+};
 
 // Style-dependent maximum distance (entryZone midpoint vs current price) for each entryType.
 // "immediate" must be reachable now; "pending" can be a stretch but must still be plausible.
@@ -508,13 +524,18 @@ const PROXIMITY_LIMITS: Record<string, { immediate: number; pending: number }> =
 
 // Style-based stop/target % bounds (must match prompt) + min R:R
 const STOP_RANGES: Record<string, { stopMin: number; stopMax: number; targetMin: number; minRR: number }> = {
-  scalp: { stopMin: 0.3, stopMax: 0.7, targetMin: 0.7, minRR: 2 },
+  // 스캘핑: ATR 상대 손절 + RR 1.3 (백테스트 A/B 검증). standards.ts STYLE_STANDARDS.scalp와 일치.
+  scalp: { stopMin: 0.3, stopMax: 1.2, targetMin: 0.4, minRR: 1.3 },
   day: { stopMin: 0.7, stopMax: 1.5, targetMin: 1.5, minRR: 1.5 },
   swing: { stopMin: 2, stopMax: 5, targetMin: 5, minRR: 2 },
   position: { stopMin: 5, stopMax: 15, targetMin: 15, minRR: 3 },
 };
 
-function enforceEntryProximity(report: AnalysisReport, snapshot: AnalysisSnapshot): AnalysisReport {
+function enforceEntryProximity(
+  report: AnalysisReport,
+  snapshot: AnalysisSnapshot,
+  strategy: StrategyResult,
+): AnalysisReport {
   const current = snapshot.ticker?.last;
   if (!current || current <= 0) return report;
   const proxLimits = PROXIMITY_LIMITS[snapshot.style] ?? PROXIMITY_LIMITS.swing;
@@ -646,8 +667,37 @@ function enforceEntryProximity(report: AnalysisReport, snapshot: AnalysisSnapsho
   const flawedCount = kept.filter((s) => s.qualityIssues && s.qualityIssues.length > 0).length;
   const cleanCount = kept.length - flawedCount;
   let actionNow = report.actionNow;
+  let noEntry: AnalysisReport["noEntry"];
+
   if (kept.length === 0) {
-    actionNow = "현재가에서 거래 우위 보이지 않음. 다음 셋업 대기.";
+    // 진짜 관망(신호 부재)과 "방향은 잡혔으나 필터로 전부 폐기"를 구분한다.
+    // report.scenarios 는 LLM이 생성한 필터 이전 시나리오 → 0개면 신호 자체가 없던 것.
+    const llmProduced = report.scenarios.length;
+    const filtered = strategy.primary !== "wait" && llmProduced > 0;
+
+    if (filtered) {
+      const dirWord =
+        strategy.direction === "short" ? "하락" : strategy.direction === "long" ? "상승" : "방향";
+      const bigger = BIGGER_STYLE[snapshot.style] ?? "";
+      const suggestion = bigger
+        ? `지금은 변동성이 낮아 ${snapshot.styleLabel} 기준 셋업이 수수료·노이즈 기준을 못 넘습니다. ${bigger} 스타일로 다시 보거나, 변동성이 살아날 때까지 기다리세요.`
+        : `지금은 변동성이 낮아 ${snapshot.styleLabel} 기준 셋업이 수수료·노이즈 기준을 못 넘습니다. 변동성이 살아날 때까지 기다리세요.`;
+      actionNow = `${dirWord} 우위는 보이나, 지금 변동성에선 ${snapshot.styleLabel} 셋업이 수수료를 못 이김 — 진입 보류.`;
+      noEntry = {
+        kind: "filtered",
+        direction: strategy.direction,
+        reasons: dropped.slice(0, 3),
+        suggestion,
+      };
+    } else {
+      actionNow = "현재가에서 거래 우위 보이지 않음. 다음 셋업 대기.";
+      noEntry = {
+        kind: "wait",
+        direction: null,
+        reasons: [],
+        suggestion: "지표가 혼조라 방향 우위가 없습니다. 다음 셋업을 기다리세요.",
+      };
+    }
   } else if (cleanCount === 0 && flawedCount > 0) {
     actionNow = `방향은 잡혔으나 시나리오마다 표준 미달 항목 있음. 카드의 "검토 항목"을 보고 진입 여부 본인 판단.`;
   }
@@ -657,5 +707,6 @@ function enforceEntryProximity(report: AnalysisReport, snapshot: AnalysisSnapsho
     scenarios: kept,
     warnings,
     actionNow,
+    noEntry,
   };
 }

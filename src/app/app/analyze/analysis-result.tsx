@@ -443,15 +443,60 @@ export function AnalysisResult({
       <div className="min-w-0 space-y-4">
       {/* Simple scenario cards — 결론 다음, 근거(추세·차트)보다 먼저 */}
       {report.scenarios.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 p-10 text-center">
-            <AlertTriangle className="h-7 w-7 text-grade-c" />
-            <div className="text-lg font-semibold">지금 진입하지 마세요</div>
-            <p className="max-w-md text-sm text-muted-foreground">
-              AI가 보기에 지금은 매매 우위가 없습니다. 시장이 정리될 때까지 기다리세요.
-            </p>
-          </CardContent>
-        </Card>
+        report.noEntry?.kind === "filtered" ? (
+          // 방향은 잡혔으나 손절폭·수수료·근접 기준 미달로 셋업이 전부 폐기된 경우.
+          // "신호 없음"이 아니라 "이 스타일/변동성에선 거래가 안 됨"을 정확히 안내한다.
+          <Card className="border-primary/30">
+            <CardContent className="flex flex-col items-start gap-3 p-6">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-6 w-6 flex-none text-primary" />
+                <div className="text-lg font-semibold">지금은 진입 보류</div>
+                {report.noEntry.direction ? (
+                  <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                    {report.noEntry.direction === "short" ? "하락 우위" : "상승 우위"}
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                방향성 우위는 보이지만, <strong className="text-foreground">현재 변동성에서는 {snapshot.styleLabel} 기준 셋업이 수수료·노이즈 기준을 넘지 못해</strong> 진입 가능한 시나리오가 없습니다. 무리하게 들어가면 수수료가 손익비를 잠식합니다.
+              </p>
+              {strategy.reasoning ? (
+                <p className="rounded-md bg-muted/40 px-3 py-2 text-sm leading-relaxed text-foreground">
+                  {strategy.reasoning}
+                </p>
+              ) : null}
+              {report.noEntry.reasons.length > 0 ? (
+                <div className="w-full">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    폐기된 셋업 사유
+                  </div>
+                  <ul className="space-y-1 text-xs text-muted-foreground">
+                    {report.noEntry.reasons.map((r, i) => (
+                      <li key={i} className="flex gap-1.5">
+                        <span className="text-grade-c">·</span>
+                        <span>{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <p className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm leading-relaxed text-primary">
+                {report.noEntry.suggestion}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-2 p-10 text-center">
+              <AlertTriangle className="h-7 w-7 text-grade-c" />
+              <div className="text-lg font-semibold">지금 진입하지 마세요</div>
+              <p className="max-w-md text-sm text-muted-foreground">
+                {report.noEntry?.suggestion ??
+                  "AI가 보기에 지금은 매매 우위가 없습니다. 시장이 정리될 때까지 기다리세요."}
+              </p>
+            </CardContent>
+          </Card>
+        )
       ) : (
         <div className="space-y-3">
           {report.scenarios.map((s, i) => {

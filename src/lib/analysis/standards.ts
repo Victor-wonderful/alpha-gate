@@ -88,10 +88,13 @@ export function resolveStandard(
 
 /** Expert-consensus standard ranges, adjusted for real costs. */
 export const STYLE_STANDARDS: Record<TradingStyle, StyleStandard> = {
+  // 스캘핑: ATR 상대 손절 + 고승률·저손익비 반영 (백테스트 A/B 검증, 2026-06).
+  // 구 0.3~0.7%/RR2는 손절이 노이즈 대비 너무 좁아 수수료 출혈(0.27R) + RR 역전 문제.
+  // 손절 상한을 넓혀 MTF ATR의 1.5~2배(고변동 시 더 넓게)를 허용, RR은 현실값 1.3으로.
   scalp: {
-    stopPct: { min: 0.3, max: 0.7 },
-    targetPct: { min: 0.7, max: 1.5 },
-    rr: { min: 2 },
+    stopPct: { min: 0.3, max: 1.2 },
+    targetPct: { min: 0.4, max: 2 },
+    rr: { min: 1.3 },
   },
   day: {
     stopPct: { min: 0.7, max: 1.5 },

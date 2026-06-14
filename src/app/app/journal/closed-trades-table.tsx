@@ -193,9 +193,9 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
       ) : (
         <>
           {/* Table */}
-          <div className="overflow-x-auto rounded-lg border border-border">
+          <div className="overflow-x-auto rounded-2xl border border-border bg-popover">
             <table className="w-full min-w-[1280px] text-xs">
-              <thead className="bg-muted/40 text-[10px] uppercase text-muted-foreground">
+              <thead className="bg-card text-[10px] uppercase text-muted-foreground">
                 <tr>
                   <th className="px-2 py-1.5 text-left">시간</th>
                   <th className="px-2 py-1.5 text-left">코인</th>

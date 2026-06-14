@@ -1,15 +1,12 @@
 import Link from "next/link";
-import { Activity, ArrowRight, Layers, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { ArrowRight, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GradeBadge } from "@/components/trade/grade-badge";
 import type { Grade } from "@/types/trade";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { ResolveTradesButton } from "./resolve-button";
 import { CancelPendingButton } from "./cancel-pending-button";
-import { ClusterTabs } from "@/components/app/cluster-tabs";
-import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
 import { ModeFilter, parseMode, type TradeMode } from "@/components/app/mode-filter";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
@@ -214,101 +211,111 @@ export default async function JournalListPage({
       kstNow.getUTCDate(),
     ) - kstOffsetMs,
   );
-  const todayR = closed
-    .filter((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc && t.result_r != null)
+  const todayClosed = closed.filter((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc);
+  const todayR = todayClosed
+    .filter((t) => t.result_r != null)
     .reduce((s, t) => s + Number(t.result_r ?? 0), 0);
 
-  const cluster = clusters.results({
-    openCount: open.length + pendingLimits.length,
-    rightSlot: (
-      <div className="flex items-center gap-2">
-        <HelpLink href="/app/guide/results" />
-        <ResolveTradesButton />
-      </div>
-    ),
-  });
+  // 대기 주문 유형 분해 (역지정/지정)
+  const pendingStopCount = pendingLimits.filter((t) => t.order_type === "stop").length;
+  const pendingLimitCount = pendingLimits.length - pendingStopCount;
+  const pendingSub =
+    pendingLimits.length === 0
+      ? "없음"
+      : [pendingStopCount ? `역지정 ${pendingStopCount}` : null, pendingLimitCount ? `지정 ${pendingLimitCount}` : null]
+          .filter(Boolean)
+          .join(" · ");
+
   return (
     <div className="space-y-5">
       <FlowStepper current="journal" />
       <Suspense fallback={null}>
         <ExpiryBanner />
       </Suspense>
-      <ClusterTabs
-        title={cluster.title}
-        description="5분마다 자동 정산되며, 즉시 확인하려면 우측 버튼을 누르세요. 가격은 페이지 새로고침으로 갱신됩니다."
-        tabs={cluster.tabs}
-        rightSlot={cluster.rightSlot}
-      />
 
-      {/* 거래 모드 필터 (실거래/백테스트) */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* 페이지 헤더 — 제목 + 모드 필터 */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">거래 일지</h1>
+          <p className="text-xs text-muted-foreground">
+            실제 거래와 가상 거래를 분리해 기록합니다 — 청산 결과 · AI 복기 포함
+          </p>
+        </div>
         <ModeFilter
           basePath="/app/journal"
           view="all"
           current={tradeMode}
-          counts={{
-            all: closedAll.length,
-            live: liveCount,
-            backtest: backtestCount,
-          }}
+          counts={{ all: closedAll.length, live: liveCount, backtest: backtestCount }}
         />
+      </div>
+
+      {/* 실제 / 가상 거래 탭 + 액션 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          title="Bybit 연동 예정"
+          className="flex cursor-default items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 opacity-60"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-grade-a" />
+          <span className="text-sm font-medium text-muted-foreground">실제 거래</span>
+          <span className="text-[10px] text-muted-foreground/60">Bybit 연동 예정</span>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl border border-ring bg-primary/10 px-4 py-2.5">
+          <Wallet className="h-3.5 w-3.5 text-primary" />
+          <span className="text-sm font-bold">가상 거래</span>
+          <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] text-primary tabular-nums">
+            {closedAll.length}
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <HelpLink href="/app/guide/results" />
+          <ResolveTradesButton />
+        </div>
       </div>
 
       {/* KPI cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          icon={<Activity className="h-4 w-4" />}
           label="오늘 실현 R"
-          value={
-            closed.some((t) => t.closed_at && new Date(t.closed_at) >= kstStartUtc)
-              ? `${todayR >= 0 ? "+" : ""}${todayR.toFixed(2)}R`
-              : "—"
-          }
+          value={todayClosed.length > 0 ? `${todayR >= 0 ? "+" : ""}${todayR.toFixed(2)}R` : "—"}
+          sub={todayClosed.length > 0 ? `${todayClosed.length}건 청산` : "오늘 청산 없음"}
           tone={todayR > 0 ? "good" : todayR < 0 ? "bad" : "neutral"}
         />
         <KpiCard
-          icon={<Layers className="h-4 w-4" />}
           label="진행 중 포지션"
           value={`${positions.length}건`}
-          sub={positions.length > 0 ? "아래 카드 참고" : "없음"}
-        />
-        <KpiCard
-          icon={totalUnrealizedR >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-          label="미실현 합계"
-          value={
-            positions.length > 0
-              ? `${totalUnrealizedR >= 0 ? "+" : ""}${totalUnrealizedR.toFixed(2)}R`
-              : "—"
-          }
           sub={
             positions.length > 0
-              ? `${totalUnrealizedUsd >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedUsd, "USD")}`
-              : "진행 중 없음"
+              ? `미실현 ${totalUnrealizedR >= 0 ? "+" : ""}${totalUnrealizedR.toFixed(2)}R · ${totalUnrealizedUsd >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedUsd, "USD")}`
+              : "없음"
           }
-          tone={totalUnrealizedR > 0 ? "good" : totalUnrealizedR < 0 ? "bad" : "neutral"}
+          tone={positions.length > 0 ? (totalUnrealizedR > 0 ? "good" : totalUnrealizedR < 0 ? "bad" : "neutral") : "neutral"}
         />
         <KpiCard
-          icon={<Wallet className="h-4 w-4" />}
+          label="대기 중 주문"
+          value={`${pendingLimits.length}건`}
+          sub={pendingSub}
+        />
+        <KpiCard
           label="총 노출"
           value={positions.length > 0 ? `${totalExposurePct.toFixed(1)}%` : "—"}
           sub={
             positions.length > 0
               ? `${formatCurrency(totalNotional, "USD")} / ${formatCurrency(accountSize, "USD")}`
-              : "—"
+              : "진행 중 없음"
           }
         />
       </div>
 
       {/* Pending limit orders */}
       {pendingLimits.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        <section className="space-y-2.5">
+          <h2 className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-            대기 중 주문 ({pendingLimits.length})
+            대기 중 주문 (지정가 · 역지정가)
           </h2>
-          <div className="overflow-hidden rounded-lg border border-border">
+          <div className="overflow-hidden rounded-2xl border border-border bg-popover">
             <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+              <thead className="bg-card text-xs text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 text-left">등록 시각</th>
                   <th className="px-4 py-2 text-left">코인</th>
@@ -379,8 +386,8 @@ export default async function JournalListPage({
 
       {/* Open positions board */}
       {positions.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        <section className="space-y-2.5">
+          <h2 className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-grade-a" />
             진행 중 포지션 ({positions.length})
           </h2>
@@ -393,16 +400,14 @@ export default async function JournalListPage({
       ) : null}
 
       {/* Closed trades table */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+      <section className="space-y-2.5">
+        <h2 className="text-[13px] font-semibold text-muted-foreground">
           종료된 거래 ({closed.length})
         </h2>
         {closed.length === 0 ? (
-          <Card>
-            <CardContent className="p-10 text-center text-sm text-muted-foreground">
-              아직 종료된 거래가 없습니다.
-            </CardContent>
-          </Card>
+          <div className="rounded-2xl border border-border bg-popover p-10 text-center text-sm text-muted-foreground">
+            아직 종료된 거래가 없습니다.
+          </div>
         ) : (
           <ClosedTradesTable rows={closedRows} />
         )}
@@ -413,13 +418,11 @@ export default async function JournalListPage({
 }
 
 function KpiCard({
-  icon,
   label,
   value,
   sub,
   tone,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
   sub?: string;
@@ -432,18 +435,13 @@ function KpiCard({
         ? "text-grade-d"
         : "text-foreground";
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
-          <span className="text-muted-foreground/60">{icon}</span>
-        </div>
-        <div className={cn("mt-1 font-mono text-2xl font-bold tabular-nums", toneClass)}>
-          {value}
-        </div>
-        {sub ? <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div> : null}
-      </CardContent>
-    </Card>
+    <div className="rounded-2xl border border-border bg-card p-3.5">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className={cn("mt-1 font-mono text-xl font-bold tabular-nums", toneClass)}>
+        {value}
+      </div>
+      {sub ? <div className="mt-0.5 text-[10px] text-muted-foreground">{sub}</div> : null}
+    </div>
   );
 }
 

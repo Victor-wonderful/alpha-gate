@@ -24,11 +24,11 @@ export const clusters = {
   trading: (opts?: { rightSlot?: ReactNode }): ClusterDef => ({
     title: "가상 거래",
     description:
-      "가상 자금으로 거래소 실습, 가격 예측 게임, 차익거래. 모두 같은 vUSDT 잔액을 사용합니다.",
+      "가상 자금(vUSDT)으로 거래소 실습. 실제 손실 없이 매매를 연습합니다.",
+    // 예측게임(/app/game)·김프 리밸런싱(/app/arbitrage)은 네비에서 제외 (2026-06).
+    // 라우트·코드·DB는 보존 — 필요 시 여기 tabs에 다시 추가하면 복원됨.
     tabs: [
       { href: "/app/virtual-trade", label: "가상 거래", icon: "💼" },
-      { href: "/app/game", label: "가격 예측 게임", icon: "🎮" },
-      { href: "/app/arbitrage", label: "김프 리밸런싱", icon: "🔀" },
     ],
     rightSlot: opts?.rightSlot,
   }),

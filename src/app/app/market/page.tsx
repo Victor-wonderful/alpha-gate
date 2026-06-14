@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { Suspense } from "react";
-import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AutoRefreshBar } from "@/components/market/auto-refresh-bar";
 import { CapitalFlowCard } from "@/components/market/capital-flow-card";
@@ -117,21 +115,6 @@ export default function MarketPage() {
       >
         <MacroCalendar />
       </CollapsibleSection>
-
-      {/* 김치 프리미엄 상세 — 차익거래 페이지로 (접힘 형태 진입점) */}
-      <Link
-        href="/app/arbitrage"
-        className="group flex items-center gap-2.5 rounded-2xl border border-border/60 bg-card/40 px-5 py-3.5 transition-all hover:border-ring/40 hover:bg-card/60"
-      >
-        <ChevronRight className="h-4 w-4 flex-none text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-        <span className="text-[15px] font-semibold">김치 프리미엄 상세</span>
-        <span className="hidden min-w-0 flex-1 truncate text-[11px] text-muted-foreground/70 sm:block">
-          26개 코인별 김프 · 변동성 랭킹 · 리밸런싱 차익거래 — 펼쳐서 보기
-        </span>
-        <span className="ml-auto flex-none text-xs font-medium text-primary/90 sm:ml-0">
-          차익거래 →
-        </span>
-      </Link>
 
       <p className="text-xs text-muted-foreground">
         새로고침 주기: Snapshot 10분 · 펀딩 5분 · 도미넌스·Alt Season·Stablecoin 10–30분 · F&amp;G·DeFi

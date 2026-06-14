@@ -10,7 +10,7 @@ export type { ClusterTab } from "./cluster-tabs-config";
 /** Shared tab bar that visually unifies sibling pages under one IA "cluster".
  *
  * Example clusters:
- * - 트레이딩: /app/virtual-trade, /app/game
+ * - 트레이딩: /app/virtual-trade
  * - 내 결과: /app/journal, /app/dashboard, /app/rankings
  *
  * Pages remain separate routes — this component just renders a tab strip and

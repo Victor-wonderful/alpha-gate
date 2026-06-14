@@ -52,10 +52,10 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/app", label: "대시보드", Icon: LayoutDashboard },
-  { href: "/app/market", label: "시장 현황", Icon: ChartCandlestick, matchPaths: ["/app/arbitrage"] },
+  { href: "/app/market", label: "시장 현황", Icon: ChartCandlestick },
   { href: "/app/analyze", label: "AI 분석", Icon: Sparkles },
   { href: "/app/trade", label: "거래 실행", Icon: ShieldCheck },
-  { href: "/app/virtual-trade", label: "가상 거래", Icon: Wallet, matchPaths: ["/app/game"] },
+  { href: "/app/virtual-trade", label: "가상 거래", Icon: Wallet },
   { href: "/app/journal", label: "거래 일지", Icon: NotebookPen },
   { href: "/app/dashboard", label: "성과 분석", Icon: ChartLine, matchPaths: ["/app/rankings"] },
 ];

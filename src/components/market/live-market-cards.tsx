@@ -637,14 +637,6 @@ export async function KimchiCard() {
             ))}
           </tbody>
         </table>
-        {rows.length > 5 ? (
-          <a
-            href="/app/arbitrage"
-            className="mt-1.5 block text-[10px] text-primary hover:underline"
-          >
-            전체 {rows.length}개 → 차익거래 페이지
-          </a>
-        ) : null}
       </div>
 
       <Insight title={ins.title}>{ins.body}</Insight>

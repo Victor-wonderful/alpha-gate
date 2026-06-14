@@ -578,7 +578,7 @@ export default async function HomePage() {
         {/* 빠른 메뉴 */}
         <div className="grid grid-cols-2 gap-2">
           <QuickLink href="/app/virtual-trade" label="가상 거래" />
-          <QuickLink href="/app/game" label="예측 게임" />
+          <QuickLink href="/app/analyze" label="AI 분석" />
           <QuickLink href="/app/journal" label="거래 일지" />
           <QuickLink href="/app/dashboard" label="성과 분석" />
         </div>

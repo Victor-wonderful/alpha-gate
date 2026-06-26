@@ -7,6 +7,7 @@ import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
+import { getT } from "@/lib/i18n/server";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function VirtualTradePage({
 }: {
   searchParams: Promise<{ symbol?: string }>;
 }) {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -99,7 +101,7 @@ export default async function VirtualTradePage({
           className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           <Settings className="h-3.5 w-3.5" />
-          지갑 관리
+          {t("paper.vt.walletManage")}
         </Link>
       </div>
     ),

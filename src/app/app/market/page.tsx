@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 import { AutoRefreshBar } from "@/components/market/auto-refresh-bar";
 import { CapitalFlowCard } from "@/components/market/capital-flow-card";
 import { CollapsibleSection } from "@/components/market/collapsible-section";
@@ -24,20 +25,19 @@ export const dynamic = "force-dynamic";
  * 최상단 "진입 환경 요약"이 결론을 먼저 주고, 상세는 접이식 섹션으로.
  * (시안: pencil-new.pen "시안 — 마켓")
  */
-export default function MarketPage() {
+export default async function MarketPage() {
+  const t = await getT();
   return (
     <div className="space-y-7">
       <header className="flex items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold leading-[1.15]">시장 현황</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            매매 전 1분 — 지금 진입해도 되는 환경인지 점검하세요.
-          </p>
+          <h1 className="text-3xl font-bold leading-[1.15]">{t("market.title")}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{t("market.subtitle")}</p>
         </div>
       </header>
 
       {/* 결론 먼저 — 진입 환경 요약 */}
-      <Suspense fallback={<BannerSkeleton />}>
+      <Suspense fallback={<BannerSkeleton label={t("market.checking")} />}>
         <MarketSummaryBanner />
       </Suspense>
 
@@ -45,47 +45,47 @@ export default function MarketPage() {
 
       <CollapsibleSection
         storageKey="sessions"
-        title="글로벌 세션"
-        desc="세계 주요 시장의 개장 상태 — 유동성 골든 타임에 거래하면 슬리피지가 줄어듭니다"
-        freq="실시간"
+        title={t("market.sec.sessionsTitle")}
+        desc={t("market.sec.sessionsDesc")}
+        freq={t("market.freq.realtime")}
       >
         <SessionsClock />
       </CollapsibleSection>
 
       <CollapsibleSection
         storageKey="snapshot"
-        title="오늘 시세 스냅샷"
-        desc="UTC 0시 기준 일간 변동 — 홈·후보 레이더와 같은 기준입니다"
-        freq="10분"
+        title={t("market.sec.snapshotTitle")}
+        desc={t("market.sec.snapshotDesc")}
+        freq={t("market.freq.min10")}
       >
-        <Suspense fallback={<MarketSkeleton height="lg" label="Snapshot · Today" />}>
+        <Suspense fallback={<MarketSkeleton height="lg" label="Snapshot · Today" loading={t("market.loadingData")} />}>
           <SnapshotToday />
         </Suspense>
       </CollapsibleSection>
 
       <CollapsibleSection
         storageKey="sentiment"
-        title="심리 · 수급 지표"
-        desc="투자 심리와 시장 구조 — 극단값(과욕·과공포)은 반전 신호일 수 있습니다"
-        freq="10–30분"
+        title={t("market.sec.sentimentTitle")}
+        desc={t("market.sec.sentimentDesc")}
+        freq={t("market.freq.min10_30")}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Suspense fallback={<MarketSkeleton label="Fear & Greed" />}>
+          <Suspense fallback={<MarketSkeleton label="Fear & Greed" loading={t("market.loadingData")} />}>
             <FearGreedCard />
           </Suspense>
-          <Suspense fallback={<MarketSkeleton label="BTC Dominance" />}>
+          <Suspense fallback={<MarketSkeleton label="BTC Dominance" loading={t("market.loadingData")} />}>
             <DominanceCard />
           </Suspense>
-          <Suspense fallback={<MarketSkeleton label="Alt Season Index" />}>
+          <Suspense fallback={<MarketSkeleton label="Alt Season Index" loading={t("market.loadingData")} />}>
             <AltSeasonCard />
           </Suspense>
-          <Suspense fallback={<MarketSkeleton label="김치 프리미엄" />}>
+          <Suspense fallback={<MarketSkeleton label={t("market.card.kimchi")} loading={t("market.loadingData")} />}>
             <KimchiCard />
           </Suspense>
-          <Suspense fallback={<MarketSkeleton label="Stablecoin Mcap" />}>
+          <Suspense fallback={<MarketSkeleton label="Stablecoin Mcap" loading={t("market.loadingData")} />}>
             <StablecapCard />
           </Suspense>
-          <Suspense fallback={<MarketSkeleton label="Long/Short · BTC" />}>
+          <Suspense fallback={<MarketSkeleton label="Long/Short · BTC" loading={t("market.loadingData")} />}>
             <LongShortCard />
           </Suspense>
         </div>
@@ -93,15 +93,15 @@ export default function MarketPage() {
 
       <CollapsibleSection
         storageKey="onchain"
-        title="온체인 · 자금 흐름"
-        desc="DeFi 예치금과 스테이블코인 이동 — 큰돈이 들어오는지 나가는지"
-        freq="1시간"
+        title={t("market.sec.onchainTitle")}
+        desc={t("market.sec.onchainDesc")}
+        freq={t("market.freq.hour1")}
       >
         <div className="grid gap-6 lg:grid-cols-2">
-          <Suspense fallback={<MarketSkeleton label="On-chain · DeFi TVL" height="md" />}>
+          <Suspense fallback={<MarketSkeleton label="On-chain · DeFi TVL" height="md" loading={t("market.loadingData")} />}>
             <DefiTvlCard />
           </Suspense>
-          <Suspense fallback={<MarketSkeleton label="Capital Flow · 7d" height="md" />}>
+          <Suspense fallback={<MarketSkeleton label="Capital Flow · 7d" height="md" loading={t("market.loadingData")} />}>
             <CapitalFlowCard />
           </Suspense>
         </div>
@@ -109,34 +109,33 @@ export default function MarketPage() {
 
       <CollapsibleSection
         storageKey="macro"
-        title="매크로 일정"
-        desc="금리·물가 이벤트 — 발표 전후 2시간은 신규 진입 비추천"
-        freq="일간"
+        title={t("market.sec.macroTitle")}
+        desc={t("market.sec.macroDesc")}
+        freq={t("market.freq.daily")}
       >
         <MacroCalendar />
       </CollapsibleSection>
 
-      <p className="text-xs text-muted-foreground">
-        새로고침 주기: Snapshot 10분 · 펀딩 5분 · 도미넌스·Alt Season·Stablecoin 10–30분 · F&amp;G·DeFi
-        TVL 1시간. 모든 수치는 참고용이며 매매 결정은 본인 책임입니다.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("market.footnote")}</p>
     </div>
   );
 }
 
-function BannerSkeleton() {
+function BannerSkeleton({ label }: { label: string }) {
   return (
     <div className="flex min-h-[88px] items-center rounded-2xl border border-border/60 bg-card/30 px-5 py-4 text-sm text-muted-foreground">
-      진입 환경 점검 중…
+      {label}
     </div>
   );
 }
 
 function MarketSkeleton({
   label,
+  loading,
   height = "sm",
 }: {
   label: string;
+  loading: string;
   height?: "sm" | "md" | "lg";
 }) {
   const h =
@@ -149,7 +148,7 @@ function MarketSkeleton({
       )}
     >
       <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-auto text-xs text-muted-foreground">데이터 로드 중…</p>
+      <p className="mt-auto text-xs text-muted-foreground">{loading}</p>
     </article>
   );
 }

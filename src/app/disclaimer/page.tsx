@@ -1,119 +1,93 @@
 import type { Metadata } from "next";
 import { LegalLayout } from "@/components/marketing/legal-layout";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "투자 면책 고지 — Alpha Gate",
-  description: "Alpha Gate는 투자 자문이 아닙니다. 본 면책 고지를 반드시 확인해주세요.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("legal.disclaimer.metaTitle"),
+    description: t("legal.disclaimer.metaDesc"),
+  };
+}
 
-export default function DisclaimerPage() {
+export default async function DisclaimerPage() {
+  const t = await getT();
   return (
     <LegalLayout
-      title="투자 면책 고지"
-      eyebrow="Investment Disclaimer"
-      effectiveDate="2026년 5월 20일"
+      title={t("legal.disclaimer.title")}
+      eyebrow={t("legal.disclaimer.eyebrow")}
+      effectiveDate={t("legal.disclaimer.effectiveDate")}
       currentHref="/disclaimer"
     >
-      <h2>요약</h2>
+      <h2>{t("legal.disclaimer.hSummary")}</h2>
       <p>
-        <strong>
-          Alpha Gate는 투자 자문 서비스가 아닙니다. 본 서비스가 제공하는 어떤 콘텐츠도 매매 권유, 종목 추천, 수익 보장으로
-          해석되어서는 안 됩니다.
-        </strong>{" "}
-        모든 매매 결정과 그 결과는 사용자 본인의 판단과 책임입니다.
+        <strong>{t("legal.disclaimer.summaryStrong")}</strong>{" "}
+        {t("legal.disclaimer.summaryRest")}
       </p>
 
-      <h2>1. 서비스의 성격</h2>
+      <h2>{t("legal.disclaimer.h1")}</h2>
+      <p>{t("legal.disclaimer.h1p")}</p>
+      <ul>
+        <li>{t("legal.disclaimer.h1li1")}</li>
+        <li>{t("legal.disclaimer.h1li2")}</li>
+        <li>{t("legal.disclaimer.h1li3")}</li>
+        <li>{t("legal.disclaimer.h1li4")}</li>
+      </ul>
+
+      <h2>{t("legal.disclaimer.h2")}</h2>
+      <ul>
+        <li>{t("legal.disclaimer.h2li1")}</li>
+        <li>{t("legal.disclaimer.h2li2")}</li>
+        <li>{t("legal.disclaimer.h2li3")}</li>
+        <li>{t("legal.disclaimer.h2li4")}</li>
+      </ul>
+
+      <h2>{t("legal.disclaimer.h3")}</h2>
+      <ul>
+        <li>{t("legal.disclaimer.h3li1")}</li>
+        <li>{t("legal.disclaimer.h3li2")}</li>
+        <li>{t("legal.disclaimer.h3li3")}</li>
+      </ul>
+
+      <h2>{t("legal.disclaimer.h4")}</h2>
+      <p>{t("legal.disclaimer.h4p1")}</p>
+      <p>{t("legal.disclaimer.h4p2")}</p>
+
+      <h2>{t("legal.disclaimer.h5")}</h2>
+      <ul>
+        <li>
+          <strong>{t("legal.disclaimer.h5li1Strong")}</strong>{t("legal.disclaimer.h5li1Rest")}
+        </li>
+        <li>{t("legal.disclaimer.h5li2")}</li>
+        <li>{t("legal.disclaimer.h5li3")}</li>
+        <li>{t("legal.disclaimer.h5li4")}</li>
+      </ul>
+
+      <h2>{t("legal.disclaimer.h6")}</h2>
       <p>
-        Alpha Gate는 사용자가 스스로 내린 매매 의사결정을 객관적 시장 데이터로 점검할 수 있도록 돕는 <strong>의사결정
-        지원 도구</strong>입니다. 다음 어디에도 해당하지 않습니다.
+        {t("legal.disclaimer.h6pPre")}<strong>{t("legal.disclaimer.h6pStrong")}</strong>{t("legal.disclaimer.h6pPost")}
       </p>
       <ul>
-        <li>자본시장법상 투자 자문업·금융투자업·일임매매업</li>
-        <li>유사 투자 자문업</li>
-        <li>자동매매 시스템 또는 알고리즘 트레이딩 시스템</li>
-        <li>수익 보장 서비스 또는 시그널 판매 서비스</li>
+        <li>{t("legal.disclaimer.h6li1")}</li>
+        <li>
+          {t("legal.disclaimer.h6li2Pre")}<strong>{t("legal.disclaimer.h6li2Strong")}</strong>{t("legal.disclaimer.h6li2Post")}
+        </li>
+        <li>{t("legal.disclaimer.h6li3")}</li>
+        <li>{t("legal.disclaimer.h6li4")}</li>
+        <li>{t("legal.disclaimer.h6li5")}</li>
       </ul>
 
-      <h2>2. AI 분석에 대한 한계</h2>
+      <h2>{t("legal.disclaimer.h7")}</h2>
       <ul>
-        <li>
-          AI는 과거 및 현재의 시장 데이터(가격, 호가, 체결, 펀딩비, OI 등)를 해석하지만, <strong>미래 가격을 예측하지
-          않습니다.</strong>
-        </li>
-        <li>AI가 제시하는 시나리오(A/B/C)는 발생 가능한 경우의 수일 뿐, 실제 발생을 보장하지 않습니다.</li>
-        <li>등급(A/B/C/D)은 사용자가 입력한 조건과 시장 데이터의 정합성을 평가하는 점수이며, 수익을 약속하는 지표가 아닙니다.</li>
-        <li>외부 데이터 소스(거래소 API 등)의 장애·지연·오류로 분석이 실제와 다를 수 있습니다.</li>
-      </ul>
-
-      <h2>3. 사용자의 책임</h2>
-      <ul>
-        <li>
-          본 서비스에서 얻은 정보를 토대로 한 모든 매매 결정은 <strong>사용자 본인의 자유 의사</strong>에 따른 것이며, 본인의
-          위험 부담 하에 이루어집니다.
-        </li>
-        <li>사용자는 본인의 재무 상태와 위험 허용 한도를 스스로 평가해야 합니다.</li>
-        <li>레버리지 거래는 원금의 100%를 초과하는 손실이 가능합니다. 본 서비스는 레버리지 사용을 권장하지 않습니다.</li>
-      </ul>
-
-      <h2>4. 손실에 대한 책임 제한</h2>
-      <p>
-        본 서비스의 콘텐츠를 신뢰하여 거래한 결과로 발생한 어떠한 직간접 손실(매매 손실, 기회 손실, 정신적 손해 등)에 대해서도
-        Alpha Gate 및 그 운영자는 책임을 부담하지 않습니다.
-      </p>
-      <p>
-        관련 법령에 의해 책임을 면제할 수 없는 경우에도, 손해배상 책임은 사용자가 직전 12개월간 서비스에 지불한 금액을 초과하지
-        않습니다.
-      </p>
-
-      <h2>5. 일반적 시장 위험 고지</h2>
-      <ul>
-        <li>
-          <strong>암호화폐 시장은 변동성이 매우 큽니다.</strong> 24시간 거래되며 단시간 내 큰 가격 변동이 발생할 수 있습니다.
-        </li>
-        <li>거래소 자체의 위험(파산, 해킹, 출금 중단 등)이 존재합니다.</li>
-        <li>규제 환경 변화로 거래가 제한되거나 자산 가치가 크게 변할 수 있습니다.</li>
-        <li>과거 수익률은 미래 수익률을 보장하지 않습니다.</li>
-      </ul>
-
-      <h2>6. 실거래 연동(Live Trading)에 관한 고지</h2>
-      <p>
-        Alpha Gate는 사용자가 자발적으로 등록한 거래소 API 키를 사용해 본인의 주문을 거래소에 전송하는
-        <strong> 주문 보조 도구</strong>를 제공합니다. 이는 다음을 의미합니다.
-      </p>
-      <ul>
-        <li>
-          모든 실거래 주문은 사용자가 화면에서 직접 "확인 — 실제 주문 전송" 버튼을 눌러야만 실행됩니다.
-          Alpha Gate가 사용자의 의사와 무관하게 자동으로 매매하지 않습니다.
-        </li>
-        <li>
-          Alpha Gate는 사용자의 API 키를 AES-256-GCM으로 암호화해 저장하며, <strong>출금 권한이 있는 키는 등록을 거부합니다.</strong>
-          그럼에도 키 유출 위험은 0이 될 수 없으며, 사용자는 API 키 발급 시 출금을 비활성화하고 IP 제한·정기 키 로테이션 등 보안 조치를 직접 수행할 책임이 있습니다.
-        </li>
-        <li>
-          거래소 API의 장애, 네트워크 지연, 부분 체결, 슬리피지, 강제 청산 등으로 인해 의도한 가격과 다른 결과가 발생할 수 있습니다.
-          이러한 손실에 대해 Alpha Gate는 책임을 지지 않습니다.
-        </li>
-        <li>
-          Alpha Gate는 안전장치(일일 누적 -2R 도달 시 차단, 거래당 노출 50% 한도, 동일 코인 중복 진입 차단 등)를 제공하나,
-          이는 보조 수단일 뿐 모든 손실을 막을 수 없습니다.
-        </li>
-        <li>
-          가상자산이용자보호법(2024.07.19 시행) 등 국내·외 규제 환경 변화로 본 실거래 연동 기능이 사전 통보 없이 제한·중단될 수 있습니다.
-        </li>
-      </ul>
-
-      <h2>7. 권고</h2>
-      <ul>
-        <li>본인이 감당할 수 있는 손실 범위 내에서만 거래하십시오.</li>
-        <li>매매 결정 전 본인의 분석을 우선하고, 본 서비스는 보조 도구로만 활용하십시오.</li>
-        <li>중요한 결정 전에는 자격 있는 재무 전문가의 자문을 받으시기 바랍니다.</li>
+        <li>{t("legal.disclaimer.h7li1")}</li>
+        <li>{t("legal.disclaimer.h7li2")}</li>
+        <li>{t("legal.disclaimer.h7li3")}</li>
       </ul>
 
       <hr />
 
       <p>
-        본 면책 고지에 대한 질문은 <a href="/contact">문의 페이지</a> 또는 hello@alphagate.app으로 보내주세요.
+        {t("legal.disclaimer.contactPre")}<a href="/contact">{t("legal.disclaimer.contactLink")}</a>{t("legal.disclaimer.contactPost")}
       </p>
     </LegalLayout>
   );

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Sparkles, Coins, RotateCcw, Ban, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useT } from "@/lib/i18n/context";
 import {
   grantAiCreditsAction,
   depositVusdtAction,
@@ -31,6 +32,7 @@ function ConfirmModal({
   onClose: () => void;
   pending: boolean;
 }) {
+  const t = useT();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -40,7 +42,7 @@ function ConfirmModal({
         <p className="mt-2 text-sm text-muted-foreground">{body}</p>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={pending}>
-            취소
+            {t("common.cancel")}
           </Button>
           <Button
             variant={destructive ? "destructive" : "default"}
@@ -48,7 +50,7 @@ function ConfirmModal({
             onClick={onConfirm}
             disabled={pending}
           >
-            {pending ? "처리 중…" : confirmLabel}
+            {pending ? t("admin.processing") : confirmLabel}
           </Button>
         </div>
       </div>
@@ -63,6 +65,7 @@ export function UserActions({
   userId: string;
   disabled: boolean;
 }) {
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [credits, setCredits] = useState("5");
   const [deposit, setDeposit] = useState("1000");
@@ -82,7 +85,7 @@ export function UserActions({
       {/* AI 크레딧 부여 */}
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex-1 min-w-[120px]">
-          <label className="mb-1 block text-xs text-muted-foreground">AI 크레딧 부여</label>
+          <label className="mb-1 block text-xs text-muted-foreground">{t("admin.grantCredits")}</label>
           <Input
             type="number"
             min={1}
@@ -93,18 +96,18 @@ export function UserActions({
         </div>
         <Button
           size="sm"
-          onClick={() => run(() => grantAiCreditsAction(userId, Number(credits)), "AI 크레딧을 부여했습니다.")}
+          onClick={() => run(() => grantAiCreditsAction(userId, Number(credits)), t("admin.grantCreditsDone"))}
           disabled={pending}
         >
           <Sparkles className="h-4 w-4" />
-          부여
+          {t("admin.grant")}
         </Button>
       </div>
 
       {/* vUSDT 입금 */}
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex-1 min-w-[120px]">
-          <label className="mb-1 block text-xs text-muted-foreground">vUSDT 입금</label>
+          <label className="mb-1 block text-xs text-muted-foreground">{t("admin.depositVusdt")}</label>
           <Input
             type="number"
             min={1}
@@ -115,11 +118,11 @@ export function UserActions({
         </div>
         <Button
           size="sm"
-          onClick={() => run(() => depositVusdtAction(userId, Number(deposit)), "vUSDT를 입금했습니다.")}
+          onClick={() => run(() => depositVusdtAction(userId, Number(deposit)), t("admin.depositDone"))}
           disabled={pending}
         >
           <Coins className="h-4 w-4" />
-          입금
+          {t("admin.deposit")}
         </Button>
       </div>
 
@@ -127,7 +130,7 @@ export function UserActions({
       <div className="flex flex-wrap gap-2 border-t border-border pt-4">
         <Button variant="outline" size="sm" onClick={() => setModal("reset")} disabled={pending}>
           <RotateCcw className="h-4 w-4" />
-          vUSDT 초기화
+          {t("admin.resetVusdt")}
         </Button>
         <Button
           variant={disabled ? "default" : "destructive"}
@@ -136,36 +139,32 @@ export function UserActions({
           disabled={pending}
         >
           {disabled ? <ShieldCheck className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
-          {disabled ? "계정 활성화" : "계정 비활성화"}
+          {disabled ? t("admin.enableAccount") : t("admin.disableAccount")}
         </Button>
       </div>
 
       <ConfirmModal
         open={modal === "reset"}
-        title="vUSDT 잔액 초기화"
-        body="이 회원의 vUSDT 잔액을 기본값($10,000)으로 되돌립니다. 진행 중 포지션의 마진은 해제됩니다. 되돌릴 수 없습니다."
-        confirmLabel="초기화"
+        title={t("admin.resetModalTitle")}
+        body={t("admin.resetModalBody")}
+        confirmLabel={t("admin.reset")}
         destructive
         pending={pending}
         onClose={() => setModal(null)}
-        onConfirm={() => run(() => resetVusdtAction(userId), "vUSDT를 초기화했습니다.")}
+        onConfirm={() => run(() => resetVusdtAction(userId), t("admin.resetDone"))}
       />
       <ConfirmModal
         open={modal === "toggle"}
-        title={disabled ? "계정 활성화" : "계정 비활성화"}
-        body={
-          disabled
-            ? "이 회원이 다시 앱에 접근할 수 있게 됩니다."
-            : "이 회원은 앱 접근이 차단되고 로그인 시 비활성 안내를 받습니다."
-        }
-        confirmLabel={disabled ? "활성화" : "비활성화"}
+        title={disabled ? t("admin.enableAccount") : t("admin.disableAccount")}
+        body={disabled ? t("admin.enableModalBody") : t("admin.disableModalBody")}
+        confirmLabel={disabled ? t("admin.enable") : t("admin.disable")}
         destructive={!disabled}
         pending={pending}
         onClose={() => setModal(null)}
         onConfirm={() =>
           run(
             () => toggleDisabledAction(userId, !disabled),
-            disabled ? "계정을 활성화했습니다." : "계정을 비활성화했습니다.",
+            disabled ? t("admin.enableDone") : t("admin.disableDone"),
           )
         }
       />

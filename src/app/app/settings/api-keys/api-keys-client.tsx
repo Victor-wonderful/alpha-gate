@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 import {
   registerKeyAction,
   reverifyKeyAction,
@@ -29,6 +30,7 @@ type SavedKey = {
 };
 
 export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
+  const t = useT();
   const [exchange, setExchange] = useState<"binance" | "upbit">("binance");
   const [nickname, setNickname] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -43,7 +45,7 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
     if (exchange !== "binance") {
       setVerifyResult({
         ok: false,
-        error: "Upbit 연동은 다음 단계에서 추가됩니다. 현재는 Binance만 검증 가능합니다.",
+        error: t("settings.apiKeys.upbitNotYet"),
       });
       return;
     }
@@ -58,13 +60,13 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
     startTransition(async () => {
       const r = await registerKeyAction({ exchange, nickname, apiKey, apiSecret });
       if (r.ok) {
-        setSubmitMsg({ tone: "ok", text: "키가 등록되었습니다. 페이지 새로고침으로 목록을 확인하세요." });
+        setSubmitMsg({ tone: "ok", text: t("settings.apiKeys.registeredMsg") });
         setApiKey("");
         setApiSecret("");
         setNickname("");
         setVerifyResult(null);
       } else {
-        setSubmitMsg({ tone: "err", text: r.error ?? "등록 실패" });
+        setSubmitMsg({ tone: "err", text: r.error ?? t("settings.apiKeys.registerFailed") });
       }
     });
   }
@@ -76,15 +78,14 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
         <CardContent className="flex gap-3 p-4 text-sm">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
           <div className="space-y-1 text-amber-100/90">
-            <div className="font-semibold">키 발급 시 필수 설정</div>
+            <div className="font-semibold">{t("settings.apiKeys.warn.title")}</div>
             <ul className="ml-4 list-disc space-y-0.5 text-amber-100/70">
-              <li><b>거래만 활성화</b> (Enable Futures / Spot Trading)</li>
-              <li><b>출금 절대 비활성</b> (Enable Withdrawals = OFF) — 출금 켠 키는 등록 차단됨</li>
-              <li>가능하면 <b>IP 화이트리스트</b> 설정 (Vercel 서울 리전)</li>
+              <li><b>{t("settings.apiKeys.warn.tradeOnly")}</b> (Enable Futures / Spot Trading)</li>
+              <li><b>{t("settings.apiKeys.warn.noWithdraw")}</b> {t("settings.apiKeys.warn.noWithdrawNote")}</li>
+              <li>{t("settings.apiKeys.warn.ipWhitelistPre")} <b>{t("settings.apiKeys.warn.ipWhitelist")}</b> {t("settings.apiKeys.warn.ipWhitelistPost")}</li>
             </ul>
             <div className="pt-1 text-xs">
-              Alpha Gate는 출금 권한이 있는 키를 절대 받지 않습니다. 모든 키는 AES-256-GCM으로
-              암호화되어 저장되며, 등록 후 평문은 다시 볼 수 없습니다.
+              {t("settings.apiKeys.warn.encrypted")}
             </div>
           </div>
         </CardContent>
@@ -95,13 +96,13 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <KeyRound className="h-4 w-4" />
-            등록된 키 ({initial.length})
+            {t("settings.apiKeys.savedKeys", { n: initial.length })}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {initial.length === 0 ? (
             <div className="px-5 pb-5 text-sm text-muted-foreground">
-              아직 등록된 키가 없습니다. 아래 폼에서 추가하세요.
+              {t("settings.apiKeys.empty")}
             </div>
           ) : (
             <ul className="divide-y divide-border/60">
@@ -116,12 +117,12 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
       {/* Add key form */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">새 키 등록</CardTitle>
+          <CardTitle className="text-base">{t("settings.apiKeys.newKey")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label className="text-xs text-muted-foreground">거래소</Label>
+              <Label className="text-xs text-muted-foreground">{t("settings.apiKeys.exchange")}</Label>
               <div className="mt-1.5 flex gap-2">
                 {(["binance", "upbit"] as const).map((ex) => (
                   <button
@@ -135,29 +136,29 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
                         : "border-border bg-background hover:border-border/60",
                     )}
                   >
-                    {ex === "binance" ? "Binance Futures" : "Upbit (현물)"}
+                    {ex === "binance" ? t("settings.apiKeys.binanceFutures") : t("settings.apiKeys.upbitSpot")}
                   </button>
                 ))}
               </div>
               {exchange === "upbit" ? (
                 <p className="mt-1.5 text-[11px] text-amber-400">
-                  Upbit는 다음 단계에서 활성화됩니다.
+                  {t("settings.apiKeys.upbitComingSoon")}
                 </p>
               ) : null}
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">별칭 (선택)</Label>
+              <Label className="text-xs text-muted-foreground">{t("settings.apiKeys.nickname")}</Label>
               <Input
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder="예: 메인, 테스트"
+                placeholder={t("settings.apiKeys.nicknamePlaceholder")}
                 className="mt-1.5"
               />
             </div>
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground">API 키 (Public Key)</Label>
+            <Label className="text-xs text-muted-foreground">{t("settings.apiKeys.publicKey")}</Label>
             <Input
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
@@ -169,12 +170,12 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground">시크릿 키 (Secret Key)</Label>
+            <Label className="text-xs text-muted-foreground">{t("settings.apiKeys.secretKey")}</Label>
             <Input
               value={apiSecret}
               onChange={(e) => setApiSecret(e.target.value)}
               type="password"
-              placeholder="시크릿은 다시 볼 수 없습니다. 한 번에 정확히 입력하세요."
+              placeholder={t("settings.apiKeys.secretPlaceholder")}
               className="mt-1.5 font-mono"
               autoComplete="off"
               spellCheck={false}
@@ -189,14 +190,14 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
               disabled={pending || !apiKey || !apiSecret || exchange !== "binance"}
             >
               <ShieldCheck className="mr-1.5 h-4 w-4" />
-              검증만
+              {t("settings.apiKeys.verifyOnly")}
             </Button>
             <Button
               type="button"
               onClick={handleSubmit}
               disabled={pending || !apiKey || !apiSecret || exchange !== "binance"}
             >
-              {pending ? "처리 중..." : "검증 + 등록"}
+              {pending ? t("settings.apiKeys.processing") : t("settings.apiKeys.verifyAndRegister")}
             </Button>
           </div>
 
@@ -221,12 +222,13 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
 }
 
 function VerifyResultCard({ result }: { result: RegisterKeyResult }) {
+  const t = useT();
   if (!result.ok) {
     return (
       <div className="rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-sm">
         <div className="flex items-center gap-1.5 font-semibold text-grade-d">
           <ShieldOff className="h-4 w-4" />
-          검증 실패
+          {t("settings.apiKeys.verifyFailed")}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{result.error}</p>
       </div>
@@ -237,19 +239,19 @@ function VerifyResultCard({ result }: { result: RegisterKeyResult }) {
     <div className="rounded-md border border-grade-a/40 bg-grade-a/10 p-3 text-sm">
       <div className="flex items-center gap-1.5 font-semibold text-grade-a">
         <Check className="h-4 w-4" />
-        키 정상 — 잔액 ${formatNumber(result.balance ?? 0)} USDT
+        {t("settings.apiKeys.keyOk", { balance: formatNumber(result.balance ?? 0) })}
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <Badge className="border border-grade-a/40 bg-grade-a/10 text-grade-a">
-          거래 권한 OK
+          {t("settings.apiKeys.tradePermOk")}
         </Badge>
         {canWithdraw ? (
           <Badge className="border border-grade-d/40 bg-grade-d/10 text-grade-d">
-            ⚠ 출금 권한 있음 (등록 거부됨)
+            {t("settings.apiKeys.withdrawOn")}
           </Badge>
         ) : (
           <Badge className="border border-grade-a/40 bg-grade-a/10 text-grade-a">
-            출금 권한 없음 (안전)
+            {t("settings.apiKeys.withdrawOff")}
           </Badge>
         )}
       </div>
@@ -258,6 +260,7 @@ function VerifyResultCard({ result }: { result: RegisterKeyResult }) {
 }
 
 function SavedKeyRow({ keyRow: k }: { keyRow: SavedKey }) {
+  const t = useT();
   const [busy, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -265,15 +268,15 @@ function SavedKeyRow({ keyRow: k }: { keyRow: SavedKey }) {
     setMsg(null);
     startTransition(async () => {
       const r = await reverifyKeyAction(k.id);
-      setMsg(r.ok ? "재검증 OK" : `재검증 실패: ${r.error}`);
+      setMsg(r.ok ? t("settings.apiKeys.reverifyOk") : t("settings.apiKeys.reverifyFailed", { error: r.error ?? "" }));
     });
   }
 
   function remove() {
-    if (!confirm(`'${k.nickname ?? k.id}' 키를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t("settings.apiKeys.deleteConfirm", { name: k.nickname ?? k.id }))) return;
     startTransition(async () => {
       const r = await deleteKeyAction(k.id);
-      if (!r.ok) setMsg(`삭제 실패: ${r.error}`);
+      if (!r.ok) setMsg(t("settings.apiKeys.deleteFailed", { error: r.error ?? "" }));
     });
   }
 
@@ -283,7 +286,7 @@ function SavedKeyRow({ keyRow: k }: { keyRow: SavedKey }) {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-semibold">{k.nickname ?? "(이름 없음)"}</span>
+            <span className="font-semibold">{k.nickname ?? t("settings.apiKeys.noName")}</span>
             <Badge className="border border-border bg-background/60 text-[10px] uppercase">
               {k.exchange}
             </Badge>
@@ -295,14 +298,14 @@ function SavedKeyRow({ keyRow: k }: { keyRow: SavedKey }) {
                   : "border-grade-d/40 bg-grade-d/10 text-grade-d",
               )}
             >
-              {isValid ? "검증됨" : k.verification_status}
+              {isValid ? t("settings.apiKeys.verified") : k.verification_status}
             </Badge>
           </div>
           <div className="mt-0.5 font-mono text-xs text-muted-foreground">
             {k.api_key_masked} ·{" "}
             {k.last_verified_at
               ? new Date(k.last_verified_at).toLocaleString("ko-KR")
-              : "검증 안 됨"}
+              : t("settings.apiKeys.notVerified")}
           </div>
           {k.verification_error ? (
             <div className="mt-0.5 text-[11px] text-grade-d">{k.verification_error}</div>

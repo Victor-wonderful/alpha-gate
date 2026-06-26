@@ -39,6 +39,7 @@ import type { AnalysisReport } from "@/lib/analysis/synthesize";
 import { recommendTradeParams } from "@/lib/recommend";
 import { monteCarloSim, STYLE_BAR_LIMITS, type MonteCarloResult } from "@/lib/simulation/monte-carlo";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 const ENTRY_ACCENT = "border-primary/40 focus-within:border-primary";
 const STOP_ACCENT = "border-grade-d/40 focus-within:border-grade-d";
@@ -145,6 +146,7 @@ function TradeFormInner({
   apiKeys?: ApiKeyOption[];
   paperWallet?: PaperWalletSummary;
 }) {
+  const t = useT();
   const router = useRouter();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
@@ -376,13 +378,13 @@ function TradeFormInner({
   async function registerAlert() {
     const row = scenarioOutcomeRef.current;
     if (!row) {
-      toast.error("이 시나리오는 알림 등록을 지원하지 않습니다 (분석이 저장되지 않았거나 관망 시나리오).", {
+      toast.error(t("trade.form.alertUnsupported"), {
         duration: 7000,
       });
       return;
     }
     if (alertRegistered) {
-      toast("이미 알림이 등록돼 있습니다. 가격 도달 시 텔레그램으로 알려드려요.", { icon: "🔔" });
+      toast(t("trade.form.alertAlready"), { icon: "🔔" });
       return;
     }
     setAlertPending(true);
@@ -394,7 +396,7 @@ function TradeFormInner({
     }
     scenarioOutcomeRef.current = { ...row, watch: true };
     setAlertRegistered(true);
-    toast.success("알림 등록 완료 — 진입가·손절·목표 도달 시 텔레그램으로 알려드립니다.", { duration: 6000 });
+    toast.success(t("trade.form.alertRegistered"), { duration: 6000 });
   }
   useEffect(() => {
     // Default to first key if nothing selected after keys load.
@@ -453,7 +455,7 @@ function TradeFormInner({
 
   function save(gradeOverride = false) {
     if (!sizing.valid) {
-      toast.error("입력을 확인하세요. 포지션 사이징이 유효하지 않습니다.");
+      toast.error(t("trade.form.toastSizingInvalidCheck"));
       return;
     }
     // D 등급은 모달 통과 없이는 진행 불가
@@ -462,7 +464,7 @@ function TradeFormInner({
       return;
     }
     if (isBacktestMode && mode === "live") {
-      toast.error("백테스트 거래는 실거래 모드로 저장할 수 없습니다. 가상 모드로 전환되어 자동 시뮬됩니다.");
+      toast.error(t("trade.form.toastBacktestNoLive"));
       return;
     }
     if (mode === "live") {
@@ -492,18 +494,18 @@ function TradeFormInner({
         return;
       }
       if (backtestAt) {
-        toast.success("백테스트 거래 저장 — 자동 시뮬 결과가 저널에 기록됐습니다.", { duration: 6000 });
+        toast.success(t("trade.form.toastBacktestSaved"), { duration: 6000 });
         router.push(`/app/journal?view=trades`);
       } else if (res.orderType === "limit" || res.orderType === "stop") {
         toast.success(
           res.orderType === "stop"
-            ? "역지정가 주문이 등록됐습니다. 트리거 돌파 시 자동 체결됩니다."
-            : "지정가 주문이 등록됐습니다. 가격 도달 시 자동 체결됩니다.",
+            ? t("trade.form.toastStopRegistered")
+            : t("trade.form.toastLimitRegistered"),
           { duration: 6000 },
         );
         router.push(`/app/journal`);
       } else {
-        toast.success("가상 트레이딩에 진입했습니다.");
+        toast.success(t("trade.form.toastPaperEntered"));
         router.push(`/app/virtual-trade`);
       }
     });
@@ -511,16 +513,16 @@ function TradeFormInner({
 
   function executeLiveTrade() {
     if (!sizing.valid) {
-      toast.error("포지션 사이징이 유효하지 않습니다.");
+      toast.error(t("trade.form.toastSizingInvalid"));
       return;
     }
     if (!selectedKeyId) {
-      toast.error("실거래용 API 키가 선택되지 않았습니다.");
+      toast.error(t("trade.form.toastNoApiKey"));
       return;
     }
     setShowLiveConfirm(false);
     startTransition(async () => {
-      toast.loading("실거래 주문 전송 중...", { id: "live-trade" });
+      toast.loading(t("trade.form.toastLiveSending"), { id: "live-trade" });
       const res = await placeLiveTradeAction({
         input,
         grade,
@@ -531,7 +533,7 @@ function TradeFormInner({
       });
       toast.dismiss("live-trade");
       if (!res.ok) {
-        toast.error(res.error ?? "실거래 실패", { duration: 10_000 });
+        toast.error(res.error ?? t("trade.form.toastLiveFailed"), { duration: 10_000 });
         if (res.tradeId) {
           // Still navigate so user can inspect the failed trade row.
           router.push(`/app/journal/${res.tradeId}`);
@@ -539,7 +541,7 @@ function TradeFormInner({
         return;
       }
       toast.success(
-        `실거래 진입 완료. 주문 ${res.orders?.length ?? 0}건 등록됨.`,
+        t("trade.form.toastLiveEntered", { n: res.orders?.length ?? 0 }),
         { duration: 6_000 },
       );
       if (res.tradeId) router.push(`/app/journal/${res.tradeId}`);
@@ -604,7 +606,7 @@ function TradeFormInner({
     setEntry(formatPriceForInput(currentPrice));
     // 손절/목표는 그대로 유지 (구조 기반 레벨 보존)
     setOrderType("market");
-    toast.success("시장가로 전환했습니다. 손절·목표는 유지, 손익비는 현재가 기준으로 재계산됩니다.", { duration: 5000 });
+    toast.success(t("trade.form.toastSwitchedToMarket"), { duration: 5000 });
   }
 
   // 시장가 모드: 현재가 도착 시 진입가를 현재가로 맞추고, 손절/목표도 같은 delta로
@@ -662,7 +664,7 @@ function TradeFormInner({
       : isLongDir
         ? cp >= entryNumV
         : cp <= entryNumV);
-  const orderKindLabel = orderType === "stop" ? "역지정가" : "지정가";
+  const orderKindLabel = orderType === "stop" ? t("trade.form.stopOrder") : t("trade.form.limitOrder");
   // 예약 주문 UX: 사용자에겐 "지금 바로 / 예약 주문" 2택만 노출.
   // 내부 주문유형(limit=되돌림 대기 / stop=돌파 추격)은 예약가 vs 현재가 방향으로 실시간 자동 판정.
   // - 롱: 예약가 ≤ 현재가 → 지정가(내려오면 체결) / 예약가 > 현재가 → 역지정가(돌파 체결)
@@ -694,11 +696,11 @@ function TradeFormInner({
   const crossedDirWord =
     orderType === "stop"
       ? isLongDir
-        ? "위로"
-        : "아래로"
+        ? t("trade.form.dirUpward")
+        : t("trade.form.dirDownward")
       : isLongDir
-        ? "아래로"
-        : "위로";
+        ? t("trade.form.dirDownward")
+        : t("trade.form.dirUpward");
   // 현재가로 진입했을 때(손절·목표 유지)의 손익비.
   const mktRisk = cp > 0 && stopNumV > 0 ? Math.abs(cp - stopNumV) : 0;
   const mktReward = cp > 0 && targetNumV > 0 ? Math.abs(targetNumV - cp) : 0;
@@ -723,7 +725,7 @@ function TradeFormInner({
       ? entryNumV * (1 - targetDistPct / 100)
       : entryNumV * (1 + targetDistPct / 100);
     setStop(formatPriceForInput(newStop));
-    toast.success(`손절을 ${targetDistPct.toFixed(2)}%로 넓혔습니다 (수수료 안전선).`);
+    toast.success(t("trade.form.toastStopWidened", { pct: targetDistPct.toFixed(2) }));
   }
 
   // 리스크%에서 도출되는 사이즈 (read-only 미리보기)
@@ -769,10 +771,11 @@ function TradeFormInner({
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">거래 실행는 AI 분석 후에 사용합니다</h1>
+              <h1 className="text-xl font-bold tracking-tight">{t("trade.form.emptyTitle")}</h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                이 페이지는 AI가 만든 시나리오의 등급·사이징·시장 구조를 확인하고 가상 트레이딩에 진입하는 화면입니다.
-                직접 진입하려면 <span className="text-foreground">가상 트레이딩</span>의 주문 패널을 사용하세요.
+                {t("trade.form.emptyDescPre")}
+                <span className="text-foreground">{t("trade.form.virtualTrade")}</span>
+                {t("trade.form.emptyDescPost")}
               </p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -781,13 +784,13 @@ function TradeFormInner({
                 className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 <Sparkles className="h-4 w-4" />
-                AI 분석으로
+                {t("trade.form.toAnalysis")}
               </Link>
               <Link
                 href="/app/virtual-trade"
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-background/40 px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/40"
               >
-                가상 트레이딩으로 →
+                {t("trade.form.toVirtualTrade")}
               </Link>
             </div>
           </CardContent>
@@ -802,14 +805,14 @@ function TradeFormInner({
   const passCount = grade.reasons.filter((r) => r.points > 0).length;
   const warnReasons = grade.reasons.filter((r) => r.points < 0);
   const warnCount = warnReasons.length;
-  const warnSummary = warnReasons.map((r) => r.label).slice(0, 3).join(" · ");
+  const warnSummary = warnReasons.map((r) => t(`grade.reason.${r.code}`, r.params)).slice(0, 3).join(" · ");
   const effRR =
     Math.abs(stopPct) > 0 && Math.abs(targetPct) > 0
       ? (Math.abs(targetPct) - ROUND_TRIP_COST_PCT) / (Math.abs(stopPct) + ROUND_TRIP_COST_PCT)
       : 0;
   const coinName = symbol.replace(/USDT$/, "");
   const reqMargin = sizing.valid && leverage > 0 ? sizing.positionSize / leverage : 0;
-  const dirLabel = direction === "long" ? "롱" : "숏";
+  const dirLabel = direction === "long" ? t("common.long") : t("common.short");
   const paperInsufficient =
     mode === "paper" && paperWallet != null && sizing.valid && reqMargin > paperWallet.available;
 
@@ -820,10 +823,10 @@ function TradeFormInner({
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-base">⏮</span>
-            <span className="font-semibold text-amber-300">백테스트 거래</span>
+            <span className="font-semibold text-amber-300">{t("trade.form.backtestTrade")}</span>
             <span className="text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">
-              기준 시각 <span className="font-mono text-foreground">{backtestAtKst} KST</span> · 저장 시 walk-forward 시뮬 자동 실행 → 결과가 저널에 백테스트 거래로 기록됩니다 (실거래·가상지갑 미차감).
+              {t("trade.form.backtestBannerPre")} <span className="font-mono text-foreground">{backtestAtKst} KST</span> {t("trade.form.backtestBannerPost")}
             </span>
           </div>
         </div>
@@ -831,9 +834,9 @@ function TradeFormInner({
 
       {/* 페이지 타이틀 */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">거래 실행</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("trade.form.pageTitle")}</h1>
         <p className="text-sm text-muted-foreground">
-          진입 전 마지막 관문 — 셋업·자금·시장 컨텍스트를 한 번에 평가합니다
+          {t("trade.form.pageSubtitle")}
         </p>
       </div>
 
@@ -850,29 +853,29 @@ function TradeFormInner({
           </div>
           <div className="min-w-0">
             <div className={cn("text-sm font-bold leading-tight", gc.text)}>
-              {GRADE_VERDICT[g]} — {grade.score}점
+              {t(`grade.${g}.label`)} {t("trade.form.scorePoints", { n: grade.score })}
               {warnCount > 0 ? (
                 <span className="font-medium text-muted-foreground">
-                  {" · "}경고 {warnCount}개를 해결하면 상향 가능
+                  {" · "}{t("trade.form.warnUpgradeHint", { n: warnCount })}
                 </span>
               ) : null}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-muted-foreground tabular-nums">
               <span className="font-semibold text-foreground">{symbol}</span>
               <span>· {dirLabel} {leverage}x</span>
-              <span>· 진입 {formatPriceForInput(entryNumV) || "—"}</span>
-              <span className="text-grade-a">· 목표 {formatPriceForInput(targetNumV) || "—"}</span>
-              <span className="text-grade-d">· 손절 {formatPriceForInput(stopNumV) || "—"}</span>
-              <span>· 실효 손익비 <span className={cn("font-semibold", effRR >= 1.5 ? "text-grade-a" : "text-foreground")}>{effRR > 0 ? `${effRR.toFixed(2)}R` : "—"}</span></span>
+              <span>· {t("trade.form.entry")} {formatPriceForInput(entryNumV) || "—"}</span>
+              <span className="text-grade-a">· {t("trade.form.target")} {formatPriceForInput(targetNumV) || "—"}</span>
+              <span className="text-grade-d">· {t("trade.form.stop")} {formatPriceForInput(stopNumV) || "—"}</span>
+              <span>· {t("trade.form.effRR")} <span className={cn("font-semibold", effRR >= 1.5 ? "text-grade-a" : "text-foreground")}>{effRR > 0 ? `${effRR.toFixed(2)}R` : "—"}</span></span>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <span className="flex items-center gap-1 rounded-md border border-grade-a/30 bg-grade-a/10 px-2 py-1 text-[11px] font-semibold text-grade-a">
-              ✓ 자동 점검 통과 {passCount}
+              {t("trade.form.autoCheckPass", { n: passCount })}
             </span>
             {warnCount > 0 ? (
               <span className="flex items-center gap-1 rounded-md border border-grade-c/30 bg-grade-c/10 px-2 py-1 text-[11px] font-semibold text-grade-c">
-                ⚠ 경고 {warnCount}
+                {t("trade.form.warnCount", { n: warnCount })}
               </span>
             ) : null}
           </div>
@@ -884,10 +887,10 @@ function TradeFormInner({
         {/* ── LEFT: 주문 정보 ── */}
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-border bg-background/40 px-5 py-3">
-            <h2 className="text-sm font-bold">주문 정보</h2>
+            <h2 className="text-sm font-bold">{t("trade.form.orderInfo")}</h2>
             {activeScenario ? (
               <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                AI 시나리오에서 불러옴
+                {t("trade.form.loadedFromScenario")}
               </span>
             ) : null}
           </div>
@@ -895,7 +898,7 @@ function TradeFormInner({
             {/* 심볼 + 방향 + 주문 방식 + 레버리지 */}
             <div className="flex flex-wrap items-end gap-4">
               <div className="space-y-1">
-                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">심볼 / 방향</Label>
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("trade.form.symbolDirection")}</Label>
                 <div className="flex items-center gap-1.5">
                   <Select
                     value={symbol}
@@ -914,7 +917,7 @@ function TradeFormInner({
                         "rounded px-2.5 py-1.5 text-xs font-bold transition-colors",
                         direction === "long" ? "bg-grade-a text-white" : "text-muted-foreground hover:text-grade-a",
                       )}
-                    >롱</button>
+                    >{t("common.long")}</button>
                     <button
                       type="button"
                       onClick={() => setDirection("short")}
@@ -922,16 +925,16 @@ function TradeFormInner({
                         "rounded px-2.5 py-1.5 text-xs font-bold transition-colors",
                         direction === "short" ? "bg-grade-d text-white" : "text-muted-foreground hover:text-grade-d",
                       )}
-                    >숏</button>
+                    >{t("common.short")}</button>
                   </div>
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">주문 방식</Label>
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("trade.form.orderMethod")}</Label>
                 <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/40 p-0.5">
                   {([
-                    { key: "now", label: "지금 바로", active: !isScheduled },
-                    { key: "scheduled", label: "예약 주문 — 자동", active: isScheduled },
+                    { key: "now", label: t("trade.form.orderNow"), active: !isScheduled },
+                    { key: "scheduled", label: t("trade.form.orderScheduled"), active: isScheduled },
                   ] as const).map((opt) => (
                     <button
                       key={opt.key}
@@ -946,7 +949,7 @@ function TradeFormInner({
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">레버리지</Label>
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("trade.form.leverage")}</Label>
                 <div className="flex items-center gap-1">
                   <Input
                     type="number"
@@ -966,11 +969,13 @@ function TradeFormInner({
               <div className="flex gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
                 <span className="text-primary">ℹ</span>
                 <span>
-                  예약 주문은 고른 방식대로 자동돼요 — 진입가 <span className="font-mono text-foreground">{formatPriceForInput(entryNumV)}</span>가 현재가 <span className="font-mono text-foreground">{formatPriceForInput(currentPrice)}</span>
+                  {t("trade.form.scheduledInfoPre")} <span className="font-mono text-foreground">{formatPriceForInput(entryNumV)}</span> {t("trade.form.scheduledInfoMid")} <span className="font-mono text-foreground">{formatPriceForInput(currentPrice)}</span>
+                  {" "}
                   {scheduledKind === "limit"
-                    ? `보다 ${isLongDir ? "낮아 “가격이 내려오면 체결”" : "높아 “가격이 올라오면 체결”"}`
-                    : `대비 ${isLongDir ? "위로 돌파하면 체결" : "아래로 이탈하면 체결"}`}
-                  로 걸어둡니다. 불리한 방향이면 돌파 추격으로 자동 전환됩니다.
+                    ? isLongDir ? t("trade.form.scheduledLimitLong") : t("trade.form.scheduledLimitShort")
+                    : isLongDir ? t("trade.form.scheduledStopLong") : t("trade.form.scheduledStopShort")}
+                  {" "}
+                  {t("trade.form.scheduledInfoPost")}
                 </span>
               </div>
             ) : null}
@@ -979,7 +984,7 @@ function TradeFormInner({
             <div className="grid grid-cols-3 gap-2">
               <div className={cn("rounded-md border bg-background/40 p-3", ENTRY_ACCENT)}>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {isScheduled ? "예약가" : "진입가 (시장가)"}
+                  {isScheduled ? t("trade.form.scheduledPrice") : t("trade.form.entryMarket")}
                 </div>
                 {isScheduled ? (
                   <input
@@ -999,7 +1004,7 @@ function TradeFormInner({
               </div>
               <div className={cn("rounded-md border bg-background/40 p-3", STOP_ACCENT)}>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">손절가</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("trade.form.stopPrice")}</span>
                   <span className="font-mono text-[10px] font-semibold text-grade-d">
                     {entryNumV > 0 && stopNumV > 0 ? `${stopPct.toFixed(1)}%` : ""}
                   </span>
@@ -1016,7 +1021,7 @@ function TradeFormInner({
               </div>
               <div className={cn("rounded-md border bg-background/40 p-3", TARGET_ACCENT)}>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">목표가</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("trade.form.targetPrice")}</span>
                   <span className="font-mono text-[10px] font-semibold text-grade-a">
                     {entryNumV > 0 && targetNumV > 0 ? `${targetPct >= 0 ? "+" : ""}${targetPct.toFixed(1)}%` : ""}
                   </span>
@@ -1037,10 +1042,10 @@ function TradeFormInner({
             {feeUnsafe ? (
               <div className="flex items-center justify-between gap-2 rounded-md border border-grade-d/40 bg-grade-d/10 px-3 py-2 text-[11px]">
                 <span className="text-grade-d">
-                  손절폭({absStopPct.toFixed(2)}%)이 수수료 안전선({MIN_STOP_PCT_VS_FEES}%) 미만 — 손절 적중 시 약 {realizedRIfStopped.toFixed(1)}R 손실(계획 1R).
+                  {t("trade.form.feeUnsafeWarn", { stop: absStopPct.toFixed(2), min: MIN_STOP_PCT_VS_FEES, r: realizedRIfStopped.toFixed(1) })}
                 </span>
                 <button type="button" onClick={widenStopToFeeSafe} className="flex-none rounded border border-grade-d/50 bg-grade-d/20 px-2 py-1 font-semibold text-foreground hover:bg-grade-d/30">
-                  손절 넓히기
+                  {t("trade.form.widenStop")}
                 </button>
               </div>
             ) : null}
@@ -1048,7 +1053,7 @@ function TradeFormInner({
             {/* 사이즈 바 + 주문 금액 + 청산가 */}
             <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">사이즈 — 리스크 예산 대비</span>
+                <span className="text-muted-foreground">{t("trade.form.sizeVsBudget")}</span>
                 <span className="font-mono font-semibold text-foreground">{sizing.valid ? "100%" : "—"}</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/40">
@@ -1056,14 +1061,14 @@ function TradeFormInner({
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">주문 금액</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("trade.form.orderAmount")}</div>
                   <div className="font-mono text-sm font-bold tabular-nums">
                     {sizing.valid ? `${formatNumber(sizing.positionSize)} ` : "— "}
                     <span className="text-[10px] font-normal text-muted-foreground">USDT</span>
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">청산가 (대략)</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("trade.form.liqPrice")}</div>
                   <div className="font-mono text-sm font-bold tabular-nums">
                     {liqPrice > 0 ? `≈ ${formatPriceForInput(liqPrice)}` : "—"}
                   </div>
@@ -1077,25 +1082,25 @@ function TradeFormInner({
         <div className="space-y-4">
           <Card className="overflow-hidden">
             <div className="border-b border-border bg-background/40 px-5 py-3">
-              <h2 className="text-sm font-bold">어떻게 실행할까요?</h2>
+              <h2 className="text-sm font-bold">{t("trade.form.howToExecute")}</h2>
             </div>
             <CardContent className="space-y-3 p-5">
               {/* 3 미니 지표 */}
               <div className="grid grid-cols-3 gap-2">
-                <ExecStat label="잃을 한도" value={sizing.valid ? formatCurrency(sizing.maxLoss, currency) : "—"} sub={`${(Number(riskPct) || 0).toFixed(1)}%`} tone="bad" />
-                <ExecStat label="수량" value={sizing.valid ? `${formatNumber(sizing.quantity)}` : "—"} sub={coinName} />
-                <ExecStat label="필요 증거금" value={sizing.valid ? formatCurrency(reqMargin, currency) : "—"} sub={`${leverage}x`} />
+                <ExecStat label={t("trade.form.maxLoss")} value={sizing.valid ? formatCurrency(sizing.maxLoss, currency) : "—"} sub={`${(Number(riskPct) || 0).toFixed(1)}%`} tone="bad" />
+                <ExecStat label={t("trade.form.quantity")} value={sizing.valid ? `${formatNumber(sizing.quantity)}` : "—"} sub={coinName} />
+                <ExecStat label={t("trade.form.requiredMargin")} value={sizing.valid ? formatCurrency(reqMargin, currency) : "—"} sub={`${leverage}x`} />
               </div>
 
               {/* 3 실행 버튼 */}
               <button
                 type="button"
                 disabled
-                title="현재 비활성 — Binance IP 제한 정책 때문에 자동 주문 불가. 추후 프록시 인프라 도입 시 활성화."
+                title={t("trade.form.liveDisabledTitle")}
                 className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-md bg-primary/40 px-4 py-2.5 text-sm font-bold text-primary-foreground opacity-60"
               >
-                ✦ 실거래 주문
-                <span className="rounded bg-black/20 px-1.5 py-0.5 text-[9px] uppercase">준비 중</span>
+                ✦ {t("trade.form.liveTradeOrder")}
+                <span className="rounded bg-black/20 px-1.5 py-0.5 text-[9px] uppercase">{t("trade.form.comingSoon")}</span>
               </button>
               <button
                 type="button"
@@ -1103,7 +1108,7 @@ function TradeFormInner({
                 disabled={pending || paperInsufficient}
                 className="flex w-full items-center justify-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-4 py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                🖥 {pending ? "처리 중..." : isScheduled ? "가상 예약 주문 등록 (vUSDT)" : "가상 거래로 실행 (vUSDT)"}
+                🖥 {pending ? t("trade.form.processing") : isScheduled ? t("trade.form.paperScheduleBtn") : t("trade.form.paperExecuteBtn")}
               </button>
               <button
                 type="button"
@@ -1111,17 +1116,17 @@ function TradeFormInner({
                 disabled={alertPending || alertRegistered}
                 className="flex w-full items-center justify-center gap-2 rounded-md border border-border bg-background/40 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
               >
-                🔔 {alertPending ? "등록 중..." : alertRegistered ? "알림 등록됨 ✓" : "알림만 등록하고 대기"}
+                🔔 {alertPending ? t("trade.form.registering") : alertRegistered ? t("trade.form.alertRegisteredBtn") : t("trade.form.alertOnlyBtn")}
               </button>
 
               {paperInsufficient ? (
                 <p className="rounded border border-grade-d/40 bg-grade-d/10 p-2 text-[10px] text-grade-d">
-                  가상 잔액 부족 — 필요 증거금 {formatCurrency(reqMargin, currency)}, 사용 가능 {formatCurrency(paperWallet?.available ?? 0, currency)}.{" "}
-                  <Link href="/app/virtual-trade/wallet" className="underline">가상 자금 추가</Link> 또는 레버리지·리스크 조정.
+                  {t("trade.form.paperInsufficient", { margin: formatCurrency(reqMargin, currency), avail: formatCurrency(paperWallet?.available ?? 0, currency) })}{" "}
+                  <Link href="/app/virtual-trade/wallet" className="underline">{t("trade.form.addPaperFunds")}</Link> {t("trade.form.paperInsufficientPost")}
                 </p>
               ) : (
                 <p className="text-[10px] leading-relaxed text-muted-foreground">
-                  실거래는 거래소 주문 패널이 따로 동작합니다. 지금은 가상 거래로 동일한 체결·수수료·마진을 학습하거나, 알림만 받고 대기할 수 있어요.
+                  {t("trade.form.executeHelp")}
                 </p>
               )}
             </CardContent>
@@ -1131,28 +1136,28 @@ function TradeFormInner({
           <details className="group rounded-lg border border-border bg-card">
             <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-4 py-2.5 text-sm hover:bg-muted/30">
               <span className="transition-transform group-open:rotate-90">▶</span>
-              <span className="font-semibold text-foreground">매매 평가 상세</span>
-              <span className="text-xs text-muted-foreground">점수 · 보너스 · 패널티 — 펼쳐서 보기</span>
+              <span className="font-semibold text-foreground">{t("trade.form.evalDetail")}</span>
+              <span className="text-xs text-muted-foreground">{t("trade.form.evalDetailSub")}</span>
             </summary>
             <div className="border-t border-border px-4 py-3">
               <ul className="space-y-1.5 text-sm">
                 {grade.reasons.map((r, i) => (
                   <li key={i} className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">{r.label}</span>
+                    <span className="text-muted-foreground">{t(`grade.reason.${r.code}`, r.params)}</span>
                     <span className={cn("font-mono font-semibold", r.points > 0 ? "text-grade-a" : r.points < 0 ? "text-grade-d" : "text-muted-foreground")}>
                       {r.points > 0 ? `+${r.points}` : r.points}
                     </span>
                   </li>
                 ))}
               </ul>
-              {grade.actions.length > 0 ? (
+              {grade.actionItems.length > 0 ? (
                 <div className="mt-3 border-t border-border/60 pt-3">
-                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">지금 해야 할 행동</div>
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("trade.form.actionsNow")}</div>
                   <ul className="space-y-1.5 text-xs">
-                    {grade.actions.map((a, i) => (
+                    {grade.actionItems.map((a, i) => (
                       <li key={i} className="flex gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 flex-none rounded-full bg-primary" />
-                        <span>{a}</span>
+                        <span>{t(`grade.action.${a.code}`, a.params)}</span>
                       </li>
                     ))}
                   </ul>
@@ -1167,26 +1172,26 @@ function TradeFormInner({
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-center gap-2 text-grade-d">
                   <AlertTriangle className="h-4 w-4" />
-                  <div className="text-sm font-semibold">D등급 — 강한 자제 (원하면 축소 사이즈로 진입 가능)</div>
+                  <div className="text-sm font-semibold">{t("trade.form.dOverrideTitle")}</div>
                 </div>
                 <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs leading-relaxed">
-                  <div className="mb-2 font-semibold text-foreground">이 거래가 D등급인 이유:</div>
+                  <div className="mb-2 font-semibold text-foreground">{t("trade.form.dReasonHeading")}</div>
                   <ul className="space-y-1 font-mono text-muted-foreground">
                     {grade.reasons.filter((r) => r.points < 0).map((r, i) => (
-                      <li key={i} className="text-grade-d">{r.points}점 · {r.label}</li>
+                      <li key={i} className="text-grade-d">{t("trade.form.dReasonItem", { n: r.points })} · {t(`grade.reason.${r.code}`, r.params)}</li>
                     ))}
                   </ul>
                   <div className="mt-2 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-                    D등급은 통계상 손실 확률이 높은 패턴입니다. 사이즈가 평소의 10%로 작게 잡혀있어도 추천하지 않습니다.
+                    {t("trade.form.dOverrideNote")}
                   </div>
                 </div>
                 <div>
-                  <Label className="text-[11px]">계속 진행하시려면 아래에 <strong>D 진입</strong> 을 정확히 입력하세요:</Label>
-                  <Input value={dConfirmText} onChange={(e) => setDConfirmText(e.target.value)} placeholder="D 진입" className="mt-1 font-mono" autoComplete="off" />
+                  <Label className="text-[11px]">{t("trade.form.dConfirmPrompt")}</Label>
+                  <Input value={dConfirmText} onChange={(e) => setDConfirmText(e.target.value)} placeholder={t("trade.form.dConfirmPlaceholder")} className="mt-1 font-mono" autoComplete="off" />
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => { setShowDOverride(false); setDConfirmText(""); }} disabled={pending}>취소 (권장)</Button>
-                  <Button className="flex-1 bg-grade-d hover:bg-grade-d/90" onClick={() => { setShowDOverride(false); setDConfirmText(""); save(true); }} disabled={pending || dConfirmText.trim() !== "D 진입"}>진행 (override)</Button>
+                  <Button variant="outline" className="flex-1" onClick={() => { setShowDOverride(false); setDConfirmText(""); }} disabled={pending}>{t("trade.form.cancelRecommended")}</Button>
+                  <Button className="flex-1 bg-grade-d hover:bg-grade-d/90" onClick={() => { setShowDOverride(false); setDConfirmText(""); save(true); }} disabled={pending || dConfirmText.trim() !== "D 진입"}>{t("trade.form.proceedOverride")}</Button>
                 </div>
               </CardContent>
             </Card>
@@ -1198,20 +1203,20 @@ function TradeFormInner({
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-center gap-2 text-grade-d">
                   <AlertTriangle className="h-4 w-4" />
-                  <div className="text-sm font-semibold">실거래 최종 확인</div>
+                  <div className="text-sm font-semibold">{t("trade.form.liveConfirmTitle")}</div>
                 </div>
                 <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs font-mono leading-relaxed">
-                  <div>심볼: <span className="text-foreground">{input.symbol}</span></div>
-                  <div>방향: <span className="text-foreground">{input.direction === "long" ? "롱 (BUY)" : "숏 (SELL)"}</span></div>
-                  <div>수량: <span className="text-foreground">{sizing.quantity}</span></div>
-                  <div>레버리지: <span className="text-foreground">{leverage}×</span></div>
-                  <div>진입: <span className="text-foreground">${formatNumber(Number(entry) || 0)}</span></div>
-                  <div>손절: <span className="text-grade-d">${formatNumber(Number(stop) || 0)}</span></div>
-                  <div>목표: <span className="text-grade-a">${formatNumber(Number(target) || 0)}</span></div>
+                  <div>{t("trade.form.fieldSymbol")}: <span className="text-foreground">{input.symbol}</span></div>
+                  <div>{t("trade.form.fieldDirection")}: <span className="text-foreground">{input.direction === "long" ? t("trade.form.longBuy") : t("trade.form.shortSell")}</span></div>
+                  <div>{t("trade.form.fieldQuantity")}: <span className="text-foreground">{sizing.quantity}</span></div>
+                  <div>{t("trade.form.fieldLeverage")}: <span className="text-foreground">{leverage}×</span></div>
+                  <div>{t("trade.form.fieldEntry")}: <span className="text-foreground">${formatNumber(Number(entry) || 0)}</span></div>
+                  <div>{t("trade.form.fieldStop")}: <span className="text-grade-d">${formatNumber(Number(stop) || 0)}</span></div>
+                  <div>{t("trade.form.fieldTarget")}: <span className="text-grade-a">${formatNumber(Number(target) || 0)}</span></div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowLiveConfirm(false)} disabled={pending}>취소</Button>
-                  <Button className="flex-1 bg-grade-d hover:bg-grade-d/90" onClick={executeLiveTrade} disabled={pending}>확인 — 실제 주문 전송</Button>
+                  <Button variant="outline" className="flex-1" onClick={() => setShowLiveConfirm(false)} disabled={pending}>{t("trade.form.cancel")}</Button>
+                  <Button className="flex-1 bg-grade-d hover:bg-grade-d/90" onClick={executeLiveTrade} disabled={pending}>{t("trade.form.confirmSendOrder")}</Button>
                 </div>
               </CardContent>
             </Card>
@@ -1223,31 +1228,31 @@ function TradeFormInner({
       <details className="group rounded-lg border border-border bg-card">
         <summary className="flex cursor-pointer select-none list-none flex-wrap items-center gap-2 px-4 py-3 text-sm hover:bg-muted/30">
           <span className="transition-transform group-open:rotate-90">▶</span>
-          <span className="font-semibold text-foreground">자동 점검</span>
-          <span className="text-xs text-muted-foreground">시장 구조 · 자금 관리 · 시장 컨텍스트 — AI와 일지에서 자동으로 채워집니다</span>
+          <span className="font-semibold text-foreground">{t("trade.form.autoCheck")}</span>
+          <span className="text-xs text-muted-foreground">{t("trade.form.autoCheckSub")}</span>
           <span className="ml-auto flex items-center gap-2">
-            <span className="rounded bg-grade-a/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">✓ 통과 {passCount}</span>
+            <span className="rounded bg-grade-a/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">{t("trade.form.passShort", { n: passCount })}</span>
             {warnCount > 0 ? (
-              <span className="rounded bg-grade-c/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-c">⚠ 경고 {warnCount}{warnSummary ? ` — ${warnSummary}` : ""}</span>
+              <span className="rounded bg-grade-c/15 px-1.5 py-0.5 text-[10px] font-semibold text-grade-c">{t("trade.form.warnCount", { n: warnCount })}{warnSummary ? ` — ${warnSummary}` : ""}</span>
             ) : null}
           </span>
         </summary>
         <div className="grid gap-4 border-t border-border p-4 lg:grid-cols-2">
           {/* 자금 관리 */}
           <div className="space-y-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">자금 관리 상태</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("trade.form.moneyMgmt")}</div>
             <div className="grid grid-cols-3 gap-3">
-              <StatCell label="오늘 거래" value={`${money.todayClosedCount}건`} sub="종료된 건수" />
+              <StatCell label={t("trade.form.todayTrades")} value={t("trade.form.countUnit", { n: money.todayClosedCount })} sub={t("trade.form.closedCount")} />
               <StatCell
-                label="오늘 누적"
+                label={t("trade.form.todayCumulative")}
                 value={`${money.todayCumulativeR >= 0 ? "+" : ""}${money.todayCumulativeR.toFixed(2)}R`}
-                sub={`한도 ${DAILY_LOSS_LIMIT_R}R`}
+                sub={t("trade.form.limitR", { n: DAILY_LOSS_LIMIT_R })}
                 tone={money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ? "bad" : money.todayCumulativeR < 0 ? undefined : "good"}
               />
               <StatCell
-                label="진행 중 노출"
+                label={t("trade.form.openExposure")}
                 value={`${money.openExposurePct.toFixed(0)}%`}
-                sub={`${money.openPositions.length}개 포지션`}
+                sub={t("trade.form.positionsCount", { n: money.openPositions.length })}
                 tone={money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? "bad" : undefined}
               />
             </div>
@@ -1260,7 +1265,7 @@ function TradeFormInner({
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-semibold">{p.symbol}</span>
                         <span className={cn("rounded px-1.5 py-0.5 text-[10px] uppercase", p.direction === "long" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400")}>{p.direction}</span>
-                        {isDuplicate ? <span className="text-[10px] text-amber-400">⚠️ 중복</span> : null}
+                        {isDuplicate ? <span className="text-[10px] text-amber-400">{t("trade.form.duplicate")}</span> : null}
                       </div>
                       <span className="font-mono tabular-nums text-muted-foreground">${p.positionSize.toFixed(0)}</span>
                     </div>
@@ -1269,16 +1274,16 @@ function TradeFormInner({
               </div>
             ) : null}
             {money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ? (
-              <WarnBar text={`오늘 누적 ${money.todayCumulativeR.toFixed(2)}R — 일일 손실 한도(${DAILY_LOSS_LIMIT_R}R) 근접. 추가 진입은 신중히.`} />
+              <WarnBar text={t("trade.form.warnDailyLimit", { r: money.todayCumulativeR.toFixed(2), limit: DAILY_LOSS_LIMIT_R })} />
             ) : null}
             {money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? (
-              <WarnBar text={`진행 중 포지션이 계좌의 ${money.openExposurePct.toFixed(0)}%를 차지. 추가 진입은 과노출.`} />
+              <WarnBar text={t("trade.form.warnOverexposure", { pct: money.openExposurePct.toFixed(0) })} />
             ) : null}
           </div>
 
           {/* 시장 컨텍스트 */}
           <div className="space-y-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">시장 컨텍스트</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("trade.form.marketContext")}</div>
             <div className="grid grid-cols-3 gap-3">
               <StatCell
                 label="BTC"
@@ -1287,24 +1292,24 @@ function TradeFormInner({
                 tone={marketCtx.btc24hChangePct === null ? undefined : marketCtx.btc24hChangePct >= 0 ? "good" : "bad"}
               />
               <StatCell
-                label={`${coinName} 펀딩비`}
+                label={t("trade.form.fundingRate", { coin: coinName })}
                 value={marketCtx.fundingRate !== null ? `${(marketCtx.fundingRate * 100).toFixed(4)}%` : "—"}
-                sub={marketCtx.fundingRate !== null ? (marketCtx.fundingRate > 0 ? "롱이 숏에 지급" : "숏이 롱에 지급") : ""}
+                sub={marketCtx.fundingRate !== null ? (marketCtx.fundingRate > 0 ? t("trade.form.longPaysShort") : t("trade.form.shortPaysLong")) : ""}
                 tone={marketCtx.fundingRate !== null && Math.abs(marketCtx.fundingRate) >= 0.0005 ? "bad" : undefined}
               />
               <StatCell
-                label="다음 펀딩"
-                value={marketCtx.minutesToFunding !== null ? `${marketCtx.minutesToFunding}분` : "—"}
-                sub="정산까지"
+                label={t("trade.form.nextFunding")}
+                value={marketCtx.minutesToFunding !== null ? t("trade.form.minutesUnit", { n: marketCtx.minutesToFunding }) : "—"}
+                sub={t("trade.form.untilSettlement")}
                 tone={marketCtx.minutesToFunding !== null && marketCtx.minutesToFunding <= 10 ? "bad" : undefined}
               />
             </div>
             {marketCtx.minutesToFunding !== null && marketCtx.minutesToFunding <= 10 ? (
-              <WarnBar text="펀딩 정산이 10분 이내입니다. 정산 직전 진입은 슬리피지/펀딩비 부담이 큽니다." />
+              <WarnBar text={t("trade.form.warnFundingSoon")} />
             ) : null}
             {/* 시장 구조 체크리스트 */}
             <div className="space-y-1 pt-1">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">시장 구조 (AI 자동 확인)</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("trade.form.marketStructure")}</div>
               <div className="grid grid-cols-2 gap-x-3">
                 {MARKET_CHECK_KEYS.map((k) => (
                   <Checkbox key={k} checked={market[k]} onChange={(e) => setMarket({ ...market, [k]: e.target.checked })} label={MARKET_CHECK_LABELS[k]} />

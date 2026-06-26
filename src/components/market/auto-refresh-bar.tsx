@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCw } from "lucide-react";
+import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,6 +26,7 @@ export function AutoRefreshBar({
   label?: string;
 }) {
   const router = useRouter();
+  const t = useT();
   const [lastRefresh, setLastRefresh] = useState<number>(() => Date.now());
   const [now, setNow] = useState<number>(() => Date.now());
   const [isPending, startTransition] = useTransition();
@@ -57,13 +59,15 @@ export function AutoRefreshBar({
   const seconds = Math.max(0, Math.floor((now - lastRefresh) / 1000));
   const rel =
     seconds < 5
-      ? "방금 전"
+      ? t("refresh.justNow")
       : seconds < 60
-        ? `${seconds}초 전`
-        : `${Math.floor(seconds / 60)}분 전`;
+        ? t("refresh.secondsAgo", { n: seconds })
+        : t("refresh.minutesAgo", { n: Math.floor(seconds / 60) });
 
   const intervalLabel =
-    intervalMs >= 60_000 ? `${Math.round(intervalMs / 60_000)}분` : `${Math.round(intervalMs / 1000)}초`;
+    intervalMs >= 60_000
+      ? `${Math.round(intervalMs / 60_000)}${t("unit.min")}`
+      : `${Math.round(intervalMs / 1000)}${t("unit.sec")}`;
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/30 px-4 py-2.5">
@@ -75,11 +79,11 @@ export function AutoRefreshBar({
           )}
         />
         <span className="text-muted-foreground">
-          {label ?? "마지막 갱신"}
+          {label ?? t("refresh.last")}
         </span>
         <span className="font-medium text-foreground">{rel}</span>
         <span className="hidden text-xs text-muted-foreground sm:inline">
-          · {intervalLabel}마다 자동
+          · {t("refresh.autoEvery", { interval: intervalLabel })}
         </span>
       </div>
       <button
@@ -94,7 +98,7 @@ export function AutoRefreshBar({
             isPending && "animate-spin",
           )}
         />
-        지금 갱신
+        {t("refresh.now")}
       </button>
     </div>
   );

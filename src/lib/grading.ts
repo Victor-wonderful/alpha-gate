@@ -1,4 +1,4 @@
-import type { GradeResult, ScoreReason, TradeInput } from "@/types/trade";
+import type { ActionItem, GradeResult, ScoreReason, TradeInput } from "@/types/trade";
 import { DAILY_LOSS_LIMIT_R, SAME_DIRECTION_EXPOSURE_PCT } from "@/types/trade";
 
 export function calcRR(entry: number, stop: number, target: number, direction: "long" | "short") {
@@ -15,11 +15,12 @@ export function gradeTrade(input: TradeInput): GradeResult {
   const rr = calcRR(input.entry, input.stop, input.target, input.direction);
 
   // ─── R:R ──────────────────────────────────────────────
-  if (rr >= 3) reasons.push({ code: "rr_great", label: `손익비 ${rr.toFixed(2)}R로 우수`, points: 3 });
-  else if (rr >= 2) reasons.push({ code: "rr_good", label: `손익비 ${rr.toFixed(2)}R로 양호함`, points: 2 });
+  const rrStr = rr.toFixed(2);
+  if (rr >= 3) reasons.push({ code: "rr_great", label: `손익비 ${rrStr}R로 우수`, points: 3, params: { rr: rrStr } });
+  else if (rr >= 2) reasons.push({ code: "rr_good", label: `손익비 ${rrStr}R로 양호함`, points: 2, params: { rr: rrStr } });
   // R:R 1.5~2.0 = 손익분기 + 마진 — 정당한 +1점 (수수료 차감해도 양수 기대값)
-  else if (rr >= 1.5) reasons.push({ code: "rr_fair", label: `손익비 ${rr.toFixed(2)}R로 보통`, points: 1 });
-  else if (rr > 0) reasons.push({ code: "rr_low", label: `손익비 ${rr.toFixed(2)}R로 낮음`, points: 0 });
+  else if (rr >= 1.5) reasons.push({ code: "rr_fair", label: `손익비 ${rrStr}R로 보통`, points: 1, params: { rr: rrStr } });
+  else if (rr > 0) reasons.push({ code: "rr_low", label: `손익비 ${rrStr}R로 낮음`, points: 0, params: { rr: rrStr } });
   else reasons.push({ code: "rr_invalid", label: "진입/손절/목표 구조가 잘못됨", points: -2 });
 
   // ─── 시장 구조 ────────────────────────────────────────
@@ -45,6 +46,7 @@ export function gradeTrade(input: TradeInput): GradeResult {
       code: "stop_too_wide",
       label: `진입가 대비 손절폭이 ${(stopPctOfEntry * 100).toFixed(1)}%로 큼`,
       points: -1,
+      params: { pct: (stopPctOfEntry * 100).toFixed(1) },
     });
   const targetPct = input.entry > 0 ? Math.abs(input.target - input.entry) / input.entry : 0;
   if (targetPct > 0.15 || rr > 4)
@@ -60,12 +62,14 @@ export function gradeTrade(input: TradeInput): GradeResult {
       code: "daily_loss_limit",
       label: `오늘 누적 ${todayCumulativeR.toFixed(2)}R — 일일 손실 한도(${DAILY_LOSS_LIMIT_R}R) 도달`,
       points: -2,
+      params: { r: todayCumulativeR.toFixed(2), limit: DAILY_LOSS_LIMIT_R },
     });
   } else if (todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5) {
     reasons.push({
       code: "daily_loss_near",
       label: `오늘 누적 ${todayCumulativeR.toFixed(2)}R — 일일 손실 한도(${DAILY_LOSS_LIMIT_R}R) 근접`,
       points: -1,
+      params: { r: todayCumulativeR.toFixed(2), limit: DAILY_LOSS_LIMIT_R },
     });
   }
   const duplicateSymbol = openPositions.some((p) => p.symbol === input.symbol);
@@ -74,6 +78,7 @@ export function gradeTrade(input: TradeInput): GradeResult {
       code: "duplicate_symbol",
       label: `${input.symbol} 포지션이 이미 진행 중 (중복 노출)`,
       points: -1,
+      params: { symbol: input.symbol },
     });
   }
   if (openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT) {
@@ -81,6 +86,7 @@ export function gradeTrade(input: TradeInput): GradeResult {
       code: "overexposed",
       label: `진행 중 포지션 노출 ${openExposurePct.toFixed(0)}% — 과노출`,
       points: -2,
+      params: { pct: openExposurePct.toFixed(0) },
     });
   }
 
@@ -93,6 +99,7 @@ export function gradeTrade(input: TradeInput): GradeResult {
       code: "funding_imminent",
       label: `펀딩 정산 ${input.marketCtx.minutesToFunding}분 전`,
       points: -1,
+      params: { min: input.marketCtx.minutesToFunding },
     });
 
   // 펀딩비 극단치 (±0.05% 이상)는 군집 포지션 신호
@@ -107,6 +114,7 @@ export function gradeTrade(input: TradeInput): GradeResult {
           code: "funding_crowded",
           label: `펀딩비 ${(fr * 100).toFixed(3)}% — 같은 방향에 군집`,
           points: -1,
+          params: { rate: (fr * 100).toFixed(3) },
         });
     }
   }
@@ -123,31 +131,39 @@ export function gradeTrade(input: TradeInput): GradeResult {
     grade === "D" ? (accountStop ? "account" : "setup") : undefined;
 
   // ─── 행동 권고 ────────────────────────────────────────
+  // 한국어 폴백(actions) + 코드 기반(actionItems)을 동시에 채운다.
   const actions: string[] = [];
+  const actionItems: ActionItem[] = [];
+  const pushAction = (code: string, label: string) => {
+    actions.push(label);
+    actionItems.push({ code });
+  };
   if (grade === "D") {
     if (accountStop)
-      actions.push(
+      pushAction(
+        "d_account",
         "오늘은 보류하세요 — 셋업과 무관하게 누적 손실/노출이 한도입니다. 워치리스트에 저장하고 다음 기회를 노리세요.",
       );
     else
-      actions.push(
+      pushAction(
+        "d_setup",
         "고위험 자리입니다. 막진 않지만, 굳이 한다면 권장 리스크의 10% 축소 사이즈로만. 더 좋은 진입을 기다리는 걸 권장합니다.",
       );
   }
-  if (rr > 0 && rr < 1.5) actions.push("손익비가 낮습니다. 목표가를 조정하거나 거래를 취소하세요.");
-  if (rr === 0) actions.push("진입가/손절가/목표가 방향이 어긋났습니다. 다시 입력하세요.");
+  if (rr > 0 && rr < 1.5) pushAction("rr_low", "손익비가 낮습니다. 목표가를 조정하거나 거래를 취소하세요.");
+  if (rr === 0) pushAction("rr_zero", "진입가/손절가/목표가 방향이 어긋났습니다. 다시 입력하세요.");
   if (!input.market.not_box_middle)
-    actions.push("박스권 중간입니다. 눌림 대기 또는 포지션을 절반으로 줄이세요.");
+    pushAction("box_middle", "박스권 중간입니다. 눌림 대기 또는 포지션을 절반으로 줄이세요.");
   if (!isBtcPair && !input.market.aligned_with_btc)
-    actions.push("현재 시장 국면(BTC.D/USDT.D/총시총)과 다른 방향. 알트 디버전스 셋업이 아니면 추가 확인 필요.");
+    pushAction("btc_conflict", "현재 시장 국면(BTC.D/USDT.D/총시총)과 다른 방향. 알트 디버전스 셋업이 아니면 추가 확인 필요.");
   if (input.marketCtx.minutesToFunding !== null && input.marketCtx.minutesToFunding <= 10)
-    actions.push("펀딩 정산이 임박합니다. 슬리피지/펀딩비 부담을 감안하세요.");
+    pushAction("funding_imminent", "펀딩 정산이 임박합니다. 슬리피지/펀딩비 부담을 감안하세요.");
 
-  if (actions.length === 0 && grade === "A") actions.push("계획대로 진입하세요. 손절가는 반드시 지키세요.");
+  if (actions.length === 0 && grade === "A") pushAction("grade_a", "계획대로 진입하세요. 손절가는 반드시 지키세요.");
   if (actions.length === 0 && grade === "B")
-    actions.push("진입 가능하지만 포지션을 평소의 절반으로 시작하는 것을 고려하세요.");
+    pushAction("grade_b", "진입 가능하지만 포지션을 평소의 절반으로 시작하는 것을 고려하세요.");
   if (actions.length === 0 && grade === "C")
-    actions.push("조건이 부족합니다. 눌림 대기를 권장합니다.");
+    pushAction("grade_c", "조건이 부족합니다. 눌림 대기를 권장합니다.");
 
-  return { grade, score, reasons, actions, rr, dCause };
+  return { grade, score, reasons, actions, actionItems, rr, dCause };
 }

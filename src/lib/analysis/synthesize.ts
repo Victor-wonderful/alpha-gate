@@ -5,6 +5,7 @@ import { STYLE_PRESETS } from "./style";
 import { STRATEGY_LABELS, type StrategyId, type StrategyResult } from "./strategy";
 import { parseJsonLoose } from "./json-extract";
 import { MIN_STOP_PCT_VS_FEES, ROUND_TRIP_COST_PCT } from "./standards";
+import type { Locale } from "@/lib/i18n/config";
 
 const SYSTEM_PROMPT = `당신은 암호화폐 무기한 선물 시장을 분석하는 트레이딩 코치입니다.
 
@@ -447,9 +448,16 @@ export interface AnalysisReport {
   };
 }
 
+// 영어 응답 강제 — system 프롬프트(캐시됨)는 한국어 유지, user 메시지에 덧붙여 언어만 오버라이드.
+const EN_LANG_OVERRIDE = `
+
+=== LANGUAGE OVERRIDE (highest priority) ===
+Ignore any instruction above to write in Korean. Write EVERY natural-language string value in the output JSON — summary, note, structure text, all scenario fields (description, trigger, etc.), warnings, actionNow, noEntry reasons/suggestion, and any label/explanation — in clear, plain English for a general audience (no jargon; spell out terms). Keep all JSON keys and enum/ID values exactly as specified. Output only the JSON object, nothing else.`;
+
 export async function synthesizeAnalysis(
   snapshot: AnalysisSnapshot,
   strategy: StrategyResult,
+  locale: Locale = "ko",
 ): Promise<AnalysisReport> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -481,6 +489,7 @@ export async function synthesizeAnalysis(
       text: `[트레이딩 스타일: ${snapshot.styleLabel}]\n${styleHint}\n\n${strategyBlock}\n\n분석할 스냅샷:\n${JSON.stringify(compact, null, 2)}`,
     },
   ];
+  if (locale === "en") userBlocks.push({ type: "text", text: EN_LANG_OVERRIDE });
 
   // 파싱 실패 시 최대 2회까지 재시도 (가끔 산문/잘린 JSON 반환).
   let result: { data: AnalysisReport } | { error: string; raw: string } | null = null;

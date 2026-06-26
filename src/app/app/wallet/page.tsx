@@ -4,25 +4,27 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { getBalance, getAiCredits } from "@/lib/paper-wallet";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
 type TxKind =
   | "signup_bonus" | "deposit" | "trade_lock" | "trade_settle"
   | "game_bet" | "game_payout" | "ai_credit_purchase"
   | "tournament_reward" | "admin_adjust";
 
-const TX_LABELS: Record<TxKind, string> = {
-  signup_bonus: "가입 보너스",
-  deposit: "충전",
-  trade_lock: "거래 진입",
-  trade_settle: "거래 정산",
-  game_bet: "게임 베팅",
-  game_payout: "게임 정산",
-  ai_credit_purchase: "AI 크레딧 구매",
-  tournament_reward: "토너먼트 보상",
-  admin_adjust: "관리자 조정",
+const TX_LABEL_KEYS: Record<TxKind, string> = {
+  signup_bonus: "wallet.txSignupBonus",
+  deposit: "wallet.txDeposit",
+  trade_lock: "wallet.txTradeLock",
+  trade_settle: "wallet.txTradeSettle",
+  game_bet: "wallet.txGameBet",
+  game_payout: "wallet.txGamePayout",
+  ai_credit_purchase: "wallet.txAiCreditPurchase",
+  tournament_reward: "wallet.txTournamentReward",
+  admin_adjust: "wallet.txAdminAdjust",
 };
 
 export default async function WalletPage() {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -61,9 +63,9 @@ export default async function WalletPage() {
     <div className="space-y-4">
       {/* 헤더 */}
       <div>
-        <h1 className="text-2xl font-bold">내 지갑</h1>
+        <h1 className="text-2xl font-bold">{t("wallet.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          vUSDT 잔액 · AI 크레딧 · 최근 거래 내역
+          {t("wallet.subtitle")}
         </p>
       </div>
 
@@ -75,10 +77,10 @@ export default async function WalletPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Trophy className="h-4 w-4 text-yellow-500" />
-                vUSDT 잔액
+                {t("wallet.vusdtBalance")}
               </div>
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-                플랫폼 가상화폐
+                {t("wallet.platformVirtualCurrency")}
               </span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
@@ -95,13 +97,13 @@ export default async function WalletPage() {
                 href="/app/deposit"
                 className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
               >
-                <Plus className="h-4 w-4" /> 충전
+                <Plus className="h-4 w-4" /> {t("wallet.deposit")}
               </Link>
               <Link
                 href="/app/credits"
                 className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors"
               >
-                <Sparkles className="h-4 w-4" /> AI 크레딧 구매
+                <Sparkles className="h-4 w-4" /> {t("wallet.buyAiCredits")}
               </Link>
             </div>
           </CardContent>
@@ -112,22 +114,22 @@ export default async function WalletPage() {
           <CardContent className="p-5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Sparkles className="h-4 w-4 text-primary" />
-              AI 크레딧
+              {t("wallet.aiCredits")}
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="font-mono text-4xl font-black tabular-nums">
                 {credits.toLocaleString()}
               </span>
-              <span className="text-base text-muted-foreground font-medium">회</span>
+              <span className="text-base text-muted-foreground font-medium">{t("wallet.creditsUnit")}</span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              AI 분석 1회 = 1 크레딧 차감
+              {t("wallet.creditPerAnalysis")}
             </div>
             <Link
               href="/app/credits"
               className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors"
             >
-              <Plus className="h-4 w-4" /> 크레딧 충전
+              <Plus className="h-4 w-4" /> {t("wallet.chargeCredits")}
             </Link>
           </CardContent>
         </Card>
@@ -137,7 +139,7 @@ export default async function WalletPage() {
       <Card>
         <CardContent className="p-4">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-            vUSDT 사용처
+            {t("wallet.vusdtUsage")}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <Link
@@ -145,21 +147,21 @@ export default async function WalletPage() {
               className="flex flex-col items-center gap-1.5 rounded-md border border-border/40 p-3 hover:bg-muted/30 transition-colors"
             >
               <Coins className="h-5 w-5 text-primary" />
-              <span className="text-xs">가상 트레이딩</span>
+              <span className="text-xs">{t("wallet.virtualTrading")}</span>
             </Link>
             <Link
               href="/app/credits"
               className="flex flex-col items-center gap-1.5 rounded-md border border-border/40 p-3 hover:bg-muted/30 transition-colors"
             >
               <Sparkles className="h-5 w-5 text-primary" />
-              <span className="text-xs">AI 분석 크레딧</span>
+              <span className="text-xs">{t("wallet.aiAnalysisCredits")}</span>
             </Link>
             <Link
               href="/app/deposit"
               className="flex flex-col items-center gap-1.5 rounded-md border border-border/40 p-3 hover:bg-muted/30 transition-colors"
             >
               <Plus className="h-5 w-5 text-primary" />
-              <span className="text-xs">충전</span>
+              <span className="text-xs">{t("wallet.deposit")}</span>
             </Link>
           </div>
         </CardContent>
@@ -171,20 +173,20 @@ export default async function WalletPage() {
           <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <History className="h-4 w-4 text-muted-foreground" />
-              최근 거래 내역
+              {t("wallet.recentTransactions")}
             </div>
-            <span className="text-xs text-muted-foreground">최근 20건</span>
+            <span className="text-xs text-muted-foreground">{t("wallet.recent20")}</span>
           </div>
 
           {transactions.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              거래 내역이 없습니다
+              {t("wallet.noTransactions")}
             </div>
           ) : (
             <div className="divide-y divide-border/40">
               {transactions.map((tx) => {
                 const isIncome = tx.amount > 0;
-                const label = TX_LABELS[tx.kind] ?? tx.kind;
+                const label = TX_LABEL_KEYS[tx.kind] ? t(TX_LABEL_KEYS[tx.kind]) : tx.kind;
                 const date = new Date(tx.created_at);
                 return (
                   <div
@@ -229,7 +231,7 @@ export default async function WalletPage() {
                         {Number(tx.amount).toLocaleString()}
                       </div>
                       <div className="text-[10px] text-muted-foreground tabular-nums">
-                        잔액 {Number(tx.balance_after).toLocaleString()}
+                        {t("wallet.balanceLabel")} {Number(tx.balance_after).toLocaleString()}
                       </div>
                     </div>
                   </div>
@@ -244,8 +246,7 @@ export default async function WalletPage() {
       <Card>
         <CardContent className="py-3 px-4 text-xs text-muted-foreground">
           <p>
-            <strong className="text-foreground">환율</strong> · 1 AAG = 1 USDT(실제) = 1,000 vUSDT(플랫폼).{" "}
-            vUSDT는 플랫폼 내에서만 사용 가능합니다.
+            <strong className="text-foreground">{t("wallet.exchangeRate")}</strong> · {t("wallet.exchangeRateDetail")}
           </p>
         </CardContent>
       </Card>

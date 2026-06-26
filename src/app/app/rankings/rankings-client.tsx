@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { LineChart, Award, Loader2, Gift } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 // 게임·통합 랭킹은 네비/UI에서 제외 (2026-06). 트레이딩 랭킹만 노출.
 type Category = "trading";
@@ -24,15 +25,15 @@ interface UserRank {
   totalParticipants: number;
 }
 
-const CATEGORIES: { id: Category; label: string; icon: React.ReactNode }[] = [
-  { id: "trading", label: "트레이딩", icon: <LineChart className="h-3.5 w-3.5" /> },
+const CATEGORIES: { id: Category; icon: React.ReactNode }[] = [
+  { id: "trading", icon: <LineChart className="h-3.5 w-3.5" /> },
 ];
 
-const PERIODS: { id: Period; label: string }[] = [
-  { id: "daily", label: "일간" },
-  { id: "weekly", label: "주간" },
-  { id: "monthly", label: "월간" },
-  { id: "all", label: "전체" },
+const PERIODS: { id: Period }[] = [
+  { id: "daily" },
+  { id: "weekly" },
+  { id: "monthly" },
+  { id: "all" },
 ];
 
 const REWARDS_INFO: Record<Category, number[]> = {
@@ -47,6 +48,10 @@ function medal(rank: number) {
 }
 
 export function RankingsClient() {
+  const t = useT();
+  const categoryLabel = (id: Category) =>
+    id === "trading" ? t("misc.rankings.category.trading") : id;
+  const periodLabel = (id: Period) => t(`misc.rankings.period.${id}`);
   const category: Category = "trading";
   const [period, setPeriod] = useState<Period>("weekly");
   const [top, setTop] = useState<RankingEntry[]>([]);
@@ -86,7 +91,7 @@ export function RankingsClient() {
                 : "text-muted-foreground hover:bg-muted/30",
             )}
           >
-            {p.label}
+            {periodLabel(p.id)}
           </button>
         ))}
       </div>
@@ -99,23 +104,23 @@ export function RankingsClient() {
               <Award className="h-4 w-4" />
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">내 순위</div>
+              <div className="text-xs text-muted-foreground">{t("misc.rankings.myRank")}</div>
               <div className="font-mono font-bold">
                 {me?.rank ? (
                   <>
                     #{me.rank}
                     <span className="text-xs text-muted-foreground ml-1">
-                      / {me.totalParticipants}명
+                      {t("misc.rankings.outOf", { n: me.totalParticipants })}
                     </span>
                   </>
                 ) : (
-                  <span className="text-sm text-muted-foreground">참가 기록 없음</span>
+                  <span className="text-sm text-muted-foreground">{t("misc.rankings.noRecord")}</span>
                 )}
               </div>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">내 점수</div>
+            <div className="text-xs text-muted-foreground">{t("misc.rankings.myScore")}</div>
             <div
               className={cn(
                 "font-mono font-bold tabular-nums",
@@ -139,8 +144,10 @@ export function RankingsClient() {
         <CardContent className="p-0">
           <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
             <div className="text-sm font-medium">
-              {CATEGORIES.find((c) => c.id === category)?.label} 랭킹 ·{" "}
-              {PERIODS.find((p) => p.id === period)?.label}
+              {t("misc.rankings.leaderboardTitle", {
+                category: categoryLabel(category),
+                period: periodLabel(period),
+              })}
             </div>
             <span className="text-xs text-muted-foreground">TOP 50</span>
           </div>
@@ -151,7 +158,7 @@ export function RankingsClient() {
             </div>
           ) : top.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              아직 랭킹 데이터가 없습니다
+              {t("misc.rankings.empty")}
             </div>
           ) : (
             <div className="divide-y divide-border/40">
@@ -187,7 +194,7 @@ export function RankingsClient() {
                           {entry.display_name}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          {entry.count}건
+                          {t("misc.rankings.tradeCount", { n: entry.count })}
                         </div>
                       </div>
                     </div>
@@ -220,12 +227,12 @@ export function RankingsClient() {
         <CardContent className="py-3 px-4">
           <div className="flex items-center gap-2 text-sm font-medium mb-2">
             <Gift className="h-4 w-4 text-yellow-500" />
-            주간 보상 (매주 월요일 00:00 KST 자동 지급)
+            {t("misc.rankings.weeklyReward")}
           </div>
           <div className="grid grid-cols-1 gap-2 text-xs">
             {(["trading"] as Category[]).map((c) => {
               const rewards = REWARDS_INFO[c];
-              const label = CATEGORIES.find((x) => x.id === c)?.label;
+              const label = categoryLabel(c);
               const total = rewards.reduce((s, r) => s + r, 0);
               return (
                 <div
@@ -235,7 +242,7 @@ export function RankingsClient() {
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold">{label}</span>
                     <span className="text-muted-foreground">
-                      총 {total.toLocaleString()} vUSDT
+                      {t("misc.rankings.totalReward", { total: total.toLocaleString() })}
                     </span>
                   </div>
                   <div className="space-y-0.5 text-[11px] text-muted-foreground">
@@ -243,7 +250,7 @@ export function RankingsClient() {
                       🥇 {rewards[0].toLocaleString()} · 🥈 {rewards[1].toLocaleString()} · 🥉{" "}
                       {rewards[2].toLocaleString()}
                     </div>
-                    <div>4~10위 각 {rewards[3]}</div>
+                    <div>{t("misc.rankings.rank4to10", { n: rewards[3] })}</div>
                   </div>
                 </div>
               );

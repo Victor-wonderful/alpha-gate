@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Dice5, Info } from "lucide-react";
+import { useT } from "@/lib/i18n/context";
 import { simulateScenario } from "@/lib/analysis/monte-carlo";
 import type { TradingStyle } from "@/lib/analysis/style";
 
@@ -35,6 +36,7 @@ export function ScenarioProbability({
   /** 시안 카드용 한 줄(라벨 + 바 + 카운트) 표시 */
   compact?: boolean;
 }) {
+  const t = useT();
   const result = useMemo(
     () =>
       simulateScenario({
@@ -58,11 +60,14 @@ export function ScenarioProbability({
     return (
       <div className="flex items-center gap-3">
         <span
-          title={`과거 변동성 분포 부트스트랩(N=${paths.toLocaleString()}) · 방향 가정 없음. 기대값 ${expR >= 0 ? "+" : ""}${expR.toFixed(2)}R`}
+          title={t("analyze.cmpB.compactTitle", {
+            n: paths.toLocaleString(),
+            exp: `${expR >= 0 ? "+" : ""}${expR.toFixed(2)}`,
+          })}
           className="flex-none cursor-help text-xs text-muted-foreground"
         >
-          도달 확률{" "}
-          <span className="hidden sm:inline text-muted-foreground/60">(몬테카를로)</span>
+          {t("analyze.cmpB.reachProb")}{" "}
+          <span className="hidden sm:inline text-muted-foreground/60">{t("analyze.cmpB.monteCarloParen")}</span>
         </span>
         <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
           <div className="bg-grade-a" style={{ width: pct(pTarget) }} />
@@ -70,10 +75,10 @@ export function ScenarioProbability({
           <div className="bg-grade-d" style={{ width: pct(pStop) }} />
         </div>
         <span className="flex-none font-mono text-xs tabular-nums text-muted-foreground">
-          <span className="text-grade-a">목표 {n(pTarget)}</span>
-          {" · "}미도달 {n(pTimeout)}
+          <span className="text-grade-a">{t("analyze.cmpB.compactTarget", { n: n(pTarget) })}</span>
+          {" · "}{t("analyze.cmpB.compactTimeout", { n: n(pTimeout) })}
           {" · "}
-          <span className="text-grade-d">손절 {n(pStop)}</span>
+          <span className="text-grade-d">{t("analyze.cmpB.compactStop", { n: n(pStop) })}</span>
         </span>
       </div>
     );
@@ -83,54 +88,54 @@ export function ScenarioProbability({
     <div className="rounded-lg border border-border bg-background/40 p-4">
       <div className="mb-2.5 flex items-center gap-1.5">
         <Dice5 className="h-4 w-4 text-primary" />
-        <span className="text-sm font-semibold">도달 확률 (몬테카를로)</span>
+        <span className="text-sm font-semibold">{t("analyze.cmpB.reachProbFull")}</span>
         <span
-          title={`과거 변동성 분포를 무작위 재샘플(부트스트랩, N=${paths.toLocaleString()})한 확률 구조입니다. 방향(드리프트)은 0으로 가정 — 가격 예측이 아니라 "목표까지 거리 vs 손절까지 거리 + 변동성"이 만드는 확률입니다.`}
+          title={t("analyze.cmpB.fullTitle", { n: paths.toLocaleString() })}
           className="ml-auto inline-flex cursor-help items-center gap-1 text-[10px] text-muted-foreground/70"
         >
           <Info className="h-3 w-3" />
-          방향 가정 없음
+          {t("analyze.cmpB.noDirection")}
         </span>
       </div>
 
       {/* 확률 바 */}
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-        <div className="bg-grade-a" style={{ width: pct(pTarget) }} title={`목표 먼저 ${pct(pTarget)}`} />
-        <div className="bg-grade-d" style={{ width: pct(pStop) }} title={`손절 먼저 ${pct(pStop)}`} />
-        <div className="bg-muted-foreground/40" style={{ width: pct(pTimeout) }} title={`미도달 ${pct(pTimeout)}`} />
+        <div className="bg-grade-a" style={{ width: pct(pTarget) }} title={t("analyze.cmpB.barTarget", { p: pct(pTarget) })} />
+        <div className="bg-grade-d" style={{ width: pct(pStop) }} title={t("analyze.cmpB.barStop", { p: pct(pStop) })} />
+        <div className="bg-muted-foreground/40" style={{ width: pct(pTimeout) }} title={t("analyze.cmpB.barTimeout", { p: pct(pTimeout) })} />
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2 text-center">
         <div>
           <div className="font-mono text-base font-bold tabular-nums text-grade-a">{pct(pTarget)}</div>
-          <div className="text-[10px] text-muted-foreground">목표 먼저</div>
+          <div className="text-[10px] text-muted-foreground">{t("analyze.cmpB.targetFirst")}</div>
         </div>
         <div>
           <div className="font-mono text-base font-bold tabular-nums text-grade-d">{pct(pStop)}</div>
-          <div className="text-[10px] text-muted-foreground">손절 먼저</div>
+          <div className="text-[10px] text-muted-foreground">{t("analyze.cmpB.stopFirst")}</div>
         </div>
         <div>
           <div className="font-mono text-base font-bold tabular-nums text-muted-foreground">{pct(pTimeout)}</div>
-          <div className="text-[10px] text-muted-foreground">기한 내 미도달</div>
+          <div className="text-[10px] text-muted-foreground">{t("analyze.cmpB.timeoutLabel")}</div>
         </div>
       </div>
 
       {/* 기대 R + 분포 */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/50 pt-2.5 text-xs">
         <span className="text-muted-foreground">
-          기대값{" "}
+          {t("analyze.cmpB.expValue")}{" "}
           <span className={"font-mono font-semibold tabular-nums " + (expGood ? "text-grade-a" : "text-grade-d")}>
             {expR >= 0 ? "+" : ""}
             {expR.toFixed(2)}R
           </span>
         </span>
         <span className="font-mono tabular-nums text-muted-foreground">
-          R분포 p10{" "}
+          {t("analyze.cmpB.rDist")}{" "}
           <span className="text-grade-d">{p10 >= 0 ? "+" : ""}{p10.toFixed(1)}</span>
-          {" · "}중앙값 <span className="text-foreground/80">{p50 >= 0 ? "+" : ""}{p50.toFixed(1)}</span>
+          {" · "}{t("analyze.cmpB.median")} <span className="text-foreground/80">{p50 >= 0 ? "+" : ""}{p50.toFixed(1)}</span>
           {" · "}p90 <span className="text-grade-a">{p90 >= 0 ? "+" : ""}{p90.toFixed(1)}</span>
         </span>
         <span className="text-muted-foreground">
-          평균 최대낙폭 <span className="font-mono tabular-nums text-amber-400">−{medianDrawdownPct.toFixed(1)}%</span>
+          {t("analyze.cmpB.avgDrawdown")} <span className="font-mono tabular-nums text-amber-400">−{medianDrawdownPct.toFixed(1)}%</span>
         </span>
       </div>
     </div>

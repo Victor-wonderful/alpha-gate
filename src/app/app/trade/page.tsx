@@ -3,12 +3,14 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { getMoneyContext } from "@/lib/money-management";
+import { getT } from "@/lib/i18n/server";
 
 export default async function TradePage({
   searchParams,
 }: {
   searchParams: Promise<{ symbol?: string; accountSize?: string; riskPct?: string }>;
 }) {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -49,7 +51,7 @@ export default async function TradePage({
   const apiKeys = (apiKeysRaw ?? []).map((k) => ({
     id: k.id as string,
     exchange: k.exchange as "binance" | "upbit",
-    nickname: (k.nickname as string | null) ?? "(이름 없음)",
+    nickname: (k.nickname as string | null) ?? t("trade.page.noName"),
     apiKeyMasked: k.api_key_masked as string,
     canTrade: Boolean((k.permissions as { canTrade?: boolean } | null)?.canTrade),
   }));

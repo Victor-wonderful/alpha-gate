@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import Script from "next/script";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -65,13 +64,13 @@ export default async function RootLayout({
       className={`dark ${GeistSans.variable} ${GeistMono.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        {/* Inline script in <head> runs at HTML parse time (before body/hydration),
+            silencing lightweight-charts "Object is disposed" async errors.
+            dangerouslySetInnerHTML avoids React's "script with children" warning. */}
+        <script dangerouslySetInnerHTML={{ __html: SUPPRESS_DISPOSED }} />
+      </head>
       <body className="min-h-screen antialiased">
-        {/* Synchronously installed BEFORE Next.js dev overlay to silence
-            lightweight-charts "Object is disposed" async errors. Uses
-            next/script (Next.js 16 disallows raw <script> in component tree). */}
-        <Script id="suppress-disposed" strategy="beforeInteractive">
-          {SUPPRESS_DISPOSED}
-        </Script>
         <I18nProvider locale={locale}>
           <Providers>{children}</Providers>
         </I18nProvider>

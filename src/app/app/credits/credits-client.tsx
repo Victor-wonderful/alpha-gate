@@ -6,21 +6,22 @@ import { Sparkles, Trophy, Check, Loader2, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 interface Package {
   id: "starter" | "basic" | "pro" | "vip";
   credits: number;
   price: number; // vUSDT
-  label: string;
+  labelKey: string;
   highlight?: boolean;
-  badge?: string;
+  badgeKey?: string;
 }
 
 const PACKAGES: Package[] = [
-  { id: "starter", credits: 5, price: 10, label: "스타터" },
-  { id: "basic", credits: 100, price: 1000, label: "베이직", highlight: true, badge: "인기" },
-  { id: "pro", credits: 500, price: 5000, label: "프로" },
-  { id: "vip", credits: 1000, price: 10000, label: "VIP", badge: "대용량" },
+  { id: "starter", credits: 5, price: 10, labelKey: "billing.credits.pkg.starter" },
+  { id: "basic", credits: 100, price: 1000, labelKey: "billing.credits.pkg.basic", highlight: true, badgeKey: "billing.credits.badge.popular" },
+  { id: "pro", credits: 500, price: 5000, labelKey: "billing.credits.pkg.pro" },
+  { id: "vip", credits: 1000, price: 10000, labelKey: "billing.credits.pkg.vip", badgeKey: "billing.credits.badge.highVolume" },
 ];
 
 interface Props {
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function CreditsClient({ initialBalance, initialCredits }: Props) {
+  const t = useT();
   const [balance, setBalance] = useState(initialBalance);
   const [credits, setCredits] = useState(initialCredits);
   const [pending, startTransition] = useTransition();
@@ -37,7 +39,7 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
   function purchase(pkg: Package) {
     if (pending) return;
     if (balance < pkg.price) {
-      toast.error(`잔액 부족 — ${pkg.price.toLocaleString()} vUSDT 필요`);
+      toast.error(t("billing.credits.toast.insufficient", { amount: pkg.price.toLocaleString() }));
       return;
     }
     setSelectedId(pkg.id);
@@ -50,14 +52,14 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
         });
         const data = await res.json();
         if (!res.ok) {
-          toast.error(data.error ?? "구매 실패");
+          toast.error(data.error ?? t("billing.credits.toast.purchaseFailed"));
           return;
         }
         setBalance(data.balanceAfter);
         setCredits(data.creditsAfter);
-        toast.success(`${pkg.credits}회 크레딧 추가 완료`);
+        toast.success(t("billing.credits.toast.purchaseSuccess", { n: pkg.credits }));
       } catch {
-        toast.error("네트워크 오류");
+        toast.error(t("common.error.network"));
       } finally {
         setSelectedId(null);
       }
@@ -72,7 +74,7 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
           <CardContent className="py-4 px-5">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Trophy className="h-3.5 w-3.5 text-yellow-500" />
-              vUSDT 잔액
+              {t("billing.vusdtBalance")}
             </div>
             <div className="font-mono text-2xl font-black tabular-nums mt-1">
               {balance.toLocaleString()}
@@ -83,10 +85,10 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
           <CardContent className="py-4 px-5">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              AI 크레딧
+              {t("billing.aiCredits")}
             </div>
             <div className="font-mono text-2xl font-black tabular-nums mt-1">
-              {credits.toLocaleString()}<span className="text-base ml-1 text-muted-foreground">회</span>
+              {credits.toLocaleString()}<span className="text-base ml-1 text-muted-foreground">{t("unit.credits")}</span>
             </div>
           </CardContent>
         </Card>
@@ -106,34 +108,34 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
                 pkg.highlight && "border-primary/50 ring-2 ring-primary/20",
               )}
             >
-              {pkg.badge && (
+              {pkg.badgeKey && (
                 <div className={cn(
                   "absolute top-2 right-2 z-10 rounded-full px-2 py-0.5 text-[10px] font-bold",
                   pkg.highlight
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground border border-border",
                 )}>
-                  {pkg.badge}
+                  {t(pkg.badgeKey)}
                 </div>
               )}
               <CardContent className="p-5 space-y-3">
                 <div>
                   <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                    {pkg.label}
+                    {t(pkg.labelKey)}
                   </div>
                   <div className="flex items-baseline gap-1 mt-1">
                     <span className="font-mono text-3xl font-black tabular-nums">
                       {pkg.credits.toLocaleString()}
                     </span>
-                    <span className="text-sm text-muted-foreground">회</span>
+                    <span className="text-sm text-muted-foreground">{t("unit.credits")}</span>
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
-                    회당 {unitPrice.toFixed(unitPrice >= 1 ? 0 : 1)} vUSDT
+                    {t("billing.credits.perCredit", { price: unitPrice.toFixed(unitPrice >= 1 ? 0 : 1) })}
                   </div>
                 </div>
 
                 <div className="border-t border-border/40 pt-3">
-                  <div className="text-xs text-muted-foreground">가격</div>
+                  <div className="text-xs text-muted-foreground">{t("billing.price")}</div>
                   <div className="font-mono text-lg font-bold tabular-nums">
                     {pkg.price.toLocaleString()}{" "}
                     <span className="text-xs font-normal text-muted-foreground">vUSDT</span>
@@ -150,14 +152,14 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      처리 중...
+                      {t("common.processing")}
                     </>
                   ) : cantAfford ? (
-                    "잔액 부족"
+                    t("billing.insufficientBalance")
                   ) : (
                     <>
                       <Check className="h-4 w-4" />
-                      구매
+                      {t("billing.buy")}
                     </>
                   )}
                 </Button>
@@ -173,18 +175,17 @@ export function CreditsClient({ initialBalance, initialCredits }: Props) {
           <div className="flex items-start gap-2">
             <TrendingUp className="h-3.5 w-3.5 mt-0.5 text-primary flex-none" />
             <p>
-              AI 분석 도구는 캔들/거래량/주문호가 데이터 + AI 시나리오 생성을 포함합니다.
-              1회 사용 = 1 크레딧 차감 (분석 성공 시에만).
+              {t("billing.credits.info.usage")}
             </p>
           </div>
           <div className="flex items-start gap-2">
             <Sparkles className="h-3.5 w-3.5 mt-0.5 text-yellow-500 flex-none" />
             <p>
-              vUSDT가 부족하면{" "}
+              {t("billing.credits.info.topupPrefix")}{" "}
               <a href="/app/deposit" className="text-primary underline underline-offset-2 hover:text-primary/80">
-                충전 페이지
+                {t("billing.credits.info.topupLink")}
               </a>
-              에서 AAG로 입금하세요 (1 AAG = 1,000 vUSDT).
+              {t("billing.credits.info.topupSuffix")}
             </p>
           </div>
         </CardContent>

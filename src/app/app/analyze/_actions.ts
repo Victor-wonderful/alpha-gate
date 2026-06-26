@@ -10,6 +10,7 @@ import { fetchScenarioStats, type ScenarioStats } from "@/lib/analysis/scenario-
 import { simulateTrade } from "@/lib/backtest/simulator";
 import { revalidatePath } from "next/cache";
 import { getAiCredits, spendAiCredit } from "@/lib/paper-wallet";
+import { getLocale } from "@/lib/i18n/server";
 
 export async function runAnalysisAction(
   symbol: string,
@@ -70,9 +71,10 @@ export async function runAnalysisAction(
     return { snapshot, error: "ANTHROPIC_API_KEY가 설정되지 않았습니다. 데이터 스냅샷만 표시합니다." };
 
   // Stage 2: Strategy Agent (LLM, focused classification)
+  const locale = await getLocale();
   let strategy: StrategyResult;
   try {
-    strategy = await classifyStrategy(snapshot);
+    strategy = await classifyStrategy(snapshot, locale);
   } catch (e) {
     return {
       snapshot,
@@ -83,7 +85,7 @@ export async function runAnalysisAction(
   // Stage 3: Scenario Synthesis (LLM, constrained by strategy)
   let report: AnalysisReport;
   try {
-    report = await synthesizeAnalysis(snapshot, strategy);
+    report = await synthesizeAnalysis(snapshot, strategy, locale);
   } catch (e) {
     return {
       snapshot,

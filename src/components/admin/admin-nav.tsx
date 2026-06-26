@@ -4,16 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Activity, Server } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const ITEMS = [
-  { href: "/app/admin", label: "대시보드", icon: LayoutDashboard, exact: true },
-  { href: "/app/admin/users", label: "회원", icon: Users, exact: false },
-  { href: "/app/admin/activity", label: "활동", icon: Activity, exact: false },
-  { href: "/app/admin/system", label: "시스템", icon: Server, exact: false },
-];
+import { useT } from "@/lib/i18n/context";
 
 export function AdminNav() {
   const pathname = usePathname();
+  const t = useT();
+
+  const ITEMS = [
+    { href: "/app/admin", label: t("admin.navDashboard"), icon: LayoutDashboard, exact: true },
+    { href: "/app/admin/users", label: t("admin.navUsers"), icon: Users, exact: false },
+    { href: "/app/admin/activity", label: t("admin.navActivity"), icon: Activity, exact: false },
+    { href: "/app/admin/system", label: t("admin.navSystem"), icon: Server, exact: false },
+  ];
   return (
     <nav
       className={cn(

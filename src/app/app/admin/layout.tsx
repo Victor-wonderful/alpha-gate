@@ -1,16 +1,18 @@
 import { Shield } from "lucide-react";
 import { requireAdmin } from "@/lib/admin/guard";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { getT } from "@/lib/i18n/server";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const admin = await requireAdmin();
+  const t = await getT();
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-bold tracking-tight">어드민</h1>
+          <h1 className="text-lg font-bold tracking-tight">{t("admin.title")}</h1>
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
             {admin.email}
           </span>

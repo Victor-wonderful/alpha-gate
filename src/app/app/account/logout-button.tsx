@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/context";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 
 export function LogoutButton() {
+  const t = useT();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -26,7 +28,7 @@ export function LogoutButton() {
       disabled={pending}
     >
       <LogOut className="mr-2 h-4 w-4" />
-      {pending ? "로그아웃 중…" : "로그아웃"}
+      {pending ? t("acct.loggingOut") : t("acct.logout")}
     </Button>
   );
 }

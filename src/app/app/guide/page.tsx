@@ -10,12 +10,14 @@ import {
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
 export const metadata = {
   title: "사용 방법",
 };
 
-export default function GuidePage() {
+export default async function GuidePage() {
+  const t = await getT();
   return (
     <div className="mx-auto max-w-[1100px] space-y-14 px-1 py-4">
       <div>
@@ -24,24 +26,25 @@ export default function GuidePage() {
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          홈으로
+          {t("guide.home.backHome")}
         </Link>
       </div>
 
       {/* Intro */}
       <section className="space-y-4">
         <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary">getting started</div>
-        <h1 className="text-4xl font-bold leading-[1.1] tracking-tight">Alpha Gate 사용 방법</h1>
+        <h1 className="text-4xl font-bold leading-[1.1] tracking-tight">{t("guide.home.title")}</h1>
         <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
-          "무엇을 살까"가 아니라 <span className="font-medium text-foreground">"이 거래를 해도 되는가"</span>에
-          답하는 도구입니다. AI 분석부터 복기까지 4단계 사이클로 진행됩니다.
+          {t("guide.home.introLead")}{" "}
+          <span className="font-medium text-foreground">{t("guide.home.introEmphasis")}</span>
+          {t("guide.home.introTail")}
         </p>
       </section>
 
       {/* 4단계 사이클 — 가로 다이어그램 */}
       <section className="space-y-3">
         <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          4단계 사이클
+          {t("guide.home.cycleLabel")}
         </div>
         <div className="grid divide-y divide-border/60 rounded-xl border border-border/60 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
           <CycleStep
@@ -49,32 +52,32 @@ export default function GuidePage() {
             Icon={Sparkles}
             color="text-primary"
             bg="bg-primary/10"
-            title="AI 분석"
-            sub="시장 구조 · 시나리오"
+            title={t("guide.home.cycle1Title")}
+            sub={t("guide.home.cycle1Sub")}
           />
           <CycleStep
             n="02"
             Icon={CheckCircle2}
             color="text-grade-a"
             bg="bg-grade-a/10"
-            title="거래 실행"
-            sub="등급 · 사이즈"
+            title={t("guide.home.cycle2Title")}
+            sub={t("guide.home.cycle2Sub")}
           />
           <CycleStep
             n="03"
             Icon={Wallet}
             color="text-grade-b"
             bg="bg-grade-b/10"
-            title="진입"
-            sub="시장가 · 지정가"
+            title={t("guide.home.cycle3Title")}
+            sub={t("guide.home.cycle3Sub")}
           />
           <CycleStep
             n="04"
             Icon={LineChartIcon}
             color="text-grade-c"
             bg="bg-grade-c/10"
-            title="복기"
-            sub="통계 · 랭킹"
+            title={t("guide.home.cycle4Title")}
+            sub={t("guide.home.cycle4Sub")}
           />
         </div>
       </section>
@@ -82,37 +85,37 @@ export default function GuidePage() {
       {/* 기능별 가이드 — 5 카드 */}
       <section className="space-y-3">
         <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          기능별 가이드
+          {t("guide.home.featureLabel")}
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
           <GuideCard
             href="/app/guide/analyze"
             Icon={Sparkles}
             iconColor="text-primary"
-            title="AI 분석 사용법"
-            desc="언제 분석하면 좋은지, 결과 읽는 법, 시나리오 결과 자동 추적 + 과거 적중률."
+            title={t("guide.home.cardAnalyzeTitle")}
+            desc={t("guide.home.cardAnalyzeDesc")}
           />
           <GuideCard
             href="/app/guide/trading"
             Icon={Wallet}
             iconColor="text-grade-b"
-            title="가상 거래 사용법"
-            desc="시장가/지정가, 5분 자동 정산, 거래 평가의 자금 관리 + 시장 컨텍스트 자동 집계."
+            title={t("guide.home.cardTradingTitle")}
+            desc={t("guide.home.cardTradingDesc")}
           />
           <GuideCard
             href="/app/guide/results"
             Icon={LineChartIcon}
             iconColor="text-grade-a"
-            title="내 결과 · 복기 사용법"
-            desc="등급/방향별 breakdown, Equity Curve, 랭킹 시스템 해석."
+            title={t("guide.home.cardResultsTitle")}
+            desc={t("guide.home.cardResultsDesc")}
           />
         </div>
       </section>
 
       {/* 화폐 시스템 */}
       <section className="space-y-4">
-        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">화폐 시스템</div>
-        <h2 className="text-2xl font-bold leading-[1.15] tracking-tight">vUSDT, AAG, AI 크레딧</h2>
+        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{t("guide.home.currencyLabel")}</div>
+        <h2 className="text-2xl font-bold leading-[1.15] tracking-tight">{t("guide.home.currencyHeading")}</h2>
         <div className="grid gap-6 pt-2 lg:grid-cols-3">
           <CurrencyCard
             Icon={Coins}
@@ -120,8 +123,8 @@ export default function GuidePage() {
             title="vUSDT"
             body={
               <>
-                플랫폼 내 가상 화폐. 가상 거래에 사용합니다. 신규 가입 시{" "}
-                <span className="font-mono font-medium tabular-nums text-foreground">10,000</span> 자동 지급.
+                {t("guide.home.vusdtLead")}{" "}
+                <span className="font-mono font-medium tabular-nums text-foreground">10,000</span>{t("guide.home.vusdtTail")}
               </>
             }
           />
@@ -131,22 +134,22 @@ export default function GuidePage() {
             title="AAG"
             body={
               <>
-                실제 결제 통화. 환율{" "}
+                {t("guide.home.aagLead")}{" "}
                 <span className="font-mono font-medium tabular-nums text-foreground">
                   1 AAG = 1 USDT = 1,000 vUSDT
                 </span>
-                . 충전 시 보너스를 받습니다.
+                {t("guide.home.aagTail")}
               </>
             }
           />
           <CurrencyCard
             Icon={Sparkles}
             iconColor="text-amber-400"
-            title="AI 크레딧"
+            title={t("guide.home.creditTitle")}
             body={
               <>
-                AI 분석 1회 = 크레딧 1개. 신규 가입 시{" "}
-                <span className="font-medium text-foreground">5회 무료</span> 보너스. 소진 시 vUSDT로 패키지 구매.
+                {t("guide.home.creditLead")}{" "}
+                <span className="font-medium text-foreground">{t("guide.home.creditEmphasis")}</span>{t("guide.home.creditTail")}
               </>
             }
           />
@@ -156,22 +159,22 @@ export default function GuidePage() {
       {/* 공통 FAQ */}
       <section className="space-y-4">
         <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">FAQ</div>
-        <h2 className="text-2xl font-bold leading-[1.15] tracking-tight">자주 묻는 질문</h2>
+        <h2 className="text-2xl font-bold leading-[1.15] tracking-tight">{t("guide.home.faqHeading")}</h2>
         <div className="mt-4 divide-y divide-border/60 border-y border-border/60">
-          <Faq question="자동 정산은 언제 되나요?">
-            5분마다 자동. 손절·목표가 적중하면 거래 종결 + 실현 R 계산 + 알림(Telegram/Discord) 발송. 즉시 확인하려면 거래 일지 페이지의 "지금 자동 정산" 버튼.
+          <Faq question={t("guide.home.faqAutoSettleQ")}>
+            {t("guide.home.faqAutoSettleA")}
           </Faq>
-          <Faq question="시나리오 적중률은 어떻게 계산되나요?">
-            분석을 저장하면 시나리오들이 자동으로 트래킹 시스템에 등록됩니다. 사용자가 실제 진입했는지 여부와 무관하게 시스템이 5분마다 entry/target/stop 가격을 추적해 적중률을 누적합니다. (symbol × strategy) 조합별 최근 30일 표본 합산. 표본 3개 이상이면 분석 결과 화면에 "과거 적중률 X%" 표시.
+          <Faq question={t("guide.home.faqHitRateQ")}>
+            {t("guide.home.faqHitRateA")}
           </Faq>
-          <Faq question="거래 평가의 자금 관리는 뭔가요?">
-            거래 실행 페이지에서 자동으로 표시되는 상태 박스. 오늘 거래 N건/누적 R, 진행 중 포지션 리스트, 진행 중 노출 %, 일일 손실 한도(-2R) 근접 경고. 사용자 입력 없이 저널 DB에서 자동 집계. 중복 코인 진입이나 과노출은 등급에 자동 차감.
+          <Faq question={t("guide.home.faqMoneyMgmtQ")}>
+            {t("guide.home.faqMoneyMgmtA")}
           </Faq>
-          <Faq question="실거래(Binance 등)도 가능한가요?">
-            코드는 완성됐지만 현재 보류 중입니다. Binance의 IP 제한 정책과 Vercel 서버리스의 고정 IP 부재가 충돌하기 때문입니다. Bybit·프록시 인프라 도입 시 활성화 예정.
+          <Faq question={t("guide.home.faqLiveTradeQ")}>
+            {t("guide.home.faqLiveTradeA")}
           </Faq>
-          <Faq question="신규 가입 시 받는 자산이 뭔가요?">
-            vUSDT 10,000과 AI 크레딧 5회. 가상 거래과 분석을 즉시 시작할 수 있는 분량.
+          <Faq question={t("guide.home.faqSignupAssetsQ")}>
+            {t("guide.home.faqSignupAssetsA")}
           </Faq>
         </div>
       </section>
@@ -181,16 +184,16 @@ export default function GuidePage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary">ready</div>
-            <h3 className="mt-2 text-2xl font-bold leading-[1.15]">시작할 준비가 됐어요</h3>
+            <h3 className="mt-2 text-2xl font-bold leading-[1.15]">{t("guide.home.ctaTitle")}</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              AI 분석 5회 무료 + vUSDT 10,000으로 첫 사이클을 돌려보세요.
+              {t("guide.home.ctaDesc")}
             </p>
           </div>
           <Link
             href="/app/analyze"
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            AI 분석 시작
+            {t("guide.home.ctaButton")}
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

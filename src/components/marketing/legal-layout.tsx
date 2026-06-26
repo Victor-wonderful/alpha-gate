@@ -2,12 +2,13 @@ import Link from "next/link";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { SectionShell, GradientText } from "@/components/marketing/section";
+import { getT } from "@/lib/i18n/server";
 
-const LEGAL_NAV: Array<{ href: string; label: string }> = [
-  { href: "/terms", label: "이용약관" },
-  { href: "/privacy", label: "개인정보처리방침" },
-  { href: "/refund", label: "환불정책" },
-  { href: "/disclaimer", label: "투자 면책 고지" },
+const LEGAL_NAV: Array<{ href: string; labelKey: string }> = [
+  { href: "/terms", labelKey: "mktc.legal.terms" },
+  { href: "/privacy", labelKey: "mktc.legal.privacy" },
+  { href: "/refund", labelKey: "mktc.legal.refund" },
+  { href: "/disclaimer", labelKey: "mktc.legal.disclaimer" },
 ];
 
 interface LegalLayoutProps {
@@ -18,13 +19,14 @@ interface LegalLayoutProps {
   children: React.ReactNode;
 }
 
-export function LegalLayout({
+export async function LegalLayout({
   title,
   eyebrow,
   effectiveDate,
   currentHref,
   children,
 }: LegalLayoutProps) {
+  const t = await getT();
   return (
     <main className="flex min-h-screen flex-col bg-[#02060f] text-white">
       <MarketingHeader />
@@ -38,7 +40,7 @@ export function LegalLayout({
           <GradientText>{title}</GradientText>
         </h1>
         <p className="mt-4 font-mono text-xs uppercase tracking-wider text-white/40">
-          시행일 · {effectiveDate}
+          {t("mktc.legal.effectiveDate", { date: effectiveDate })}
         </p>
       </SectionShell>
 
@@ -48,7 +50,7 @@ export function LegalLayout({
           <aside className="lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-[#091632]/60 via-[#06112a]/50 to-[#040b1d]/75 p-5 backdrop-blur-xl">
               <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-400">
-                법적 고지
+                {t("mktc.footer.colLegal")}
               </div>
               <ul className="mt-4 space-y-1 text-sm">
                 {LEGAL_NAV.map((n) => {
@@ -63,7 +65,7 @@ export function LegalLayout({
                             : "block rounded-md border-l-2 border-transparent px-3 py-2 text-white/55 transition-colors hover:border-white/20 hover:text-white"
                         }
                       >
-                        {n.label}
+                        {t(n.labelKey)}
                       </Link>
                     </li>
                   );
@@ -73,7 +75,7 @@ export function LegalLayout({
                 href="/contact"
                 className="mt-5 inline-flex items-center gap-1 text-xs font-semibold text-cyan-300 transition-colors hover:text-cyan-200"
               >
-                문의하기 →
+                {t("mktc.legal.contactCta")}
               </Link>
             </div>
           </aside>

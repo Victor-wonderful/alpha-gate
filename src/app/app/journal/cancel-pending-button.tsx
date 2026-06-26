@@ -3,9 +3,11 @@
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/context";
 import { cancelPendingLimitByTradeAction } from "./_actions";
 
 export function CancelPendingButton({ tradeId }: { tradeId: string }) {
+  const t = useT();
   const [pending, start] = useTransition();
   return (
     <Button
@@ -16,14 +18,14 @@ export function CancelPendingButton({ tradeId }: { tradeId: string }) {
         start(async () => {
           const r = await cancelPendingLimitByTradeAction(tradeId);
           if (!r.ok) {
-            toast.error(r.error ?? "취소 실패");
+            toast.error(r.error ?? t("journal.cmp.cancelFailed"));
             return;
           }
-          toast.success("지정가 주문을 취소했습니다.");
+          toast.success(t("journal.cmp.cancelSuccess"));
         })
       }
     >
-      {pending ? "취소 중…" : "주문 취소"}
+      {pending ? t("journal.cmp.cancelling") : t("journal.cmp.cancelOrder")}
     </Button>
   );
 }

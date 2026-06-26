@@ -4,9 +4,11 @@ import { useTransition } from "react";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/context";
 import { resolveMyTradesAction } from "@/app/app/_actions";
 
 export function ResolveTradesButton() {
+  const t = useT();
   const [pending, start] = useTransition();
   return (
     <Button
@@ -21,23 +23,24 @@ export function ResolveTradesButton() {
             return;
           }
           if (res.checked === 0) {
-            toast.info("정산할 열린 거래가 없습니다.");
+            toast.info(t("journal.cmp.noOpenTrades"));
             return;
           }
           if (res.resolved > 0) {
             toast.success(
-              `${res.checked}건 중 ${res.resolved}건 자동 정산 완료.${res.stale > 0 ? ` (타임아웃 ${res.stale}건)` : ""}`,
+              t("journal.cmp.resolvedDone", { checked: res.checked, resolved: res.resolved }) +
+                (res.stale > 0 ? t("journal.cmp.staleSuffix", { stale: res.stale }) : ""),
             );
           } else if (res.stale > 0) {
-            toast.info(`정산 대상 없음. 타임아웃 ${res.stale}건은 수동 정리 필요.`);
+            toast.info(t("journal.cmp.staleOnly", { stale: res.stale }));
           } else {
-            toast.info(`${res.checked}건 확인 — 아직 손절/목표 적중 없음.`);
+            toast.info(t("journal.cmp.checkedNoHit", { checked: res.checked }));
           }
         })
       }
     >
       <RefreshCw className={pending ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
-      {pending ? "확인 중..." : "지금 자동 정산"}
+      {pending ? t("journal.cmp.checking") : t("journal.cmp.resolveNow")}
     </Button>
   );
 }

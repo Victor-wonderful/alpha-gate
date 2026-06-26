@@ -13,7 +13,8 @@ import {
   createTelegramLinkAction,
   getCurrentChatIdAction,
 } from "./_actions";
-import { ANALYSIS_ALERT_OPTIONS } from "@/lib/analysis/sessions";
+import { getAnalysisAlertOptions } from "@/lib/analysis/sessions";
+import { useT } from "@/lib/i18n/context";
 
 type Initial = {
   telegram_chat_id?: string | null;
@@ -26,6 +27,7 @@ type Initial = {
 } | null;
 
 export function NotifyForm({ initial }: { initial: Initial }) {
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [tg, setTg] = useState(initial?.telegram_chat_id ?? "");
   const [dc, setDc] = useState(initial?.discord_webhook_url ?? "");
@@ -45,14 +47,14 @@ export function NotifyForm({ initial }: { initial: Initial }) {
     const tick = async () => {
       if (Date.now() - startedAt > MAX_MS) {
         setPolling(false);
-        toast.info("자동 확인 시간 초과. Telegram 에서 START 눌렀다면 \"연결 후 새로고침\" 버튼으로 확인하세요.");
+        toast.info(t("settings.notify.tg.pollTimeout"));
         return;
       }
       const r = await getCurrentChatIdAction();
       if (r.chatId) {
         setTg(r.chatId);
         setPolling(false);
-        toast.success("🎉 텔레그램 연결 완료!");
+        toast.success(t("settings.notify.tg.connectedToast"));
         return;
       }
       pollTimerRef.current = setTimeout(tick, 3000);
@@ -61,7 +63,7 @@ export function NotifyForm({ initial }: { initial: Initial }) {
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
-  }, [polling]);
+  }, [polling, t]);
 
   function save() {
     startTransition(async () => {
@@ -75,7 +77,7 @@ export function NotifyForm({ initial }: { initial: Initial }) {
         analysis_alert_times: [...alertTimes].sort((a, b) => a - b),
       });
       if (r.error) toast.error(r.error);
-      else toast.success("저장됨");
+      else toast.success(t("settings.notify.savedToast"));
     });
   }
 
@@ -83,23 +85,23 @@ export function NotifyForm({ initial }: { initial: Initial }) {
     startTransition(async () => {
       const r = await testNotifyAction();
       if (r.error) toast.error(r.error);
-      else toast.success("테스트 발송 완료. 채널을 확인하세요.");
+      else toast.success(t("settings.notify.testSentToast"));
     });
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>채널</CardTitle>
+        <CardTitle>{t("settings.notify.channels")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="space-y-2">
-          <Label>텔레그램</Label>
+          <Label>{t("settings.notify.telegram")}</Label>
           {tg ? (
             <div className="rounded-md border border-grade-a/30 bg-grade-a/5 px-3 py-2 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <span className="text-grade-a font-semibold">✓ 연결됨</span>
+                  <span className="text-grade-a font-semibold">{t("settings.notify.tg.connected")}</span>
                   <span className="ml-2 text-xs text-muted-foreground font-mono">
                     chat_id: {tg}
                   </span>
@@ -108,9 +110,9 @@ export function NotifyForm({ initial }: { initial: Initial }) {
                   type="button"
                   onClick={() => setTg("")}
                   className="text-xs text-muted-foreground hover:text-foreground underline"
-                  title="연결 해제 (저장해야 적용됨)"
+                  title={t("settings.notify.tg.disconnectTitle")}
                 >
-                  해제
+                  {t("settings.notify.tg.disconnect")}
                 </button>
               </div>
             </div>
@@ -124,13 +126,13 @@ export function NotifyForm({ initial }: { initial: Initial }) {
                   startTransition(async () => {
                     const r = await createTelegramLinkAction();
                     if (r.error || !r.url) {
-                      toast.error(r.error ?? "링크 생성 실패");
+                      toast.error(r.error ?? t("settings.notify.tg.linkFailed"));
                       return;
                     }
                     // 새 창에서 Telegram 열기 (앱 또는 웹)
                     window.open(r.url, "_blank", "noopener,noreferrer");
                     toast.info(
-                      "Telegram 에서 START 누르세요. 연결되면 자동으로 ✓ 연결됨 표시 (최대 90초).",
+                      t("settings.notify.tg.startPrompt"),
                       { duration: 6000 },
                     );
                     // 자동 폴링 시작 — chat_id 등록 감지 시 즉시 UI 갱신
@@ -141,10 +143,10 @@ export function NotifyForm({ initial }: { initial: Initial }) {
                 {polling ? (
                   <>
                     <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-                    Telegram 에서 START 대기 중...
+                    {t("settings.notify.tg.waiting")}
                   </>
                 ) : (
-                  "🤖 텔레그램 연결"
+                  t("settings.notify.tg.connectBtn")
                 )}
               </Button>
               <button
@@ -155,28 +157,28 @@ export function NotifyForm({ initial }: { initial: Initial }) {
                     const r = await getCurrentChatIdAction();
                     if (r.chatId) {
                       setTg(r.chatId);
-                      toast.success("연결됐습니다.");
+                      toast.success(t("settings.notify.tg.connectedShort"));
                     } else {
-                      toast.info("아직 연결되지 않았습니다. Telegram 에서 START 눌러주세요.");
+                      toast.info(t("settings.notify.tg.notYet"));
                     }
                   });
                 }}
                 className="ml-2 text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
               >
-                연결 후 새로고침
+                {t("settings.notify.tg.refreshAfter")}
               </button>
               <details className="mt-1">
                 <summary className="cursor-pointer text-xs text-muted-foreground">
-                  직접 chat_id 입력
+                  {t("settings.notify.tg.manualSummary")}
                 </summary>
                 <div className="mt-2">
                   <Input
                     value={tg}
                     onChange={(e) => setTg(e.target.value)}
-                    placeholder="예: 123456789"
+                    placeholder={t("settings.notify.tg.chatIdPlaceholder")}
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    이미 chat_id 를 아는 경우 직접 입력 가능. 저장 버튼 누르면 적용됩니다.
+                    {t("settings.notify.tg.manualHint")}
                   </p>
                 </div>
               </details>
@@ -184,36 +186,36 @@ export function NotifyForm({ initial }: { initial: Initial }) {
           )}
         </div>
         <div className="space-y-1.5">
-          <Label>디스코드 Webhook URL</Label>
+          <Label>{t("settings.notify.discordLabel")}</Label>
           <Input
             value={dc}
             onChange={(e) => setDc(e.target.value)}
             placeholder="https://discord.com/api/webhooks/..."
           />
           <p className="text-xs text-muted-foreground">
-            디스코드 서버 설정 → 연동 → 웹훅에서 생성한 URL을 붙여 넣으세요.
+            {t("settings.notify.discordHint")}
           </p>
         </div>
 
         <div className="space-y-1 border-t border-border pt-4">
-          <div className="text-sm font-semibold">이벤트</div>
-          <Checkbox checked={eD} onChange={(e) => setED(e.target.checked)} label="D급 거래 저장 경고" />
-          <Checkbox checked={eL} onChange={(e) => setEL(e.target.checked)} label="연속 손실 경고" />
-          <Checkbox checked={eA} onChange={(e) => setEA(e.target.checked)} label="AI 복기 완료 알림" />
+          <div className="text-sm font-semibold">{t("settings.notify.events")}</div>
+          <Checkbox checked={eD} onChange={(e) => setED(e.target.checked)} label={t("settings.notify.evt.dGrade")} />
+          <Checkbox checked={eL} onChange={(e) => setEL(e.target.checked)} label={t("settings.notify.evt.losingStreak")} />
+          <Checkbox checked={eA} onChange={(e) => setEA(e.target.checked)} label={t("settings.notify.evt.aiCoach")} />
           <Checkbox
             checked={eDig}
             onChange={(e) => setEDig(e.target.checked)}
-            label="일일 요약 (한국시간 09:00)"
+            label={t("settings.notify.evt.dailyDigest")}
           />
         </div>
 
         <div className="space-y-2 border-t border-border pt-4">
-          <div className="text-sm font-semibold">🎯 분석 시간 알림</div>
+          <div className="text-sm font-semibold">{t("settings.notify.analysisAlertTitle")}</div>
           <p className="text-xs text-muted-foreground">
-            선택한 시각(KST)에 “지금이 분석하기 좋은 시간” 알림을 보냅니다. 스타일에 맞는 시각을 고르세요. 선택 안 하면 발송하지 않습니다.
+            {t("settings.notify.analysisAlertHint")}
           </p>
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-            {ANALYSIS_ALERT_OPTIONS.map((o) => (
+            {getAnalysisAlertOptions(t).map((o) => (
               <Checkbox
                 key={o.min}
                 checked={alertTimes.includes(o.min)}
@@ -227,16 +229,16 @@ export function NotifyForm({ initial }: { initial: Initial }) {
             ))}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            텔레그램·디스코드 채널이 연결돼 있어야 발송됩니다.
+            {t("settings.notify.analysisAlertFootnote")}
           </p>
         </div>
 
         <div className="flex gap-2">
           <Button onClick={save} disabled={pending}>
-            저장
+            {t("common.save")}
           </Button>
           <Button variant="outline" onClick={test} disabled={pending}>
-            테스트 발송
+            {t("settings.notify.testSend")}
           </Button>
         </div>
       </CardContent>

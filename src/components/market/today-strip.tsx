@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { fetchFng } from "@/lib/market-widgets/fng";
 import { getUpcomingMacroEvents } from "@/lib/market-widgets/calendar";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
 type BtcQuote = { last: number; changeToday: number; funding: number | null };
 
@@ -45,7 +46,7 @@ function fmtPrice(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-/** Rule-based verdict: "평소" vs "변동성↑" vs "매크로 직전" */
+/** Rule-based verdict: returns an i18n key + tone */
 function verdict({
   btc,
   fngValue,
@@ -54,23 +55,24 @@ function verdict({
   btc: BtcQuote | null;
   fngValue: number;
   hoursToNextHighMacro: number | null;
-}): { label: string; tone: "ok" | "warn" | "danger" } {
+}): { labelKey: string; tone: "ok" | "warn" | "danger" } {
   if (hoursToNextHighMacro !== null && hoursToNextHighMacro <= 24) {
-    return { label: "매크로 발표 직전", tone: "danger" };
+    return { labelKey: "verdictMacroImminent", tone: "danger" };
   }
   if (btc && Math.abs(btc.changeToday) >= 5) {
-    return { label: "변동성 큼", tone: "warn" };
+    return { labelKey: "verdictHighVolatility", tone: "warn" };
   }
   if (fngValue >= 75 || fngValue <= 25) {
-    return { label: "심리 극단", tone: "warn" };
+    return { labelKey: "verdictSentimentExtreme", tone: "warn" };
   }
   if (btc && btc.funding !== null && Math.abs(btc.funding) >= 0.05) {
-    return { label: "포지셔닝 쏠림", tone: "warn" };
+    return { labelKey: "verdictPositioningSkew", tone: "warn" };
   }
-  return { label: "평소", tone: "ok" };
+  return { labelKey: "verdictNormal", tone: "ok" };
 }
 
 export async function TodayMarketStrip() {
+  const t = await getT();
   const [btc, fng] = await Promise.all([fetchBtcQuote(), fetchFng()]);
   const events = getUpcomingMacroEvents(3);
   const nextHighMacro = events.find((e) => e.impact === "high");
@@ -90,7 +92,7 @@ export async function TodayMarketStrip() {
     warn: { dot: "bg-amber-400", text: "text-amber-400" },
     danger: { dot: "bg-grade-d", text: "text-grade-d" },
   } as const;
-  const t = toneStyles[v.tone];
+  const tone = toneStyles[v.tone];
 
   return (
     <Link
@@ -103,12 +105,15 @@ export async function TodayMarketStrip() {
           <span
             className={cn(
               "inline-block h-2 w-2 rounded-full",
-              t.dot,
+              tone.dot,
               v.tone === "ok" && "animate-pulse",
             )}
           />
           <span className="text-base font-semibold">
-            오늘 시장은 <span className={t.text}>{v.label}</span>
+            {t("market.strip.todayMarketIs")}{" "}
+            <span className={tone.text}>
+              {t(`market.strip.${v.labelKey}`)}
+            </span>
           </span>
         </div>
 
@@ -146,7 +151,7 @@ export async function TodayMarketStrip() {
             <>
               <span className="hidden h-4 w-px bg-border/60 lg:inline-block" />
               <span className="hidden items-center gap-1.5 text-muted-foreground lg:inline-flex">
-                펀딩
+                {t("market.strip.funding")}
                 <span
                   className={cn(
                     "font-mono font-medium tabular-nums",
@@ -164,7 +169,7 @@ export async function TodayMarketStrip() {
             <>
               <span className="hidden h-4 w-px bg-border/60 lg:inline-block" />
               <span className="hidden items-center gap-1.5 text-muted-foreground lg:inline-flex">
-                다음
+                {t("market.strip.next")}
                 <span className="font-medium text-foreground">
                   {nextHighMacro.kind}
                 </span>
@@ -178,7 +183,7 @@ export async function TodayMarketStrip() {
       </div>
 
       <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
-        자세히
+        {t("market.strip.details")}
         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
       </span>
     </Link>

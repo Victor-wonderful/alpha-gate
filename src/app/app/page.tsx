@@ -19,6 +19,8 @@ import { loadLatestRadar } from "@/lib/analysis/radar-persist";
 import { entrySuitability } from "@/lib/analysis/sessions";
 import type { TradingStyle } from "@/lib/analysis/style";
 import { cn, formatNumber } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/messages";
 import type { Grade } from "@/types/trade";
 import { TodayMarketStrip } from "@/components/market/today-strip";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
@@ -27,22 +29,22 @@ export const dynamic = "force-dynamic";
 
 /* ── 라벨 맵 ──────────────────────────────────────────── */
 
-const STRATEGY_LABELS: Record<string, string> = {
-  trend_pullback: "추세 눌림목",
-  breakout: "돌파",
-  range_fade: "박스권 매매",
-  reversal: "추세 반전",
-  liquidity_grab: "유동성 사냥",
-  funding_squeeze: "펀딩 압착",
-  session_open_drive: "세션 개장 추세",
-  wait: "관망",
+const STRATEGY_KEYS: Record<string, string> = {
+  trend_pullback: "home.strategy.trend_pullback",
+  breakout: "home.strategy.breakout",
+  range_fade: "home.strategy.range_fade",
+  reversal: "home.strategy.reversal",
+  liquidity_grab: "home.strategy.liquidity_grab",
+  funding_squeeze: "home.strategy.funding_squeeze",
+  session_open_drive: "home.strategy.session_open_drive",
+  wait: "home.strategy.wait",
 };
 
-const STYLE_LABELS: Record<TradingStyle, string> = {
-  scalp: "스캘핑",
-  day: "데이",
-  swing: "스윙",
-  position: "포지션",
+const STYLE_KEYS: Record<TradingStyle, string> = {
+  scalp: "home.style.scalp",
+  day: "home.style.day",
+  swing: "home.style.swing",
+  position: "home.style.position",
 };
 
 const STYLE_BADGE: Record<TradingStyle, string> = {
@@ -86,11 +88,12 @@ async function fetchPrices(symbols: string[]): Promise<Record<string, number>> {
 }
 
 export default async function HomePage() {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const displayName = user?.email?.split("@")[0] ?? "트레이더";
+  const displayName = user?.email?.split("@")[0] ?? t("home.defaultName");
   const userId = user?.id;
 
   const monthStart = kstMonthStartUtc();
@@ -170,7 +173,7 @@ export default async function HomePage() {
 
   // 다음 액션 — 세션 기반 타이밍 힌트
   const kstNow = new Date(Date.now() + 9 * 60 * 60_000);
-  const suit = entrySuitability(kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes(), kstNow.getUTCDay());
+  const suit = entrySuitability(kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes(), kstNow.getUTCDay(), t);
   const topPicks = radar.candidates.slice(0, 2);
 
   const isEmpty = recent.length === 0;
@@ -183,14 +186,16 @@ export default async function HomePage() {
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold leading-[1.15]">
-              안녕하세요, <span className="text-primary">{displayName}</span>
+              {t("home.greeting")} <span className="text-primary">{displayName}</span>
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               {positions.length > 0
-                ? `진행 중 ${positions.length}건${pendings.length > 0 ? ` · 대기 주문 ${pendings.length}건` : ""}`
+                ? pendings.length > 0
+                  ? t("home.heroPositionsPendings", { p: positions.length, q: pendings.length })
+                  : t("home.heroPositions", { p: positions.length })
                 : pendings.length > 0
-                  ? `대기 중 주문 ${pendings.length}건`
-                  : "오늘 새 분석으로 시작해보세요."}
+                  ? t("home.heroPendings", { q: pendings.length })
+                  : t("home.heroEmpty")}
             </p>
           </div>
           <Link
@@ -198,7 +203,7 @@ export default async function HomePage() {
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/40 px-4 py-2 text-sm text-foreground transition-colors hover:border-border/80 hover:bg-card/80"
           >
             <HelpCircle className="h-4 w-4 text-muted-foreground" />
-            사용 방법
+            {t("home.howToUse")}
           </Link>
         </section>
 
@@ -210,35 +215,35 @@ export default async function HomePage() {
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard
             href="/app/wallet"
-            label="vUSDT 잔액"
+            label={t("home.metric.balance")}
             value={formatNumber(balance, { maximumFractionDigits: 0 })}
-            sub={balance < 100 ? "충전 필요" : "사용 가능"}
+            sub={balance < 100 ? t("home.metric.balanceNeedCharge") : t("home.metric.balanceAvailable")}
             alert={balance < 100}
           />
           <MetricCard
             href="/app/credits"
-            label="AI 크레딧"
+            label={t("home.metric.credits")}
             value={String(aiCredits)}
-            sub={aiCredits === 0 ? "구매 필요" : `이번 달 ${monthlyAnalyses}회 사용`}
+            sub={aiCredits === 0 ? t("home.metric.creditsNeedBuy") : t("home.metric.creditsUsedThisMonth", { n: monthlyAnalyses })}
             alert={aiCredits === 0}
           />
           <MetricCard
             href="/app/dashboard"
-            label="승률 (30일)"
+            label={t("home.metric.winRate")}
             value={winRate30 != null ? `${winRate30}%` : "—"}
-            sub={closed30 > 0 ? `${closed30}건 청산 기준` : "청산 기록 없음"}
+            sub={closed30 > 0 ? t("home.metric.winRateBasis", { n: closed30 }) : t("home.metric.winRateNoData")}
           />
           <MetricCard
             href="/app/dashboard"
-            label="누적 R (30일)"
+            label={t("home.metric.cumR")}
             value={`${cumR30 >= 0 ? "+" : ""}${cumR30.toFixed(1)}R`}
-            sub={`${wins30}승 ${closed30 - wins30}패`}
+            sub={t("home.metric.cumRRecord", { w: wins30, l: closed30 - wins30 })}
             tone={closed30 === 0 ? undefined : cumR30 >= 0 ? "good" : "bad"}
           />
         </section>
 
         {/* 3. 오늘의 시장 한 줄 */}
-        <Suspense fallback={<TodaySkeleton />}>
+        <Suspense fallback={<TodaySkeleton t={t} />}>
           <TodayMarketStrip />
         </Suspense>
 
@@ -250,9 +255,9 @@ export default async function HomePage() {
           )}
         >
           <div className="min-w-[150px]">
-            <div className="text-sm font-semibold">오늘의 리스크 한도</div>
+            <div className="text-sm font-semibold">{t("home.risk.title")}</div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
-              일일 -{DAILY_LIMIT_R}R 도달 시 신규 진입 자제
+              {t("home.risk.subtitle", { r: DAILY_LIMIT_R })}
             </div>
           </div>
           <div className="min-w-[180px] flex-1">
@@ -267,10 +272,12 @@ export default async function HomePage() {
             </div>
             <div className="mt-1 flex justify-between font-mono text-[11px] tabular-nums text-muted-foreground">
               <span>
-                오늘 {moneyCtx.todayCumulativeR >= 0 ? "+" : ""}
-                {moneyCtx.todayCumulativeR.toFixed(1)}R · {moneyCtx.todayClosedCount}건 청산
+                {t("home.risk.todayStat", {
+                  r: `${moneyCtx.todayCumulativeR >= 0 ? "+" : ""}${moneyCtx.todayCumulativeR.toFixed(1)}`,
+                  n: moneyCtx.todayClosedCount,
+                })}
               </span>
-              <span>여유 {remainR.toFixed(1)}R · 한도 -{DAILY_LIMIT_R}R</span>
+              <span>{t("home.risk.remaining", { r: remainR.toFixed(1), limit: DAILY_LIMIT_R })}</span>
             </div>
           </div>
           <span
@@ -286,17 +293,17 @@ export default async function HomePage() {
             {limitHit ? (
               <>
                 <TriangleAlert className="h-3.5 w-3.5" />
-                오늘은 보류
+                {t("home.risk.hold")}
               </>
             ) : limitNear ? (
               <>
                 <TriangleAlert className="h-3.5 w-3.5" />
-                한도 근접
+                {t("home.risk.near")}
               </>
             ) : (
               <>
                 <CircleCheck className="h-3.5 w-3.5" />
-                신규 진입 가능
+                {t("home.risk.ok")}
               </>
             )}
           </span>
@@ -306,21 +313,21 @@ export default async function HomePage() {
         {positions.length > 0 || pendings.length > 0 ? (
           <section>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-semibold">진행 중 포지션 · 대기 주문</h2>
+              <h2 className="text-base font-semibold">{t("home.openSection.title")}</h2>
               <Link
                 href="/app/virtual-trade"
                 className="group inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 hover:text-primary"
               >
-                가상 거래
+                {t("home.quick.virtualTrade")}
                 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {positions.slice(0, 3).map((t) => (
-                <PositionCard key={t.id as string} trade={t} current={prices[t.symbol as string]} />
+              {positions.slice(0, 3).map((row) => (
+                <PositionCard key={row.id as string} trade={row} current={prices[row.symbol as string]} t={t} />
               ))}
-              {pendings.slice(0, 3 - Math.min(positions.length, 3) || 1).map((t) => (
-                <PendingCard key={t.id as string} trade={t} current={prices[t.symbol as string]} />
+              {pendings.slice(0, 3 - Math.min(positions.length, 3) || 1).map((row) => (
+                <PendingCard key={row.id as string} trade={row} current={prices[row.symbol as string]} t={t} />
               ))}
             </div>
           </section>
@@ -337,14 +344,14 @@ export default async function HomePage() {
                 <HelpCircle className="h-5 w-5" />
               </div>
               <div>
-                <div className="text-base font-semibold">처음이세요?</div>
+                <div className="text-base font-semibold">{t("home.firstTime.title")}</div>
                 <div className="mt-0.5 text-sm text-muted-foreground">
-                  4단계 사이클과 등급 시스템을 한 번에 정리.
+                  {t("home.firstTime.desc")}
                 </div>
               </div>
             </div>
             <span className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
-              사용 방법
+              {t("home.howToUse")}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </span>
           </Link>
@@ -356,39 +363,39 @@ export default async function HomePage() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-base font-semibold">
                 <BookOpen className="h-4 w-4 text-muted-foreground" />
-                최근 거래
+                {t("home.recent.title")}
               </h2>
               <Link
                 href="/app/journal"
                 className="group inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 hover:text-primary"
               >
-                전체 보기
+                {t("home.recent.viewAll")}
                 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </div>
             <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card/40">
-              {recent.map((t) => {
-                const status = (t as { order_status?: string }).order_status;
-                const orderType = (t as { order_type?: string }).order_type;
-                const ctxLeverage = (t as { context_flags?: { leverage?: number } }).context_flags
+              {recent.map((tr) => {
+                const status = (tr as { order_status?: string }).order_status;
+                const orderType = (tr as { order_type?: string }).order_type;
+                const ctxLeverage = (tr as { context_flags?: { leverage?: number } }).context_flags
                   ?.leverage;
-                const isPending = !t.closed_at && status === "pending" && t.result_r == null;
-                const isOpen = !t.closed_at && !isPending;
-                const dateStr = new Date(t.closed_at ?? t.created_at).toLocaleDateString("ko-KR", {
+                const isPending = !tr.closed_at && status === "pending" && tr.result_r == null;
+                const isOpen = !tr.closed_at && !isPending;
+                const dateStr = new Date(tr.closed_at ?? tr.created_at).toLocaleDateString("ko-KR", {
                   month: "short",
                   day: "numeric",
                 });
                 return (
-                  <li key={t.id}>
+                  <li key={tr.id}>
                     <Link
-                      href={`/app/journal/${t.id}`}
+                      href={`/app/journal/${tr.id}`}
                       className="group flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/30"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <GradeBadge grade={t.pre_grade as Grade} size="sm" />
-                        <span className="font-mono text-sm font-medium">{t.symbol}</span>
+                        <GradeBadge grade={tr.pre_grade as Grade} size="sm" />
+                        <span className="font-mono text-sm font-medium">{tr.symbol}</span>
                         <span className="text-sm text-muted-foreground">
-                          {t.direction === "long" ? "롱" : "숏"} · {t.timeframe}
+                          {tr.direction === "long" ? t("common.long") : t("common.short")} · {tr.timeframe}
                         </span>
                         {ctxLeverage ? (
                           <span
@@ -400,40 +407,40 @@ export default async function HomePage() {
                                   ? "border-grade-c/40 text-grade-c"
                                   : "border-border text-muted-foreground",
                             )}
-                            title={`레버리지 ${ctxLeverage}x`}
+                            title={t("home.recent.leverageTitle", { n: ctxLeverage })}
                           >
                             {ctxLeverage}x
                           </span>
                         ) : null}
                         {orderType === "limit" ? (
                           <span className="rounded-md bg-grade-b/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-b">
-                            지정가
+                            {t("home.orderType.limit")}
                           </span>
                         ) : orderType === "stop" ? (
                           <span className="rounded-md bg-grade-c/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-c">
-                            역지정
+                            {t("home.orderType.stop")}
                           </span>
                         ) : null}
                         {isPending ? (
                           <span className="rounded-md bg-grade-c/10 px-2 py-0.5 text-xs font-medium text-grade-c">
-                            대기
+                            {t("home.status.pending")}
                           </span>
                         ) : isOpen ? (
                           <span className="rounded-md bg-grade-b/15 px-2 py-0.5 text-xs font-medium text-grade-b">
-                            진행
+                            {t("home.status.open")}
                           </span>
                         ) : null}
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        {t.result_r != null ? (
+                        {tr.result_r != null ? (
                           <span
                             className={cn(
                               "font-mono font-medium",
-                              Number(t.result_r) >= 0 ? "text-grade-a" : "text-grade-d",
+                              Number(tr.result_r) >= 0 ? "text-grade-a" : "text-grade-d",
                             )}
                           >
-                            {Number(t.result_r) >= 0 ? "+" : ""}
-                            {Number(t.result_r).toFixed(2)}R
+                            {Number(tr.result_r) >= 0 ? "+" : ""}
+                            {Number(tr.result_r).toFixed(2)}R
                           </span>
                         ) : null}
                         <span className="text-muted-foreground">{dateStr}</span>
@@ -454,7 +461,7 @@ export default async function HomePage() {
         <section className="rounded-2xl border border-ring/40 bg-card/50 p-4">
           <div className="flex items-center gap-1.5 text-[15px] font-semibold">
             <Zap className="h-4 w-4 text-primary" />
-            다음 액션
+            {t("home.nextAction.title")}
           </div>
           <div
             className={cn(
@@ -475,7 +482,7 @@ export default async function HomePage() {
           </div>
           {topPicks.length > 0 ? (
             <>
-              <div className="mt-3 text-[11px] text-muted-foreground/70">후보 레이더 Top 픽</div>
+              <div className="mt-3 text-[11px] text-muted-foreground/70">{t("home.nextAction.topPicks")}</div>
               <ul className="mt-1.5 space-y-1.5">
                 {topPicks.map((c) => (
                   <li key={c.symbol}>
@@ -489,7 +496,7 @@ export default async function HomePage() {
                           {c.signals
                             .slice(0, 2)
                             .map((s) => s.label)
-                            .join(" · ") || "신호 관찰 중"}
+                            .join(" · ") || t("home.nextAction.observing")}
                         </span>
                       </span>
                       <span
@@ -498,7 +505,7 @@ export default async function HomePage() {
                           STYLE_BADGE[c.bestStyle],
                         )}
                       >
-                        {STYLE_LABELS[c.bestStyle]}
+                        {t(STYLE_KEYS[c.bestStyle])}
                       </span>
                       <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
                     </Link>
@@ -511,33 +518,35 @@ export default async function HomePage() {
             href="/app/analyze"
             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            <Sparkles className="h-4 w-4" />새 분석 시작
+            <Sparkles className="h-4 w-4" />
+            {t("home.nextAction.startAnalysis")}
           </Link>
         </section>
 
         {/* 최근 AI 분석 */}
         <section className="rounded-2xl border border-border/60 bg-card/40 p-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold">최근 AI 분석</h2>
+            <h2 className="text-[15px] font-semibold">{t("home.aiRecent.title")}</h2>
             <Link
               href="/app/analyze/history"
               className="text-xs font-medium text-primary/90 hover:text-primary"
             >
-              전체 →
+              {t("home.aiRecent.viewAll")}
             </Link>
           </div>
           {(analysesRes.data ?? []).length === 0 ? (
-            <p className="mt-3 text-xs text-muted-foreground">아직 분석 기록이 없습니다.</p>
+            <p className="mt-3 text-xs text-muted-foreground">{t("home.aiRecent.empty")}</p>
           ) : (
             <ul className="mt-2.5 space-y-1.5">
               {(analysesRes.data ?? []).map((a) => {
-                const strat = STRATEGY_LABELS[a.primary_strategy as string] ?? a.primary_strategy;
+                const stratKey = STRATEGY_KEYS[a.primary_strategy as string];
+                const strat = stratKey ? t(stratKey) : a.primary_strategy;
                 const dir =
                   a.strategy_direction === "long"
-                    ? "롱"
+                    ? t("common.long")
                     : a.strategy_direction === "short"
-                      ? "숏"
-                      : "양방향";
+                      ? t("common.short")
+                      : t("home.aiRecent.bothWays");
                 return (
                   <li key={a.id as string}>
                     <Link
@@ -549,7 +558,7 @@ export default async function HomePage() {
                         <span className="block text-[10px] text-muted-foreground">
                           {strat}
                           {a.primary_strategy !== "wait" ? ` · ${dir}` : ""} ·{" "}
-                          {STYLE_LABELS[a.style as TradingStyle] ?? a.style}
+                          {STYLE_KEYS[a.style as TradingStyle] ? t(STYLE_KEYS[a.style as TradingStyle]) : a.style}
                         </span>
                       </span>
                       <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
@@ -567,9 +576,9 @@ export default async function HomePage() {
           className="group flex items-center justify-between rounded-2xl border border-border/60 bg-card/40 px-4 py-3.5 transition-all hover:border-ring/40 hover:bg-card/60"
         >
           <div>
-            <div className="text-sm font-semibold">시장 현황</div>
+            <div className="text-sm font-semibold">{t("home.marketLink.title")}</div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
-              세션 · 심리 지표 · 김프 · 매크로 일정
+              {t("home.marketLink.desc")}
             </div>
           </div>
           <ArrowRight className="h-4 w-4 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
@@ -577,10 +586,10 @@ export default async function HomePage() {
 
         {/* 빠른 메뉴 */}
         <div className="grid grid-cols-2 gap-2">
-          <QuickLink href="/app/virtual-trade" label="가상 거래" />
-          <QuickLink href="/app/analyze" label="AI 분석" />
-          <QuickLink href="/app/journal" label="거래 일지" />
-          <QuickLink href="/app/dashboard" label="성과 분석" />
+          <QuickLink href="/app/virtual-trade" label={t("home.quick.virtualTrade")} />
+          <QuickLink href="/app/analyze" label={t("home.quick.analyze")} />
+          <QuickLink href="/app/journal" label={t("home.quick.journal")} />
+          <QuickLink href="/app/dashboard" label={t("home.quick.dashboard")} />
         </div>
       </aside>
     </div>
@@ -650,7 +659,7 @@ function fmtPx(n: number): string {
   return formatNumber(n, { maximumFractionDigits: n >= 100 ? 1 : n >= 1 ? 2 : 4 });
 }
 
-function PositionCard({ trade, current }: { trade: OpenTradeRow; current?: number }) {
+function PositionCard({ trade, current, t }: { trade: OpenTradeRow; current?: number; t: TFunction }) {
   const entry = Number(trade.entry) || 0;
   const stop = Number(trade.stop) || 0;
   const target = Number(trade.target) || 0;
@@ -679,7 +688,7 @@ function PositionCard({ trade, current }: { trade: OpenTradeRow; current?: numbe
             trade.direction === "long" ? "text-grade-a" : "text-grade-d",
           )}
         >
-          {trade.direction === "long" ? "롱" : "숏"}
+          {trade.direction === "long" ? t("common.long") : t("common.short")}
           {lev ? ` ${lev}x` : ""}
         </span>
         <span
@@ -692,7 +701,7 @@ function PositionCard({ trade, current }: { trade: OpenTradeRow; current?: numbe
         </span>
       </div>
       <div className="mt-2 font-mono text-[11px] tabular-nums text-muted-foreground">
-        진입 {fmtPx(entry)} → 현재 {current != null ? fmtPx(current) : "—"}
+        {t("home.posCard.entryToCurrent", { entry: fmtPx(entry), current: current != null ? fmtPx(current) : "—" })}
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
@@ -702,14 +711,14 @@ function PositionCard({ trade, current }: { trade: OpenTradeRow; current?: numbe
       </div>
       <div className="mt-1.5 text-[10px] text-muted-foreground/70">
         {toTargetPct != null
-          ? `목표까지 ${toTargetPct >= 0 ? "+" : ""}${toTargetPct.toFixed(1)}%`
-          : "현재가 조회 실패"}
+          ? t("home.posCard.toTarget", { pct: `${toTargetPct >= 0 ? "+" : ""}${toTargetPct.toFixed(1)}` })
+          : t("home.posCard.priceFail")}
       </div>
     </Link>
   );
 }
 
-function PendingCard({ trade, current }: { trade: OpenTradeRow; current?: number }) {
+function PendingCard({ trade, current, t }: { trade: OpenTradeRow; current?: number; t: TFunction }) {
   const trigger = Number(trade.limit_price ?? trade.entry) || 0;
   const isStop = trade.order_type === "stop";
   const distPct =
@@ -723,12 +732,12 @@ function PendingCard({ trade, current }: { trade: OpenTradeRow; current?: number
       <div className="flex items-center gap-2">
         <span className="font-mono text-sm font-bold">{trade.symbol}</span>
         <span className="rounded-md bg-grade-c/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-grade-c">
-          {trade.direction === "long" ? "롱" : "숏"} · {isStop ? "역지정" : "지정가"}
+          {trade.direction === "long" ? t("common.long") : t("common.short")} · {isStop ? t("home.orderType.stop") : t("home.orderType.limit")}
         </span>
-        <span className="ml-auto text-xs font-semibold text-grade-c">트리거 대기</span>
+        <span className="ml-auto text-xs font-semibold text-grade-c">{t("home.pendCard.waitingTrigger")}</span>
       </div>
       <div className="mt-2 font-mono text-[11px] tabular-nums text-muted-foreground">
-        트리거 {fmtPx(trigger)} · 현재 {current != null ? fmtPx(current) : "—"}
+        {t("home.pendCard.triggerCurrent", { trigger: fmtPx(trigger), current: current != null ? fmtPx(current) : "—" })}
         {distPct != null ? ` (${distPct >= 0 ? "+" : ""}${distPct.toFixed(1)}%)` : ""}
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -739,7 +748,7 @@ function PendingCard({ trade, current }: { trade: OpenTradeRow; current?: number
           }}
         />
       </div>
-      <div className="mt-1.5 text-[10px] text-muted-foreground/70">도달 시 자동 체결 · 알림 발송</div>
+      <div className="mt-1.5 text-[10px] text-muted-foreground/70">{t("home.pendCard.autoFill")}</div>
     </Link>
   );
 }
@@ -756,12 +765,12 @@ function QuickLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function TodaySkeleton() {
+function TodaySkeleton({ t }: { t: TFunction }) {
   return (
     <div className="flex items-center justify-between gap-6 rounded-2xl border border-border/60 bg-card/40 px-6 py-4">
-      <span className="text-sm text-muted-foreground">시장 상태 확인 중…</span>
+      <span className="text-sm text-muted-foreground">{t("home.todaySkeleton.checking")}</span>
       <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-        시장 보기
+        {t("home.todaySkeleton.viewMarket")}
         <ArrowRight className="h-4 w-4" />
       </span>
     </div>

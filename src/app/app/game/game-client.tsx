@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { LiveChart } from "@/components/game/live-chart";
 import { GameHistorySidebar } from "@/components/game/game-history-sidebar";
 import { GameControls } from "@/components/game/game-controls";
+import { useT } from "@/lib/i18n/context";
 
 type Direction = "call" | "put";
 type Timeframe = "1m" | "3m";
@@ -38,6 +39,7 @@ function nextCandleClose(timeframe: Timeframe, now: number): number {
 }
 
 export function GameClient({ initialPoints, totalGames, wins }: Props) {
+  const t = useT();
   const [points, setPoints] = useState(initialPoints);
   const [games, setGames] = useState(totalGames);
   const [winCount, setWinCount] = useState(wins);
@@ -109,7 +111,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         });
         const data = await res.json();
         if (!res.ok) {
-          toast.error(data.error ?? "오류");
+          toast.error(data.error ?? t("misc.game.error"));
           return;
         }
         setActiveGame({
@@ -121,12 +123,17 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         });
         setPoints(data.pointsRemaining);
         setRefreshKey((k) => k + 1);
-        toast.success(`${direction === "call" ? "▲ CALL" : "▼ PUT"} 베팅 · ${bet} vUSDT`);
+        toast.success(
+          t("misc.game.betPlaced", {
+            side: direction === "call" ? "▲ CALL" : "▼ PUT",
+            bet,
+          }),
+        );
       } catch {
-        toast.error("네트워크 오류");
+        toast.error(t("misc.game.networkError"));
       }
     },
-    [symbol],
+    [symbol, t],
   );
 
   // 만기 도달 시 자동 정산
@@ -140,7 +147,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         const res = await fetch(`/api/binary/settle/${activeGame.id}`, { method: "POST" });
         const data = await res.json();
         if (!res.ok) {
-          toast.error(data.error ?? "정산 오류");
+          toast.error(data.error ?? t("misc.game.settleError"));
           return;
         }
         setPoints(data.pointsTotal);
@@ -148,8 +155,8 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
         if (data.won) setWinCount((w) => w + 1);
         toast[data.won ? "success" : "error"](
           data.won
-            ? `🎉 승리! +${data.pnlPoints} vUSDT`
-            : `😢 패배 ${data.pnlPoints} vUSDT`,
+            ? t("misc.game.win", { pnl: data.pnlPoints })
+            : t("misc.game.lose", { pnl: data.pnlPoints }),
         );
       } finally {
         setActiveGame(null);
@@ -157,7 +164,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
       }
     }, 1000);
     return () => clearInterval(id);
-  }, [activeGame]);
+  }, [activeGame, t]);
 
   const handleCurrentPrice = useCallback((p: number) => {
     setCurrentPrice(p);
@@ -178,32 +185,32 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
     betting_open: {
       color: "bg-green-500/15 border-green-500/40 text-green-400",
       icon: <Activity className="h-4 w-4" />,
-      label: "베팅 가능",
-      sub: `다음 캔들까지 :${String(phaseCountdown).padStart(2, "0")} — 이번 시간 내 베팅 → 다음 캔들 판정`,
+      label: t("misc.game.phase.bettingOpen"),
+      sub: t("misc.game.phase.bettingOpenSub", { sec: String(phaseCountdown).padStart(2, "0") }),
     },
     betting_closing: {
       color: "bg-yellow-500/15 border-yellow-500/40 text-yellow-400 animate-pulse",
       icon: <AlertCircle className="h-4 w-4" />,
-      label: "베팅 마감 임박",
-      sub: `${phaseCountdown}초 후 마감 — 새 베팅 불가`,
+      label: t("misc.game.phase.bettingClosing"),
+      sub: t("misc.game.phase.bettingClosingSub", { n: phaseCountdown }),
     },
     waiting_start: {
       color: "bg-blue-500/15 border-blue-500/40 text-blue-400",
       icon: <Clock className="h-4 w-4" />,
-      label: "캔들 시작 대기",
-      sub: `${phaseCountdown}초 후 시작`,
+      label: t("misc.game.phase.waitingStart"),
+      sub: t("misc.game.phase.waitingStartSub", { n: phaseCountdown }),
     },
     candle_running: {
       color: "bg-cyan-500/15 border-cyan-500/40 text-cyan-400",
       icon: <Lock className="h-4 w-4" />,
-      label: "캔들 진행 중",
-      sub: `결과까지 ${phaseCountdown}초`,
+      label: t("misc.game.phase.candleRunning"),
+      sub: t("misc.game.phase.candleRunningSub", { n: phaseCountdown }),
     },
     settling: {
       color: "bg-purple-500/15 border-purple-500/40 text-purple-400 animate-pulse",
       icon: <Clock className="h-4 w-4" />,
-      label: "정산 중",
-      sub: "캔들 종가 확인 중...",
+      label: t("misc.game.phase.settling"),
+      sub: t("misc.game.phase.settlingSub"),
     },
   }[phase];
 
@@ -222,14 +229,14 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
             {points.toLocaleString()} vUSDT
           </span>
           <span className="text-muted-foreground text-xs">
-            승률 {winRate}% · {games}판
+            {t("misc.game.winRateGames", { rate: winRate, games })}
           </span>
         </div>
         <button
           onClick={() => setSidebarOpen(true)}
           className="flex items-center gap-1 rounded-md border border-border/40 px-2 py-1 text-xs hover:bg-muted/30"
         >
-          <History className="h-3.5 w-3.5" /> 기록
+          <History className="h-3.5 w-3.5" /> {t("misc.game.history")}
         </button>
       </div>
 
@@ -262,7 +269,9 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
               {symbol.replace("USDT", "/USDT")}
             </span>
             <span className="text-muted-foreground">
-              {(activeGame?.timeframe ?? timeframe) === "1m" ? "1분봉" : "3분봉"}
+              {(activeGame?.timeframe ?? timeframe) === "1m"
+                ? t("misc.game.tf1m")
+                : t("misc.game.tf3m")}
             </span>
             {activeGame && (
               <span className={cn(
@@ -278,8 +287,8 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
               <Trophy className="h-3.5 w-3.5 text-yellow-500" />
               <span className="font-mono font-bold text-foreground">{points.toLocaleString()} vUSDT</span>
             </span>
-            <span>승률 <span className="font-mono font-bold text-foreground">{winRate}%</span></span>
-            <span>총 <span className="font-mono font-bold text-foreground">{games}판</span></span>
+            <span>{t("misc.game.winRate")} <span className="font-mono font-bold text-foreground">{winRate}%</span></span>
+            <span>{t("misc.game.total")} <span className="font-mono font-bold text-foreground">{t("misc.game.gamesCount", { n: games })}</span></span>
           </div>
         </div>
 
@@ -301,11 +310,11 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
             <div className="absolute top-3 left-3 z-10 rounded-md border border-border/40 bg-background/85 px-3 py-2 text-xs backdrop-blur-sm">
               <div className="flex items-center gap-4">
                 <div>
-                  <div className="text-muted-foreground">진입(시가)</div>
+                  <div className="text-muted-foreground">{t("misc.game.entryOpen")}</div>
                   <div className="font-mono font-bold">${activeGame.entryPrice.toFixed(2)}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground">현재</div>
+                  <div className="text-muted-foreground">{t("misc.game.current")}</div>
                   <div className={cn(
                     "font-mono font-bold",
                     currentPrice > activeGame.entryPrice ? "text-green-400" :
@@ -322,8 +331,8 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
                   activeGame.direction === "call" ? "text-green-400" : "text-red-400",
                 )}>
                   {activeGame.direction === "call"
-                    ? currentPrice > activeGame.entryPrice ? "✓ 우세" : "✗ 열세"
-                    : currentPrice < activeGame.entryPrice ? "✓ 우세" : "✗ 열세"}
+                    ? currentPrice > activeGame.entryPrice ? t("misc.game.winning") : t("misc.game.losing")
+                    : currentPrice < activeGame.entryPrice ? t("misc.game.winning") : t("misc.game.losing")}
                 </div>
               </div>
             </div>
@@ -334,7 +343,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-sm">
               <div className="flex flex-col items-center gap-3">
                 <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <span className="text-sm font-medium text-muted-foreground">정산 중...</span>
+                <span className="text-sm font-medium text-muted-foreground">{t("misc.game.settlingShort")}</span>
               </div>
             </div>
           )}
@@ -366,7 +375,7 @@ export function GameClient({ initialPoints, totalGames, wins }: Props) {
           <div className="absolute inset-0 bg-black/70" onClick={() => setSidebarOpen(false)} />
           <div className="absolute right-0 top-0 h-full w-72 border-l border-border bg-background">
             <div className="flex items-center justify-between border-b border-border/40 p-3">
-              <span className="text-sm font-bold">게임 기록</span>
+              <span className="text-sm font-bold">{t("misc.game.historyTitle")}</span>
               <button onClick={() => setSidebarOpen(false)} className="rounded p-1 hover:bg-muted">
                 <X className="h-4 w-4" />
               </button>

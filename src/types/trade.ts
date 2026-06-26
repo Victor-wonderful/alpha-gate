@@ -106,17 +106,31 @@ export interface TradeInput {
   marketCtx: MarketContext;
 }
 
+/** i18n: 코드 + 보간 변수로 렌더 시점에 번역. label은 한국어 폴백(테스트/하위호환). */
+export type I18nParams = Record<string, string | number>;
+
 export interface ScoreReason {
   code: string;
   label: string;
   points: number;
+  /** 코드 기반 번역용 보간 변수 (예: { rr: "2.30", pct: "3.1" }) */
+  params?: I18nParams;
+}
+
+/** 코드 기반 행동 권고 (렌더 시 grade.action.<code> 로 번역) */
+export interface ActionItem {
+  code: string;
+  params?: I18nParams;
 }
 
 export interface GradeResult {
   grade: Grade;
   score: number;
   reasons: ScoreReason[];
+  /** 한국어 폴백 행동 권고 (하위호환). 신규 렌더는 actionItems 사용. */
   actions: string[];
+  /** 코드 기반 행동 권고 — i18n 렌더용. */
+  actionItems: ActionItem[];
   rr: number;
   /** D 등급의 주된 원인 — "account"(계좌 한도/과노출 = 오늘 보류) vs "setup"(약한 자리 = 축소 진입). 문구 분기용. */
   dCause?: "account" | "setup";
@@ -129,4 +143,6 @@ export interface SizingResult {
   positionSize: number;
   valid: boolean;
   reason?: string;
+  /** 코드 기반 사유 — i18n 렌더용 (sizing.<reasonCode>). */
+  reasonCode?: string;
 }

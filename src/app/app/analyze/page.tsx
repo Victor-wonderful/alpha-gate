@@ -5,10 +5,12 @@ import { HelpLink } from "@/components/app/help-link";
 import { getMoneyContext } from "@/lib/money-management";
 import { loadLatestRadar, type RadarSnapshot } from "@/lib/analysis/radar-persist";
 import type { MoneyContext } from "@/types/trade";
+import { getT } from "@/lib/i18n/server";
 
 export const maxDuration = 60;
 
 export default async function AnalyzePage() {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -50,12 +52,11 @@ export default async function AnalyzePage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">AI 시장 분석</h1>
-            <HelpLink href="/app/guide/analyze" label="도움말" />
+            <h1 className="text-2xl font-bold tracking-tight">{t("analyze.pageh.title")}</h1>
+            <HelpLink href="/app/guide/analyze" label={t("analyze.pageh.help")} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Binance USDT-M 선물 시장의 멀티 TF 구조, 유동성, 체결 흐름, 펀딩 편향을 종합 분석합니다.
-            시나리오마다 매매 등급과 권장 포지션이 자동 계산됩니다.
+            {t("analyze.pageh.intro")}
           </p>
         </div>
       </div>

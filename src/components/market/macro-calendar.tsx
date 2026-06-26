@@ -1,5 +1,6 @@
 import { getUpcomingMacroEvents } from "@/lib/market-widgets/calendar";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
 function dayBadge(days: number) {
   if (days === 0) return "D-DAY";
@@ -13,19 +14,20 @@ function dayBadgeTone(days: number, impact: "high" | "med") {
   return "bg-muted/40 text-muted-foreground";
 }
 
-export function MacroCalendar() {
+export async function MacroCalendar() {
+  const t = await getT();
   const events = getUpcomingMacroEvents(4);
 
   return (
     <section>
       <div className="mb-4 flex items-baseline justify-between">
-        <h2 className="text-base font-semibold">이번 주 매크로 이벤트</h2>
+        <h2 className="text-base font-semibold">{t("market.macroCal.title")}</h2>
         <span className="text-xs text-muted-foreground">KST</span>
       </div>
 
       {events.length === 0 ? (
         <div className="rounded-2xl border border-border/60 bg-card/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          다가오는 주요 이벤트 없음.
+          {t("market.macroCal.empty")}
         </div>
       ) : (
         <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card/40">

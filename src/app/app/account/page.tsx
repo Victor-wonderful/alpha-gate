@@ -11,15 +11,19 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getT } from "@/lib/i18n/server";
 import { AccountForm } from "./account-form";
 import { PasswordForm } from "./password-form";
 import { LogoutButton } from "./logout-button";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "내 계정 · Alpha Gate",
-};
+export async function generateMetadata() {
+  const t = await getT();
+  return {
+    title: t("acct.metaTitle"),
+  };
+}
 
 function daysSince(iso: string): number {
   const ms = Date.now() - new Date(iso).getTime();
@@ -27,6 +31,7 @@ function daysSince(iso: string): number {
 }
 
 export default async function AccountPage() {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -71,30 +76,30 @@ export default async function AccountPage() {
           {(user.email?.[0] ?? "U").toUpperCase()}
         </span>
         <div>
-          <h1 className="text-3xl font-bold leading-[1.15]">내 계정</h1>
+          <h1 className="text-3xl font-bold leading-[1.15]">{t("acct.title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{user.email}</p>
         </div>
       </header>
 
       {/* Activity stats */}
       <section>
-        <h2 className="mb-3 text-base font-semibold">내 활동</h2>
+        <h2 className="mb-3 text-base font-semibold">{t("acct.activityTitle")}</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             icon={<Sparkles className="h-4 w-4 text-primary" />}
-            label="누적 분석"
+            label={t("acct.stat.analyses")}
             value={String(analysisCount)}
-            unit="회"
+            unit={t("acct.unit.times")}
           />
           <StatCard
             icon={<Activity className="h-4 w-4 text-primary" />}
-            label="누적 거래"
+            label={t("acct.stat.trades")}
             value={String(tradeCount)}
-            unit="건"
+            unit={t("acct.unit.count")}
           />
           <StatCard
             icon={<TrendingUp className="h-4 w-4 text-primary" />}
-            label="누적 R"
+            label={t("acct.stat.cumulativeR")}
             value={`${cumulativeR >= 0 ? "+" : ""}${cumulativeR.toFixed(2)}`}
             unit="R"
             tone={
@@ -107,19 +112,18 @@ export default async function AccountPage() {
           />
           <StatCard
             icon={<CalendarDays className="h-4 w-4 text-primary" />}
-            label="가입 후"
+            label={t("acct.stat.memberDays")}
             value={String(memberDays)}
-            unit="일"
+            unit={t("acct.unit.days")}
           />
         </div>
       </section>
 
       {/* Profile + trading defaults */}
       <section>
-        <h2 className="mb-3 text-base font-semibold">기본 설정</h2>
+        <h2 className="mb-3 text-base font-semibold">{t("acct.defaultsTitle")}</h2>
         <p className="mb-4 text-xs text-muted-foreground">
-          여기서 설정한 값이 AI 분석·거래 평가 페이지에 기본값으로 자동
-          채워집니다.
+          {t("acct.defaultsDesc")}
         </p>
         <AccountForm
           initial={{
@@ -137,50 +141,50 @@ export default async function AccountPage() {
 
       {/* Security */}
       <section>
-        <h2 className="mb-3 text-base font-semibold">보안</h2>
+        <h2 className="mb-3 text-base font-semibold">{t("acct.securityTitle")}</h2>
         <PasswordForm />
       </section>
 
       {/* Connected services */}
       <section>
-        <h2 className="mb-3 text-base font-semibold">연결된 서비스</h2>
+        <h2 className="mb-3 text-base font-semibold">{t("acct.servicesTitle")}</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <ServiceCard
             href="/app/settings/notify"
             icon={<Bell className="h-4 w-4 text-primary" />}
-            label="알림 설정"
-            hint="텔레그램 / 디스코드"
+            label={t("acct.service.notify")}
+            hint={t("acct.service.notifyHint")}
           />
           <ServiceCard
             href="/app/settings/api-keys"
             icon={<KeyRound className="h-4 w-4 text-primary" />}
-            label="거래소 API 키"
-            hint="실거래 연동 (준비 중)"
+            label={t("acct.service.apiKeys")}
+            hint={t("acct.service.apiKeysHint")}
           />
           <ServiceCard
             href="/app/deposit"
             icon={<Coins className="h-4 w-4 text-primary" />}
-            label="vUSDT 충전"
-            hint="가상 트레이딩 잔액"
+            label={t("acct.service.deposit")}
+            hint={t("acct.service.depositHint")}
           />
           <ServiceCard
             href="/app/credits"
             icon={<LineChartIcon className="h-4 w-4 text-primary" />}
-            label="AI 크레딧 구매"
-            hint="분석 1회당 크레딧 차감"
+            label={t("acct.service.credits")}
+            hint={t("acct.service.creditsHint")}
           />
         </div>
       </section>
 
       {/* Danger zone */}
       <section>
-        <h2 className="mb-3 text-base font-semibold text-grade-d">위험 구역</h2>
+        <h2 className="mb-3 text-base font-semibold text-grade-d">{t("acct.dangerTitle")}</h2>
         <div className="rounded-2xl border border-grade-d/30 bg-card/40 p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium">로그아웃</div>
+              <div className="text-sm font-medium">{t("acct.logout")}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">
-                현재 브라우저 세션을 종료합니다.
+                {t("acct.logoutDesc")}
               </div>
             </div>
             <LogoutButton />

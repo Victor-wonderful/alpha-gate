@@ -9,17 +9,18 @@ import { ResolveTradesButton } from "../resolve-button";
 import { UnrealizedPnl } from "./unrealized-pnl";
 import {
   MARKET_CHECK_KEYS,
-  MARKET_CHECK_LABELS,
   TRIGGER_CHECK_KEYS,
-  TRIGGER_CHECK_LABELS,
   type Grade,
 } from "@/types/trade";
 import { formatNumber } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/messages";
 
 export const maxDuration = 60;
 
 export default async function JournalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const { data: trade } = await supabase.from("trades").select("*").eq("id", id).maybeSingle();
   if (!trade) notFound();
@@ -65,10 +66,10 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-primary">🕐</span>
-                <span className="font-semibold text-primary">자동 정산 대기 중</span>
+                <span className="font-semibold text-primary">{t("journal.detail.autoResolveWaiting")}</span>
                 <span className="text-muted-foreground">·</span>
                 <span className="text-xs text-muted-foreground">
-                  5분마다 자동 확인 / 즉시 확인하려면 우측 버튼. (만료까지 약 {remainingHours.toFixed(0)}시간)
+                  {t("journal.detail.autoResolveHint", { hours: remainingHours.toFixed(0) })}
                 </span>
               </div>
               <ResolveTradesButton />
@@ -91,11 +92,11 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
               {trade.exit_reason === "target" ? "🎯" : "✕"}
             </span>
             <span className={`font-semibold ${trade.exit_reason === "target" ? "text-grade-a" : "text-grade-d"}`}>
-              자동 정산됨 — {trade.exit_reason === "target" ? "목표 도달" : "손절 적중"}
+              {trade.exit_reason === "target" ? t("journal.detail.autoResolvedTarget") : t("journal.detail.autoResolvedStop")}
             </span>
             <span className="text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">
-              결과 {Number(trade.result_r) >= 0 ? "+" : ""}{Number(trade.result_r).toFixed(2)}R · {new Date(trade.closed_at as string).toLocaleString("ko-KR")}
+              {t("journal.detail.resultR", { value: `${Number(trade.result_r) >= 0 ? "+" : ""}${Number(trade.result_r).toFixed(2)}` })} · {new Date(trade.closed_at as string).toLocaleString("ko-KR")}
             </span>
           </div>
         </div>
@@ -104,7 +105,7 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {trade.symbol} · {trade.direction === "long" ? "롱" : "숏"} · {trade.timeframe}
+            {trade.symbol} · {trade.direction === "long" ? t("common.long") : t("common.short")} · {trade.timeframe}
           </h1>
           <p className="text-sm text-muted-foreground">
             {new Date(trade.created_at).toLocaleString("ko-KR")}
@@ -121,56 +122,56 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
         {/* 진입 시 평가 */}
         <Card>
           <CardHeader>
-            <CardTitle>진입 시 평가</CardTitle>
+            <CardTitle>{t("journal.detail.entryEvalTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <Row
-              label="의도 진입가"
+              label={t("journal.detail.intendedEntry")}
               value={`$${formatNumber(Number(trade.entry))}`}
-              sub="사용자 입력"
+              sub={t("journal.detail.userInput")}
             />
             {trade.entry_actual != null ? (
               <Row
-                label="실제 체결가"
+                label={t("journal.detail.actualFill")}
                 value={`$${formatNumber(Number(trade.entry_actual))}`}
                 sub={
                   trade.entry_slippage_pct != null
-                    ? `슬리피지 ${Number(trade.entry_slippage_pct) >= 0 ? "+" : ""}${Number(trade.entry_slippage_pct).toFixed(3)}%`
-                    : "시장가 체결"
+                    ? t("journal.detail.slippage", { value: `${Number(trade.entry_slippage_pct) >= 0 ? "+" : ""}${Number(trade.entry_slippage_pct).toFixed(3)}` })
+                    : t("journal.detail.marketFill")
                 }
               />
             ) : null}
             <Row
-              label="손절가"
+              label={t("journal.detail.stopPrice")}
               value={`$${formatNumber(Number(trade.stop))}`}
               sub={`${stopPct.toFixed(2)}% · 1R`}
             />
             <Row
-              label="목표가"
+              label={t("journal.detail.targetPrice")}
               value={`$${formatNumber(Number(trade.target))}`}
               sub={`${targetPct >= 0 ? "+" : ""}${targetPct.toFixed(2)}% · ${Number(trade.pre_rr).toFixed(2)}R`}
             />
             {trade.exit_actual != null && trade.closed_at ? (
               <Row
-                label="실제 청산가"
+                label={t("journal.detail.actualExit")}
                 value={`$${formatNumber(Number(trade.exit_actual))}`}
-                sub={trade.exit_reason === "target" ? "목표 적중" : trade.exit_reason === "stop" ? "손절 적중" : "수동"}
+                sub={trade.exit_reason === "target" ? t("journal.detail.targetHit") : trade.exit_reason === "stop" ? t("journal.detail.stopHit") : t("journal.detail.manual")}
               />
             ) : null}
             <div className="border-t border-border pt-3">
-              <Row label="진입 R:R" value={`${Number(trade.pre_rr).toFixed(2)}R`} />
-              <Row label="점수" value={`${trade.pre_score}점`} />
+              <Row label={t("journal.detail.entryRR")} value={`${Number(trade.pre_rr).toFixed(2)}R`} />
+              <Row label={t("journal.detail.score")} value={t("journal.detail.scorePoints", { n: trade.pre_score })} />
               <Row
-                label="수량"
+                label={t("journal.detail.quantity")}
                 value={`${formatNumber(Number(trade.position_quantity), { maximumFractionDigits: 4 })} ${trade.symbol.replace("USDT", "")}`}
-                sub={`노출 $${formatNumber(notional, { maximumFractionDigits: 0 })}`}
+                sub={t("journal.detail.exposure", { value: formatNumber(notional, { maximumFractionDigits: 0 }) })}
               />
-              <Row label="계좌" value={`$${formatNumber(Number(trade.account_size), { maximumFractionDigits: 0 })}`} />
-              <Row label="허용 손실률" value={`${Number(trade.allowed_loss_pct)}%`} />
-              {ctx.leverage ? <Row label="레버리지" value={`${ctx.leverage}x`} /> : null}
+              <Row label={t("journal.detail.account")} value={`$${formatNumber(Number(trade.account_size), { maximumFractionDigits: 0 })}`} />
+              <Row label={t("journal.detail.allowedLoss")} value={`${Number(trade.allowed_loss_pct)}%`} />
+              {ctx.leverage ? <Row label={t("journal.detail.leverage")} value={`${ctx.leverage}x`} /> : null}
             </div>
             <div className="border-t border-border pt-3">
-              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">점수 내역</div>
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">{t("journal.detail.scoreBreakdown")}</div>
               <ul className="space-y-1">
                 {(trade.pre_score_breakdown as Array<{ label: string; points: number }>).map((r, i) => (
                   <li key={i} className="flex justify-between">
@@ -199,7 +200,7 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
 
       {/* Monte Carlo 시뮬레이션 (저장 시점 스냅샷) */}
       {trade.simulation_meta && (trade.simulation_meta as { kind?: string }).kind === "monte_carlo_forecast" ? (
-        <MonteCarloForecastSection meta={trade.simulation_meta as MonteCarloForecastMeta} />
+        <MonteCarloForecastSection meta={trade.simulation_meta as MonteCarloForecastMeta} t={t} />
       ) : null}
 
       {/* 진입 시 시장 체크 + 트리거 */}
@@ -207,14 +208,14 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
         {Object.keys(market).length > 0 ? (
           <Card>
             <CardHeader>
-              <CardTitle>진입 시 시장 구조 체크</CardTitle>
+              <CardTitle>{t("journal.detail.marketCheckTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
               {MARKET_CHECK_KEYS.map((k) => {
                 const v = market[k];
                 return (
                   <div key={k} className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">{MARKET_CHECK_LABELS[k]}</span>
+                    <span className="text-muted-foreground">{t(`check.market.${k}`)}</span>
                     <CheckIcon v={v} />
                   </div>
                 );
@@ -226,14 +227,14 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
         {hasTrigger ? (
           <Card>
             <CardHeader>
-              <CardTitle>진입 시 트리거 검증</CardTitle>
+              <CardTitle>{t("journal.detail.triggerCheckTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
               {TRIGGER_CHECK_KEYS.map((k) => {
                 const v = trigger[k];
                 return (
                   <div key={k} className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">{TRIGGER_CHECK_LABELS[k]}</span>
+                    <span className="text-muted-foreground">{t(`check.trigger.${k}`)}</span>
                     <CheckIcon v={v} />
                   </div>
                 );
@@ -249,11 +250,11 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
           {hasMctx ? (
             <Card>
               <CardHeader>
-                <CardTitle>진입 시 시장 컨텍스트</CardTitle>
+                <CardTitle>{t("journal.detail.marketCtxTitle")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <Row
-                  label="BTC 가격"
+                  label={t("journal.detail.btcPrice")}
                   value={mctx.btcPrice ? `$${mctx.btcPrice.toLocaleString()}` : "—"}
                   sub={
                     mctx.btc24hChangePct !== null && mctx.btc24hChangePct !== undefined
@@ -262,7 +263,7 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
                   }
                 />
                 <Row
-                  label="펀딩비"
+                  label={t("journal.detail.fundingRate")}
                   value={
                     mctx.fundingRate !== null && mctx.fundingRate !== undefined
                       ? `${(mctx.fundingRate * 100).toFixed(4)}%`
@@ -271,16 +272,16 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
                   sub={
                     mctx.fundingRate !== null && mctx.fundingRate !== undefined
                       ? mctx.fundingRate > 0
-                        ? "롱이 숏에 지급"
-                        : "숏이 롱에 지급"
+                        ? t("journal.detail.fundingLongPays")
+                        : t("journal.detail.fundingShortPays")
                       : undefined
                   }
                 />
                 <Row
-                  label="다음 펀딩 정산"
+                  label={t("journal.detail.nextFunding")}
                   value={
                     mctx.minutesToFunding !== null && mctx.minutesToFunding !== undefined
-                      ? `${mctx.minutesToFunding}분 후`
+                      ? t("journal.detail.minutesLater", { n: mctx.minutesToFunding })
                       : "—"
                   }
                 />
@@ -336,7 +337,7 @@ type MonteCarloForecastMeta = {
   atrPctPerBar?: number;
 };
 
-function MonteCarloForecastSection({ meta }: { meta: MonteCarloForecastMeta }) {
+function MonteCarloForecastSection({ meta, t }: { meta: MonteCarloForecastMeta; t: TFunction }) {
   const winPct = (meta.winRate ?? 0) * 100;
   const lossPct = (meta.lossRate ?? 0) * 100;
   const timeoutPct = (meta.timeoutRate ?? 0) * 100;
@@ -345,7 +346,7 @@ function MonteCarloForecastSection({ meta }: { meta: MonteCarloForecastMeta }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>저장 시점 결과 시뮬레이션 (Monte Carlo)</CardTitle>
+        <CardTitle>{t("journal.detail.monteCarloTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div className="flex h-2.5 w-full overflow-hidden rounded-full border border-border bg-background/40">
@@ -354,13 +355,13 @@ function MonteCarloForecastSection({ meta }: { meta: MonteCarloForecastMeta }) {
           <div className="bg-muted-foreground/40" style={{ width: `${timeoutPct}%` }} />
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <ForecastStat label="목표 도달" value={`${winPct.toFixed(1)}%`} sub={meta.medianBarsToWin != null ? `평균 ${meta.medianBarsToWin}봉` : "—"} tone="good" />
-          <ForecastStat label="손절 적중" value={`${lossPct.toFixed(1)}%`} sub={meta.medianBarsToLoss != null ? `평균 ${meta.medianBarsToLoss}봉` : "—"} tone="bad" />
-          <ForecastStat label="시간 만료" value={`${timeoutPct.toFixed(1)}%`} sub={`${meta.barLimit ?? 0}봉 한도`} />
-          <ForecastStat label="기대 결과" value={`${ev >= 0 ? "+" : ""}${ev.toFixed(2)}R`} sub={`R:R ${(meta.rrRatio ?? 0).toFixed(2)}`} tone={ev > 0 ? "good" : ev < 0 ? "bad" : undefined} />
+          <ForecastStat label={t("journal.detail.reachTarget")} value={`${winPct.toFixed(1)}%`} sub={meta.medianBarsToWin != null ? t("journal.detail.avgBars", { n: meta.medianBarsToWin }) : "—"} tone="good" />
+          <ForecastStat label={t("journal.detail.hitStop")} value={`${lossPct.toFixed(1)}%`} sub={meta.medianBarsToLoss != null ? t("journal.detail.avgBars", { n: meta.medianBarsToLoss }) : "—"} tone="bad" />
+          <ForecastStat label={t("journal.detail.timeout")} value={`${timeoutPct.toFixed(1)}%`} sub={t("journal.detail.barLimit", { n: meta.barLimit ?? 0 })} />
+          <ForecastStat label={t("journal.detail.expectedResult")} value={`${ev >= 0 ? "+" : ""}${ev.toFixed(2)}R`} sub={`R:R ${(meta.rrRatio ?? 0).toFixed(2)}`} tone={ev > 0 ? "good" : ev < 0 ? "bad" : undefined} />
         </div>
         <p className={`text-xs ${evTone}`}>
-          저장 시점 변동성 {meta.atrPctPerBar?.toFixed(2) ?? "?"}% / 봉 기준 {(meta.runs ?? 0).toLocaleString()}회 무작위 경로 시뮬. 실제 시장은 본 시뮬과 다를 수 있습니다.
+          {t("journal.detail.monteCarloNote", { atr: meta.atrPctPerBar?.toFixed(2) ?? "?", runs: (meta.runs ?? 0).toLocaleString() })}
         </p>
       </CardContent>
     </Card>

@@ -6,16 +6,18 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/app/logo";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
-const NAV: Array<{ href: string; label: string; external?: boolean }> = [
-  { href: "/features", label: "기능" },
-  { href: "/how-it-works", label: "작동 방식" },
-  { href: "/pricing", label: "가격" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/contact", label: "문의" },
+const NAV: Array<{ href: string; labelKey: string; external?: boolean }> = [
+  { href: "/features", labelKey: "mktc.nav.features" },
+  { href: "/how-it-works", labelKey: "mktc.nav.howItWorks" },
+  { href: "/pricing", labelKey: "mktc.nav.pricing" },
+  { href: "/faq", labelKey: "mktc.nav.faq" },
+  { href: "/contact", labelKey: "mktc.nav.contact" },
 ];
 
 export function MarketingHeader() {
+  const t = useT();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -42,11 +44,11 @@ export function MarketingHeader() {
             );
             return n.external ? (
               <a key={n.href} href={n.href} className={cls}>
-                {n.label}
+                {t(n.labelKey)}
               </a>
             ) : (
               <Link key={n.href} href={n.href} className={cls}>
-                {n.label}
+                {t(n.labelKey)}
               </Link>
             );
           })}
@@ -56,17 +58,17 @@ export function MarketingHeader() {
             href="/login"
             className="hidden rounded-full px-4 py-1.5 text-xs font-semibold text-white/80 transition-colors hover:text-white sm:inline-block"
           >
-            로그인
+            {t("mktc.login")}
           </Link>
           <Link
             href="/login?mode=signup"
             className="rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-[0_0_20px_rgba(56,189,248,0.4)] transition-all hover:shadow-[0_0_28px_rgba(56,189,248,0.6)]"
           >
-            회원가입
+            {t("mktc.signup")}
           </Link>
           <button
             type="button"
-            aria-label="메뉴 열기"
+            aria-label={t("mktc.openMenu")}
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
             className="flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:text-white md:hidden"
@@ -92,11 +94,11 @@ export function MarketingHeader() {
               const onClick = () => setOpen(false);
               return n.external ? (
                 <a key={n.href} href={n.href} onClick={onClick} className={cls}>
-                  {n.label}
+                  {t(n.labelKey)}
                 </a>
               ) : (
                 <Link key={n.href} href={n.href} onClick={onClick} className={cls}>
-                  {n.label}
+                  {t(n.labelKey)}
                 </Link>
               );
             })}
@@ -106,14 +108,14 @@ export function MarketingHeader() {
                 onClick={() => setOpen(false)}
                 className="flex-1 rounded-full border border-white/15 px-4 py-2.5 text-center text-xs font-semibold text-white/80 hover:bg-white/5 hover:text-white"
               >
-                로그인
+                {t("mktc.login")}
               </Link>
               <Link
                 href="/login?mode=signup"
                 onClick={() => setOpen(false)}
                 className="flex-1 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-[0_0_20px_rgba(56,189,248,0.4)]"
               >
-                회원가입
+                {t("mktc.signup")}
               </Link>
             </div>
           </nav>

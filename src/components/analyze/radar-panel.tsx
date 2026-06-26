@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useT } from "@/lib/i18n/context";
 import {
   Radar,
   RefreshCw,
@@ -23,12 +24,12 @@ import { refreshRadarAction, getLiveQuotesAction } from "@/app/app/analyze/_rada
 const LIVE_INTERVAL_MS = 25_000;
 const COLLAPSED_COUNT = 5;
 
-function relativeTime(iso: string | null): string {
+function relativeTime(iso: string | null, t: ReturnType<typeof useT>): string {
   if (!iso) return "—";
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (min < 1) return "방금";
-  if (min < 60) return `${min}분 전`;
-  return `${Math.round(min / 60)}시간 전`;
+  if (min < 1) return t("analyze.cmpC.timeJustNow");
+  if (min < 60) return t("analyze.cmpC.timeMinAgo", { n: min });
+  return t("analyze.cmpC.timeHourAgo", { n: Math.round(min / 60) });
 }
 
 function fmtPrice(p: number): string {
@@ -44,17 +45,17 @@ function deriveDayOpen(price: number, changePct: number): number | null {
   return Number.isFinite(open) && open > 0 ? open : null;
 }
 
-const STYLE_LABEL: Record<TradingStyle, string> = {
-  scalp: "스캘핑",
-  day: "데이",
-  swing: "스윙",
-  position: "포지션",
+const STYLE_LABEL_KEY: Record<TradingStyle, string> = {
+  scalp: "analyze.cmpC.style.scalp",
+  day: "analyze.cmpC.style.day",
+  swing: "analyze.cmpC.style.swing",
+  position: "analyze.cmpC.style.position",
 };
-const STYLE_DUR: Record<TradingStyle, string> = {
-  scalp: "수분~수시간",
-  day: "수시간~하루",
-  swing: "며칠~수주",
-  position: "수주~수개월",
+const STYLE_DUR_KEY: Record<TradingStyle, string> = {
+  scalp: "analyze.cmpC.styleDur.scalp",
+  day: "analyze.cmpC.styleDur.day",
+  swing: "analyze.cmpC.styleDur.swing",
+  position: "analyze.cmpC.styleDur.position",
 };
 // 스타일별 색상 (빠름→느림: 앰버/스카이/바이올렛/에메랄드).
 const STYLE_RING: Record<TradingStyle, string> = {
@@ -90,6 +91,32 @@ const STYLE_ATR_CAP: Record<TradingStyle, number> = {
   swing: 10,
   position: 25,
 };
+
+// 레이더 신호 라벨 i18n — 저장된(한국어) label에서 변형(sweep 방향·펀딩 값)을 추출해
+// 코드 기반으로 번역한다. 신규 영문 DB 재적재 없이 기존 데이터에도 즉시 적용됨.
+function signalText(
+  s: { key: string; label: string },
+  t: (k: string, v?: Record<string, string | number>) => string,
+): string {
+  switch (s.key) {
+    case "sweep":
+      return t(s.label.includes("하단") ? "radar.signal.sweep_lower" : "radar.signal.sweep_upper");
+    case "funding": {
+      const m = s.label.match(/\(([^)]+)\)/);
+      const val = m ? m[1] : "";
+      return t(s.label.includes("과열") ? "radar.signal.funding_over" : "radar.signal.funding_reverse", { val });
+    }
+    case "compression":
+    case "vah":
+    case "val":
+    case "volume":
+    case "high24h":
+    case "low24h":
+      return t(`radar.signal.${s.key}`);
+    default:
+      return s.label;
+  }
+}
 
 interface Preview {
   atr: number;
@@ -171,20 +198,21 @@ function estScenarios(c: RadarCandidate): number {
 }
 
 function TrendMark({ trend }: { trend: "up" | "down" | "range" }) {
+  const t = useT();
   if (trend === "up")
     return (
-      <span title="상승 추세" className="flex items-center text-grade-a">
+      <span title={t("analyze.cmpC.trendUp")} className="flex items-center text-grade-a">
         <TrendingUp className="h-3.5 w-3.5" />
       </span>
     );
   if (trend === "down")
     return (
-      <span title="하락 추세" className="flex items-center text-grade-d">
+      <span title={t("analyze.cmpC.trendDown")} className="flex items-center text-grade-d">
         <TrendingDown className="h-3.5 w-3.5" />
       </span>
     );
   return (
-    <span title="박스권 (방향 없음)" className="flex items-center text-muted-foreground/50">
+    <span title={t("analyze.cmpC.trendRange")} className="flex items-center text-muted-foreground/50">
       <Minus className="h-3.5 w-3.5" />
     </span>
   );
@@ -201,6 +229,7 @@ export function RadarPanel({
   onStyleChange: (style: TradingStyle) => void;
   onPick: (symbol: string, style: TradingStyle) => void;
 }) {
+  const t = useT();
   const [snapshot, setSnapshot] = useState<RadarSnapshot>(initial);
   const [live, setLive] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState(false);
@@ -271,21 +300,21 @@ export function RadarPanel({
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Radar className="h-[18px] w-[18px] text-primary" />
-            후보 레이더 — 진입 가능한 코인
+            {t("analyze.cmpC.radarTitle")}
           </CardTitle>
           <div className="flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground tabular-nums">
             {hasLive ? (
               <span className="flex items-center gap-1 text-[11px] text-grade-a">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-grade-a" />
-                실시간
+                {t("analyze.cmpC.live")}
               </span>
             ) : null}
-            <span className="text-muted-foreground/70">신호 {relativeTime(scannedAt)}</span>
+            <span className="text-muted-foreground/70">{t("analyze.cmpC.signalTime", { time: relativeTime(scannedAt, t) })}</span>
             <button
               type="button"
               onClick={refresh}
               disabled={pending}
-              aria-label="새로고침"
+              aria-label={t("analyze.cmpC.refresh")}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground disabled:opacity-50"
             >
               <RefreshCw className={"h-3.5 w-3.5 " + (pending ? "animate-spin" : "")} />
@@ -293,8 +322,8 @@ export function RadarPanel({
           </div>
         </div>
         <p className="mt-1.5 text-xs leading-tight text-muted-foreground">
-          스타일을 고르면 그 스타일로 <span className="text-foreground/70">진입 가능한 코인</span>만 ·{" "}
-          <span className="text-foreground/50">손절·목표는 추정(분석 시 정밀 레벨 산출) · 매수 추천 아님</span>
+          {t("analyze.cmpC.descPrefix")} <span className="text-foreground/70">{t("analyze.cmpC.descTradeable")}</span>{t("analyze.cmpC.descSuffix")} ·{" "}
+          <span className="text-foreground/50">{t("analyze.cmpC.descNote")}</span>
         </p>
 
         {/* 스타일 탭 — 선택 시 분석 스타일도 함께 바뀜 */}
@@ -306,7 +335,7 @@ export function RadarPanel({
                 key={s}
                 type="button"
                 onClick={() => onStyleChange(s)}
-                title={STYLE_DUR[s]}
+                title={t(STYLE_DUR_KEY[s])}
                 className={
                   "rounded-lg border px-3.5 py-1.5 text-sm transition-colors " +
                   (active
@@ -314,12 +343,12 @@ export function RadarPanel({
                     : "border-border bg-card font-medium text-muted-foreground hover:text-foreground")
                 }
               >
-                {STYLE_LABEL[s]}
+                {t(STYLE_LABEL_KEY[s])}
               </button>
             );
           })}
           <span className="ml-auto text-[11px] font-medium text-grade-a">
-            {STYLE_LABEL[style]} 진입 가능 {rows.length}개
+            {t("analyze.cmpC.tradeableCount", { style: t(STYLE_LABEL_KEY[style]), n: rows.length })}
           </span>
         </div>
       </CardHeader>
@@ -328,26 +357,26 @@ export function RadarPanel({
         {!hasAtrData ? (
           <div className="mx-1 mb-1 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground">
             {scannedAt
-              ? "레이더에 스타일별 데이터가 아직 없습니다.\n우측 상단 [새로고침]을 눌러 다시 스캔하세요."
-              : "레이더 준비 중 — [새로고침]을 눌러 바로 스캔할 수 있습니다."}
+              ? t("analyze.cmpC.emptyStale")
+              : t("analyze.cmpC.emptyReady")}
           </div>
         ) : rows.length === 0 ? (
           <div className="mx-1 mb-1 whitespace-pre-line rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground">
-            {`지금은 ${STYLE_LABEL[style]}로 진입 가능한 코인이 없습니다 (변동성 부족).\n더 큰 스타일을 고르거나, 변동성이 살아날 때까지 기다리세요.`}
+            {t("analyze.cmpC.emptyNoRows", { style: t(STYLE_LABEL_KEY[style]) })}
           </div>
         ) : (
           <>
             {/* 컬럼 제목 */}
             <div className="flex items-center gap-3 border-b border-border/50 px-2 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:gap-4">
               <span className="w-5 text-center">#</span>
-              <span className="w-[76px]">코인</span>
-              <span className="w-[88px] text-right">가격 · 변동</span>
-              <span className="hidden min-w-0 flex-1 sm:block">신호</span>
-              <span className="w-[78px] text-center">방향 · 시나리오</span>
-              <span className="hidden w-[120px] md:block">예상 손절 · 목표</span>
-              <span className="hidden w-[56px] items-center justify-end gap-1 sm:flex">예상폭</span>
-              <span className="w-9 text-center">점수</span>
-              <span className="w-[56px] text-center">분석</span>
+              <span className="w-[76px]">{t("analyze.cmpC.colCoin")}</span>
+              <span className="w-[88px] text-right">{t("analyze.cmpC.colPriceChange")}</span>
+              <span className="hidden min-w-0 flex-1 sm:block">{t("analyze.cmpC.colSignal")}</span>
+              <span className="w-[78px] text-center">{t("analyze.cmpC.colDirScenario")}</span>
+              <span className="hidden w-[120px] md:block">{t("analyze.cmpC.colStopTarget")}</span>
+              <span className="hidden w-[56px] items-center justify-end gap-1 sm:flex">{t("analyze.cmpC.colRange")}</span>
+              <span className="w-9 text-center">{t("analyze.cmpC.colScore")}</span>
+              <span className="w-[56px] text-center">{t("analyze.cmpC.colAnalyze")}</span>
             </div>
             <ul className="divide-y divide-border/50">
               {visible.map((r, i) => (
@@ -370,12 +399,12 @@ export function RadarPanel({
               >
                 {expanded ? (
                   <>
-                    접기
+                    {t("analyze.cmpC.collapse")}
                     <ChevronUp className="h-3.5 w-3.5" />
                   </>
                 ) : (
                   <>
-                    더 보기 (+{hidden})
+                    {t("analyze.cmpC.showMore", { n: hidden })}
                     <ChevronDown className="h-3.5 w-3.5" />
                   </>
                 )}
@@ -403,6 +432,7 @@ function CandidateRow({
   style: TradingStyle;
   onPick: (symbol: string, style: TradingStyle) => void;
 }) {
+  const t = useT();
   const base = c.symbol.replace("USDT", "");
 
   const dayOpen = deriveDayOpen(c.price, c.change24hPct);
@@ -447,7 +477,7 @@ function CandidateRow({
                 (SIGNAL_COLOR[s.key] ?? "bg-foreground/10 text-foreground/70")
               }
             >
-              {s.label}
+              {signalText(s, t)}
             </span>
           ))}
           {c.signals.length > 2 ? (
@@ -458,37 +488,37 @@ function CandidateRow({
         {/* 예상 진입 방향 (추정) + 예상 시나리오 개수 */}
         <span className="flex w-[78px] shrink-0 flex-col items-center gap-0.5">
           {p.bias === "long" ? (
-            <span className="inline-flex items-center gap-1 rounded-md border border-grade-a/40 bg-grade-a/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-grade-a/40 bg-grade-a/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
               <TrendingUp className="h-3 w-3" />
-              롱 예상
+              {t("analyze.cmpC.biasLong")}
             </span>
           ) : p.bias === "short" ? (
-            <span className="inline-flex items-center gap-1 rounded-md border border-grade-d/40 bg-grade-d/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-d">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-grade-d/40 bg-grade-d/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-d">
               <TrendingDown className="h-3 w-3" />
-              숏 예상
+              {t("analyze.cmpC.biasShort")}
             </span>
           ) : (
             <span
-              title="방향 불명확 — 양방향 셋업 가능 (분석 시 확정)"
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-foreground/5 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+              title={t("analyze.cmpC.biasNeutralTitle")}
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-border bg-foreground/5 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
             >
               <Minus className="h-3 w-3" />
-              양방향
+              {t("analyze.cmpC.biasNeutral")}
             </span>
           )}
-          <span className="text-[9px] text-muted-foreground">시나리오 ~{estScenarios(c)}개</span>
+          <span className="text-[9px] text-muted-foreground">{t("analyze.cmpC.scenarioCount", { n: estScenarios(c) })}</span>
         </span>
 
         {/* 예상 손절폭 · 목표폭 (추정 — 분석 시 정밀화) */}
         <span className="hidden w-[120px] shrink-0 flex-col gap-0.5 leading-tight md:flex">
           <span className="flex items-center gap-1.5">
-            <span className="w-7 shrink-0 text-[9px] font-medium text-muted-foreground/70">손절</span>
+            <span className="w-7 shrink-0 text-[9px] font-medium text-muted-foreground/70">{t("analyze.cmpC.stopLabel")}</span>
             <span className="font-mono text-[11px] font-semibold tabular-nums text-grade-d">
               ±{p.stopPct.toFixed(1)}%
             </span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-7 shrink-0 text-[9px] font-medium text-muted-foreground/70">목표</span>
+            <span className="w-7 shrink-0 text-[9px] font-medium text-muted-foreground/70">{t("analyze.cmpC.targetLabel")}</span>
             <span className="font-mono text-[11px] font-semibold tabular-nums text-grade-a">
               ~{p.targetPct.toFixed(1)}%
             </span>
@@ -498,7 +528,7 @@ function CandidateRow({
 
         {/* 예상폭 */}
         <span
-          title="다음 구간 80% 예상 변동폭 (방향 예측 아님)"
+          title={t("analyze.cmpC.rangeTitle")}
           className="hidden w-[56px] shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:block"
         >
           {rangeHalf > 0 ? (rangeHalf >= 50 ? "±50%↑" : `±${rangeHalf.toFixed(1)}%`) : "—"}
@@ -511,7 +541,7 @@ function CandidateRow({
 
         {/* 분석 액션 */}
         <span className="inline-flex w-[56px] shrink-0 items-center justify-center gap-0.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:bg-primary/10 group-hover:text-primary">
-          분석
+          {t("analyze.cmpC.analyzeAction")}
           <ChevronRight className="h-3.5 w-3.5" />
         </span>
       </button>

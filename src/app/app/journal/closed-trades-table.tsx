@@ -7,6 +7,7 @@ import { GradeBadge } from "@/components/trade/grade-badge";
 import { Input } from "@/components/ui/input";
 import type { Grade } from "@/types/trade";
 import { cn, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 export interface ClosedTradeRow {
   id: string;
@@ -38,13 +39,6 @@ type PeriodFilter = "7d" | "30d" | "90d" | "all";
 
 const PAGE_SIZE = 10;
 
-const PERIOD_LABEL: Record<PeriodFilter, string> = {
-  "7d": "7일",
-  "30d": "30일",
-  "90d": "90일",
-  all: "전체",
-};
-
 const PERIOD_MS: Record<PeriodFilter, number | null> = {
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
@@ -53,6 +47,13 @@ const PERIOD_MS: Record<PeriodFilter, number | null> = {
 };
 
 export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
+  const t = useT();
+  const PERIOD_LABEL: Record<PeriodFilter, string> = {
+    "7d": t("journal.table.period.7d"),
+    "30d": t("journal.table.period.30d"),
+    "90d": t("journal.table.period.90d"),
+    all: t("journal.table.period.all"),
+  };
   const [symbolQuery, setSymbolQuery] = useState("");
   const [reason, setReason] = useState<ReasonFilter>("all");
   const [period, setPeriod] = useState<PeriodFilter>("30d");
@@ -130,7 +131,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
           <Input
             value={symbolQuery}
             onChange={(e) => changeSymbol(e.target.value)}
-            placeholder="코인 검색 (예: BTC, ETH)"
+            placeholder={t("journal.table.searchPlaceholder")}
             className="h-8 pl-7 text-xs"
           />
         </div>
@@ -149,18 +150,18 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                   : "text-muted-foreground hover:bg-accent/40",
               )}
             >
-              {r === "all" && `전체 ${counts.all}`}
+              {r === "all" && t("journal.table.reason.all", { n: counts.all })}
               {r === "target" && (
                 <span className={reason === r ? "" : "text-grade-a"}>
-                  익절 {counts.target}
+                  {t("journal.table.reason.target", { n: counts.target })}
                 </span>
               )}
               {r === "stop" && (
                 <span className={reason === r ? "" : "text-grade-d"}>
-                  손절 {counts.stop}
+                  {t("journal.table.reason.stop", { n: counts.stop })}
                 </span>
               )}
-              {r === "manual" && `수동 ${counts.manual}`}
+              {r === "manual" && t("journal.table.reason.manual", { n: counts.manual })}
             </button>
           ))}
         </div>
@@ -188,7 +189,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
       {/* Empty state */}
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-border/60 bg-card/40 p-10 text-center text-sm text-muted-foreground">
-          조건에 맞는 거래가 없습니다.
+          {t("journal.table.empty")}
         </div>
       ) : (
         <>
@@ -197,42 +198,42 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
             <table className="w-full min-w-[1280px] text-xs">
               <thead className="bg-card text-[10px] uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-2 py-1.5 text-left">시간</th>
-                  <th className="px-2 py-1.5 text-left">코인</th>
-                  <th className="px-2 py-1.5 text-left">방향</th>
-                  <th className="px-2 py-1.5 text-left">주문</th>
-                  <th className="px-2 py-1.5 text-left">TF</th>
-                  <th className="px-2 py-1.5 text-right">레버</th>
-                  <th className="px-2 py-1.5 text-left">등급</th>
-                  <th className="px-2 py-1.5 text-right">진입 / 체결</th>
-                  <th className="px-2 py-1.5 text-right">손절 / 청산</th>
-                  <th className="px-2 py-1.5 text-right">수량</th>
-                  <th className="px-2 py-1.5 text-right">R:R</th>
-                  <th className="px-2 py-1.5 text-right">실현 R</th>
-                  <th className="px-2 py-1.5 text-right">PnL</th>
-                  <th className="px-2 py-1.5 text-right">ROI</th>
-                  <th className="px-2 py-1.5 text-left">사유</th>
+                  <th className="px-2 py-1.5 text-left">{t("journal.table.col.time")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("journal.table.col.coin")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("journal.table.col.direction")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("journal.table.col.order")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("journal.table.col.tf")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("journal.table.col.leverage")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("journal.table.col.grade")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("journal.table.col.entryFill")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("journal.table.col.stopExit")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("journal.table.col.quantity")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("journal.table.col.rr")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("journal.table.col.realizedR")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("journal.table.col.pnl")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("journal.table.col.roi")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("journal.table.col.reason")}</th>
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((t) => {
-                  const entryTime = new Date(t.created_at);
-                  const exitTime = t.closed_at ? new Date(t.closed_at) : null;
+                {pageRows.map((row) => {
+                  const entryTime = new Date(row.created_at);
+                  const exitTime = row.closed_at ? new Date(row.closed_at) : null;
                   const fmtPx = (n: number | null) =>
                     n == null
                       ? "—"
                       : n >= 1000
                         ? n.toLocaleString("en-US", { maximumFractionDigits: 0 })
                         : n.toFixed(4);
-                  const exitActualNum = t.exit_actual ?? t.exit_price;
+                  const exitActualNum = row.exit_actual ?? row.exit_price;
                   const feesPctNum =
-                    t.fees_pct != null ? Number(t.fees_pct) : null;
+                    row.fees_pct != null ? Number(row.fees_pct) : null;
                   return (
-                    <tr key={t.id} className="border-t border-border hover:bg-accent/40">
+                    <tr key={row.id} className="border-t border-border hover:bg-accent/40">
                       <td className="px-2 py-1.5">
                         <Link
-                          href={`/app/journal/${t.id}`}
-                          title={feesPctNum != null ? `수수료 ${feesPctNum.toFixed(2)}%` : undefined}
+                          href={`/app/journal/${row.id}`}
+                          title={feesPctNum != null ? t("journal.table.feesTooltip", { pct: feesPctNum.toFixed(2) }) : undefined}
                           className="block text-foreground hover:underline"
                         >
                           <div>
@@ -255,129 +256,129 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                       </td>
                       <td className="px-2 py-1.5 font-mono">
                         <div className="flex items-center gap-1">
-                          <span>{t.symbol}</span>
-                          {t.mode === "backtest" ? (
+                          <span>{row.symbol}</span>
+                          {row.mode === "backtest" ? (
                             <span
                               className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-semibold text-amber-300"
-                              title="백테스트 거래 (walk-forward 자동 시뮬)"
+                              title={t("journal.table.backtestTooltip")}
                             >
                               ⏮ BT
                             </span>
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-2 py-1.5">{t.direction === "long" ? "롱" : "숏"}</td>
+                      <td className="px-2 py-1.5">{row.direction === "long" ? t("common.long") : t("common.short")}</td>
                       <td className="px-2 py-1.5">
-                        {t.order_type === "limit" ? (
+                        {row.order_type === "limit" ? (
                           <span className="rounded bg-sky-500/10 px-1 py-0.5 text-[10px] text-sky-400">
-                            지정
+                            {t("journal.table.orderType.limit")}
                           </span>
-                        ) : t.order_type === "stop" ? (
+                        ) : row.order_type === "stop" ? (
                           <span className="rounded bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-400">
-                            역지정
+                            {t("journal.table.orderType.stop")}
                           </span>
                         ) : (
                           <span className="rounded bg-muted/40 px-1 py-0.5 text-[10px] text-muted-foreground">
-                            시장
+                            {t("journal.table.orderType.market")}
                           </span>
                         )}
                       </td>
-                      <td className="px-2 py-1.5">{t.timeframe}</td>
+                      <td className="px-2 py-1.5">{row.timeframe}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                        {t.leverage != null ? (
+                        {row.leverage != null ? (
                           <span
                             className={
-                              t.leverage >= 20
+                              row.leverage >= 20
                                 ? "text-grade-d"
-                                : t.leverage >= 10
+                                : row.leverage >= 10
                                   ? "text-amber-400"
                                   : "text-foreground"
                             }
                           >
-                            {t.leverage}x
+                            {row.leverage}x
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-2 py-1.5">
-                        <GradeBadge grade={t.pre_grade as Grade} size="sm" />
+                        <GradeBadge grade={row.pre_grade as Grade} size="sm" />
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                        <div>{fmtPx(t.entry)}</div>
+                        <div>{fmtPx(row.entry)}</div>
                         <div
                           className="text-[10px] text-muted-foreground"
-                          title="실제 체결가 (슬리피지 포함)"
+                          title={t("journal.table.entryActualTooltip")}
                         >
-                          ↳ {fmtPx(t.entry_actual)}
+                          ↳ {fmtPx(row.entry_actual)}
                         </div>
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                        <div>{fmtPx(t.stop)}</div>
+                        <div>{fmtPx(row.stop)}</div>
                         <div
                           className="text-[10px] text-muted-foreground"
-                          title="실제 청산가"
+                          title={t("journal.table.exitActualTooltip")}
                         >
                           ↳ {fmtPx(exitActualNum)}
                         </div>
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                        {t.position_quantity != null
-                          ? Number(t.position_quantity).toFixed(4)
+                        {row.position_quantity != null
+                          ? Number(row.position_quantity).toFixed(4)
                           : "—"}
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono">
-                        {Number(t.pre_rr ?? 0).toFixed(2)}
+                        {Number(row.pre_rr ?? 0).toFixed(2)}
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono">
-                        {t.result_r != null ? (
+                        {row.result_r != null ? (
                           <span
                             className={
-                              Number(t.result_r) >= 0
+                              Number(row.result_r) >= 0
                                 ? "text-grade-a"
                                 : "text-grade-d"
                             }
                           >
-                            {Number(t.result_r) >= 0 ? "+" : ""}
-                            {Number(t.result_r).toFixed(2)}R
+                            {Number(row.result_r) >= 0 ? "+" : ""}
+                            {Number(row.result_r).toFixed(2)}R
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono">
-                        {t.pnl != null ? (
+                        {row.pnl != null ? (
                           <span
-                            className={t.pnl >= 0 ? "text-grade-a" : "text-grade-d"}
+                            className={row.pnl >= 0 ? "text-grade-a" : "text-grade-d"}
                           >
-                            {t.pnl >= 0 ? "+" : ""}
-                            {formatNumber(t.pnl, { maximumFractionDigits: 2 })}
+                            {row.pnl >= 0 ? "+" : ""}
+                            {formatNumber(row.pnl, { maximumFractionDigits: 2 })}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono">
-                        {t.roiPct != null ? (
+                        {row.roiPct != null ? (
                           <span
                             className={
-                              t.roiPct >= 0 ? "text-grade-a" : "text-grade-d"
+                              row.roiPct >= 0 ? "text-grade-a" : "text-grade-d"
                             }
                           >
-                            {t.roiPct >= 0 ? "+" : ""}
-                            {t.roiPct.toFixed(2)}%
+                            {row.roiPct >= 0 ? "+" : ""}
+                            {row.roiPct.toFixed(2)}%
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-2 py-1.5">
-                        {t.exit_reason === "target" ? (
-                          <span className="text-grade-a">목표</span>
-                        ) : t.exit_reason === "stop" ? (
-                          <span className="text-grade-d">손절</span>
-                        ) : t.exit_reason === "manual" ? (
-                          <span className="text-muted-foreground">수동</span>
+                        {row.exit_reason === "target" ? (
+                          <span className="text-grade-a">{t("journal.table.exitReason.target")}</span>
+                        ) : row.exit_reason === "stop" ? (
+                          <span className="text-grade-d">{t("journal.table.exitReason.stop")}</span>
+                        ) : row.exit_reason === "manual" ? (
+                          <span className="text-muted-foreground">{t("journal.table.exitReason.manual")}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -393,9 +394,11 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
           {totalPages > 1 ? (
             <div className="flex items-center justify-between gap-3 text-xs">
               <span className="text-muted-foreground">
-                {(safePage - 1) * PAGE_SIZE + 1}–
-                {Math.min(safePage * PAGE_SIZE, filtered.length)} /{" "}
-                {filtered.length}건
+                {t("journal.table.pagination", {
+                  from: (safePage - 1) * PAGE_SIZE + 1,
+                  to: Math.min(safePage * PAGE_SIZE, filtered.length),
+                  total: filtered.length,
+                })}
               </span>
               <div className="flex items-center gap-1">
                 <button

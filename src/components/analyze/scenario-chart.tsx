@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { toPng } from "html-to-image";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/context";
 import { cn, formatNumber } from "@/lib/utils";
 import type { AnalysisSnapshot } from "@/lib/analysis/analyze";
 import type { AnalysisReport } from "@/lib/analysis/synthesize";
@@ -33,6 +34,7 @@ const SWING_COLOR = "hsl(240 5% 64.9%)";
 type ChartRole = "HTF" | "MTF" | "LTF";
 
 export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
+  const t = useT();
   const captureRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -155,9 +157,9 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
       addLine(sc.entryZone.high, ENTRY_COLOR, "", LineStyle.Dashed, 1, false);
       addLine(sc.entryZone.low, ENTRY_COLOR, "", LineStyle.Dashed, 1, false);
       // Main 3 lines with short labels (price shown in axis already, so label is just identifier)
-      addLine(entry, ENTRY_COLOR, "▶ 진입", LineStyle.Solid, 3);
-      addLine(sc.invalidation, STOP_COLOR, "✕ 손절", LineStyle.Solid, 3);
-      addLine(sc.target, TARGET_COLOR, "★ 목표", LineStyle.Solid, 3);
+      addLine(entry, ENTRY_COLOR, "▶ " + t("analyze.cmpC.entry"), LineStyle.Solid, 3);
+      addLine(sc.invalidation, STOP_COLOR, "✕ " + t("analyze.cmpC.stop"), LineStyle.Solid, 3);
+      addLine(sc.target, TARGET_COLOR, "★ " + t("analyze.cmpC.target"), LineStyle.Solid, 3);
     }
 
     return () => {
@@ -182,14 +184,14 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
       });
       const a = document.createElement("a");
       const scenarioLetter = String.fromCharCode(65 + scenarioIndex);
-      a.download = `${snapshot.symbol}_${tfLabel}_시나리오${scenarioLetter}_${new Date()
+      a.download = `${snapshot.symbol}_${tfLabel}_${t("analyze.cmpC.scenarioFile", { letter: scenarioLetter })}_${new Date()
         .toISOString()
         .slice(0, 10)}.png`;
       a.href = dataUrl;
       a.click();
-      toast.success("차트 이미지를 저장했습니다.");
+      toast.success(t("analyze.cmpC.pngSaved"));
     } catch {
-      toast.error("이미지 저장에 실패했습니다.");
+      toast.error(t("analyze.cmpC.pngFailed"));
     } finally {
       setDownloading(false);
     }
@@ -223,10 +225,10 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
                     onClick={() => setRole(r)}
                     title={
                       r === "HTF"
-                        ? "Higher TF — 큰 추세 편향"
+                        ? t("analyze.cmpC.tfHtf")
                         : r === "MTF"
-                        ? "Mid TF — 셋업 잡는 TF (기본)"
-                        : "Lower TF — 트리거 확인"
+                        ? t("analyze.cmpC.tfMtf")
+                        : t("analyze.cmpC.tfLtf")
                     }
                     className={cn(
                       "rounded px-2 py-0.5 font-mono text-[11px] font-semibold transition-colors",
@@ -246,11 +248,11 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
               {tfLabel}
             </span>
           )}
-          <span className="text-muted-foreground">· 캔들 {activeChart.candles.length}개</span>
+          <span className="text-muted-foreground">{t("analyze.cmpC.candleCount", { n: activeChart.candles.length })}</span>
         </div>
         <Button variant="ghost" size="sm" onClick={downloadPng} disabled={downloading}>
           <Download className="h-3.5 w-3.5" />
-          {downloading ? "저장 중..." : "PNG 저장"}
+          {downloading ? t("analyze.cmpC.saving") : t("analyze.cmpC.pngSave")}
         </Button>
       </div>
 
@@ -269,9 +271,9 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
             </span>
             <div>
               <div className="flex items-center gap-1.5 text-sm font-bold leading-tight">
-                <span>시나리오 {String.fromCharCode(65 + scenarioIndex)}</span>
+                <span>{t("analyze.cmpC.scenarioLabel", { letter: String.fromCharCode(65 + scenarioIndex) })}</span>
                 <span className={cn("text-xs", isLong ? "text-grade-a" : "text-grade-d")}>
-                  · {isLong ? "롱" : "숏"}
+                  · {isLong ? t("common.long") : t("common.short")}
                 </span>
                 <span className="ml-1 rounded border border-border bg-background/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                   {tfLabel}
@@ -294,29 +296,29 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
       {sc ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <SummaryCell
-            label="▶ 진입"
+            label={"▶ " + t("analyze.cmpC.entry")}
             value={`$${formatTick(entry)}`}
             sub={
               currentVsEntry === 0
-                ? "현재가 동일"
-                : `현재가 대비 ${currentVsEntry > 0 ? "+" : ""}${currentVsEntry.toFixed(2)}%`
+                ? t("analyze.cmpC.currentSame")
+                : t("analyze.cmpC.currentVsEntry", { pct: `${currentVsEntry > 0 ? "+" : ""}${currentVsEntry.toFixed(2)}` })
             }
             color={ENTRY_COLOR}
           />
           <SummaryCell
-            label="✕ 손절"
+            label={"✕ " + t("analyze.cmpC.stop")}
             value={`$${formatTick(sc.invalidation)}`}
             sub={`-${stopDistPct.toFixed(2)}% (1R)`}
             color={STOP_COLOR}
           />
           <SummaryCell
-            label="★ 목표"
+            label={"★ " + t("analyze.cmpC.target")}
             value={`$${formatTick(sc.target)}`}
             sub={`+${targetDistPct.toFixed(2)}% (${rr.toFixed(1)}R)`}
             color={TARGET_COLOR}
           />
           <SummaryCell
-            label="📌 트리거"
+            label={"📌 " + t("analyze.cmpC.trigger")}
             value={sc.trigger}
             valueClass="text-xs font-medium leading-snug"
             sub=""

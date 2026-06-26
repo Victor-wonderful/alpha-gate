@@ -5,6 +5,7 @@ import {
   type TechnicalRow,
 } from "@/lib/market-widgets/technicals";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
 function fmtPriceUsd(n: number) {
   if (!n) return "—";
@@ -50,10 +51,10 @@ function ma200Tone(p: TechnicalRow["ma200Position"]) {
   return "text-muted-foreground";
 }
 
-function ma200Label(p: TechnicalRow["ma200Position"]) {
-  if (p === "above") return "위";
-  if (p === "below") return "아래";
-  return "—";
+function ma200LabelKey(p: TechnicalRow["ma200Position"]): string | null {
+  if (p === "above") return "market.snap.ma200Above";
+  if (p === "below") return "market.snap.ma200Below";
+  return null;
 }
 
 function fundingTone(v: number | null) {
@@ -70,13 +71,14 @@ function fmtFunding(v: number | null) {
 
 export async function SnapshotToday() {
   const rows = await fetchTechnicalsSnapshot();
+  const t = await getT();
 
   return (
     <section>
       <div className="mb-4 flex items-baseline justify-between">
         <h2 className="text-base font-semibold">Snapshot · Today</h2>
         <span className="text-xs text-muted-foreground">
-          via Binance · 오늘 변동(UTC 0시 기준) · RSI 14 / SMA 200 · 펀딩비 USDT-perp
+          {t("market.snap.caption")}
         </span>
       </div>
 
@@ -85,15 +87,15 @@ export async function SnapshotToday() {
           <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="border-b border-border/40 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                <th className="px-5 py-3 font-medium">코인</th>
-                <th className="px-5 py-3 font-medium">현재가</th>
-                <th className="px-5 py-3 font-medium">오늘</th>
+                <th className="px-5 py-3 font-medium">{t("market.snap.colCoin")}</th>
+                <th className="px-5 py-3 font-medium">{t("market.snap.colPrice")}</th>
+                <th className="px-5 py-3 font-medium">{t("market.snap.colToday")}</th>
                 <th className="px-5 py-3 font-medium">RSI 14</th>
                 <th className="hidden px-5 py-3 font-medium md:table-cell">
                   200DMA
                 </th>
                 <th className="hidden px-5 py-3 font-medium lg:table-cell">
-                  펀딩비
+                  {t("market.snap.colFunding")}
                 </th>
                 <th className="px-5 py-3" />
               </tr>
@@ -145,7 +147,10 @@ export async function SnapshotToday() {
                       ma200Tone(r.ma200Position),
                     )}
                   >
-                    {ma200Label(r.ma200Position)}
+                    {(() => {
+                      const key = ma200LabelKey(r.ma200Position);
+                      return key ? t(key) : "—";
+                    })()}
                   </td>
                   <td
                     className={cn(
@@ -160,7 +165,7 @@ export async function SnapshotToday() {
                       href={`/app/analyze?symbol=${r.pair}`}
                       className="inline-flex items-center gap-1 rounded-md border border-border bg-card/60 px-2.5 py-1 text-xs font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
                     >
-                      AI 분석
+                      {t("market.snap.aiAnalyze")}
                       <ArrowRight className="h-3 w-3" />
                     </Link>
                   </td>

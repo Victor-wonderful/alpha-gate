@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 import { classifyLiquidity, dayOfWeekNote, entrySuitability, type EntryTier } from "@/lib/analysis/sessions";
 
 type Session = {
@@ -87,12 +88,12 @@ function minutesUntilNextChange(s: Session, totalMin: number): number {
   return 24 * 60 - totalMin + events[0].at;
 }
 
-function fmtMin(totalMin: number) {
+function fmtMin(totalMin: number, t: (key: string, vars?: Record<string, string | number>) => string) {
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  if (h === 0) return `${m}분`;
-  if (m === 0) return `${h}시간`;
-  return `${h}시간 ${m}분`;
+  if (h === 0) return t("market.sessions.durationMin", { m });
+  if (m === 0) return t("market.sessions.durationHour", { h });
+  return t("market.sessions.durationHourMin", { h, m });
 }
 
 function fmtRange(ranges: [number, number][]) {
@@ -105,6 +106,7 @@ function fmtRange(ranges: [number, number][]) {
 }
 
 export function SessionsClock() {
+  const t = useT();
   const [time, setTime] = useState<{
     h: number;
     m: number;
@@ -130,13 +132,13 @@ export function SessionsClock() {
   }, []);
 
   // 유동성 등급은 공유 분류기 사용 (분석 타이밍 힌트와 동일 기준)
-  const tier = mounted ? classifyLiquidity(time.totalMin).tier : null;
+  const tier = mounted ? classifyLiquidity(time.totalMin, t).tier : null;
   const inGolden = tier === "golden";
   const inTrap = tier === "dead";
 
   // 진입(트레이딩) 적합도 — 유동성 + 펀딩 + 요일 종합
-  const entry = mounted ? entrySuitability(time.totalMin, time.dow) : null;
-  const dayNote = mounted ? dayOfWeekNote(time.dow) : null;
+  const entry = mounted ? entrySuitability(time.totalMin, time.dow, t) : null;
+  const dayNote = mounted ? dayOfWeekNote(time.dow, t) : null;
   const entryTone = entry ? ENTRY_TONE[entry.tier] : null;
 
   return (
@@ -144,17 +146,17 @@ export function SessionsClock() {
       <div className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-base font-semibold">
           <Clock className="h-4 w-4 text-muted-foreground" />
-          글로벌 마켓 세션
+          {t("market.sessions.title")}
         </h2>
         {mounted ? (
           <div className="flex items-center gap-2">
             {inGolden ? (
               <span className="rounded-md bg-grade-a/15 px-2 py-0.5 text-xs font-semibold text-grade-a">
-                🌟 황금 시간대
+                🌟 {t("market.sessions.goldenWindow")}
               </span>
             ) : inTrap ? (
               <span className="rounded-md bg-amber-400/15 px-2 py-0.5 text-xs font-semibold text-amber-400">
-                ⚠ 함정 시간대
+                ⚠ {t("market.sessions.trapWindow")}
               </span>
             ) : null}
             <span className="font-mono text-sm tabular-nums text-muted-foreground">
@@ -194,7 +196,7 @@ export function SessionsClock() {
         </div>
       ) : (
         <div className="mb-2 rounded-xl border border-border/60 bg-card/30 px-3 py-2.5 text-xs text-muted-foreground">
-          진입 적합도 판정 중…
+          {t("market.sessions.entryEvaluating")}
         </div>
       )}
 
@@ -239,9 +241,9 @@ export function SessionsClock() {
                       open ? "text-grade-a/80" : "text-muted-foreground",
                     )}
                   >
-                    {open ? "마감까지" : "오픈까지"}{" "}
+                    {open ? t("market.sessions.untilClose") : t("market.sessions.untilOpen")}{" "}
                     <span className="font-mono font-medium tabular-nums">
-                      {fmtMin(until)}
+                      {fmtMin(until, t)}
                     </span>
                   </p>
                 ) : null}

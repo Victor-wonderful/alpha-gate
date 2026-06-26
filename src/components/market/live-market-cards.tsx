@@ -1,4 +1,5 @@
 import { ChevronDown } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
 import { fetchFng, type FngPoint } from "@/lib/market-widgets/fng";
 import { fetchDominance } from "@/lib/market-widgets/dominance";
 import { fetchAltSeasonIndex } from "@/lib/market-widgets/alt-season";
@@ -45,18 +46,19 @@ function Card({
 
 /** Native collapsible insight section using <details>. No client JS needed.
  *  Title is the short verdict; body is the multi-line interpretation. */
-function Insight({
+async function Insight({
   title,
   children,
 }: {
   title: string;
   children: React.ReactNode;
 }) {
+  const t = await getT();
   return (
     <details className="group border-t border-border/40 pt-2">
       <summary className="flex cursor-pointer items-center justify-between gap-2 text-xs font-medium text-foreground hover:text-primary [&::-webkit-details-marker]:hidden">
         <span className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">방향 해석 ·</span>
+          <span className="text-muted-foreground">{t("market.cards.insight.prefix")}</span>
           <span>{title}</span>
         </span>
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
@@ -90,69 +92,72 @@ function fngTone(v: number) {
   return "text-grade-d";
 }
 
-function fngLabelKo(label: string) {
+function fngLabelKo(label: string, t: (k: string) => string) {
   const map: Record<string, string> = {
-    "Extreme Fear": "극단적 공포",
-    Fear: "공포",
-    Neutral: "중립",
-    Greed: "탐욕",
-    "Extreme Greed": "극단적 탐욕",
+    "Extreme Fear": t("market.cards.fng.label.extremeFear"),
+    Fear: t("market.cards.fng.label.fear"),
+    Neutral: t("market.cards.fng.label.neutral"),
+    Greed: t("market.cards.fng.label.greed"),
+    "Extreme Greed": t("market.cards.fng.label.extremeGreed"),
   };
   return map[label] ?? label;
 }
 
-function fngInsight(v: number): { title: string; body: React.ReactNode } {
+function fngInsight(
+  v: number,
+  t: (k: string) => string,
+): { title: string; body: React.ReactNode } {
   if (v <= 25)
     return {
-      title: "단기 바닥 후보",
+      title: t("market.cards.fng.insight.bottom.title"),
       body: (
         <>
-          <p>· 역사적으로 25 이하 구간은 단기 바닥과 자주 일치.</p>
-          <p>· BTC/ETH 분할 매수 검토 구간 (전량 X). 알트는 추가 변동성 가능.</p>
-          <p>· 추격 매도는 자제. 자금 관리 우선.</p>
+          <p>{t("market.cards.fng.insight.bottom.l1")}</p>
+          <p>{t("market.cards.fng.insight.bottom.l2")}</p>
+          <p>{t("market.cards.fng.insight.bottom.l3")}</p>
         </>
       ),
     };
   if (v < 45)
     return {
-      title: "추세 약화",
+      title: t("market.cards.fng.insight.weak.title"),
       body: (
         <>
-          <p>· 심리 위축. 추세 모멘텀 약함.</p>
-          <p>· 신규 진입은 셋업 명확할 때만, 사이즈 평소 70%.</p>
-          <p>· 보유 포지션은 손절 좁히는 것 고려.</p>
+          <p>{t("market.cards.fng.insight.weak.l1")}</p>
+          <p>{t("market.cards.fng.insight.weak.l2")}</p>
+          <p>{t("market.cards.fng.insight.weak.l3")}</p>
         </>
       ),
     };
   if (v <= 55)
     return {
-      title: "방향성 없음",
+      title: t("market.cards.fng.insight.neutral.title"),
       body: (
         <>
-          <p>· 심리 균형 — 큰 베팅 회피.</p>
-          <p>· 기술적 신호(추세·구조) 우선, 심리는 보조.</p>
-          <p>· 스캘프/데이트레이드에 유리.</p>
+          <p>{t("market.cards.fng.insight.neutral.l1")}</p>
+          <p>{t("market.cards.fng.insight.neutral.l2")}</p>
+          <p>{t("market.cards.fng.insight.neutral.l3")}</p>
         </>
       ),
     };
   if (v < 75)
     return {
-      title: "추격 자제",
+      title: t("market.cards.fng.insight.chase.title"),
       body: (
         <>
-          <p>· 탐욕 우세 — 후발 매수는 손익비 나쁨.</p>
-          <p>· 보유 포지션 일부 익절, 손절 끌어올리기.</p>
-          <p>· 신규는 풀백 기다리는 게 안전.</p>
+          <p>{t("market.cards.fng.insight.chase.l1")}</p>
+          <p>{t("market.cards.fng.insight.chase.l2")}</p>
+          <p>{t("market.cards.fng.insight.chase.l3")}</p>
         </>
       ),
     };
   return {
-    title: "조정 위험 ↑",
+    title: t("market.cards.fng.insight.correction.title"),
     body: (
       <>
-        <p>· 극탐욕 — 단기 조정 위험 크게 ↑.</p>
-        <p>· 익절·헷지 우선, 신규 매수 보류.</p>
-        <p>· 75 이상은 보통 1~2주 내 -10~-20% 조정 빈도 ↑.</p>
+        <p>{t("market.cards.fng.insight.correction.l1")}</p>
+        <p>{t("market.cards.fng.insight.correction.l2")}</p>
+        <p>{t("market.cards.fng.insight.correction.l3")}</p>
       </>
     ),
   };
@@ -210,13 +215,14 @@ function FngSparkline({
   );
 }
 
-function FngScale({ value }: { value: number }) {
+async function FngScale({ value }: { value: number }) {
+  const t = await getT();
   const segs = [
-    { to: 25, cls: "bg-grade-d/60", label: "극공포" },
-    { to: 45, cls: "bg-amber-400/60", label: "공포" },
-    { to: 55, cls: "bg-muted-foreground/30", label: "중립" },
-    { to: 75, cls: "bg-grade-a/60", label: "탐욕" },
-    { to: 100, cls: "bg-grade-d/60", label: "극탐욕" },
+    { to: 25, cls: "bg-grade-d/60", label: t("market.cards.fng.scale.extremeFear") },
+    { to: 45, cls: "bg-amber-400/60", label: t("market.cards.fng.scale.fear") },
+    { to: 55, cls: "bg-muted-foreground/30", label: t("market.cards.fng.scale.neutral") },
+    { to: 75, cls: "bg-grade-a/60", label: t("market.cards.fng.scale.greed") },
+    { to: 100, cls: "bg-grade-d/60", label: t("market.cards.fng.scale.extremeGreed") },
   ];
   return (
     <div>
@@ -247,11 +253,12 @@ function FngScale({ value }: { value: number }) {
 }
 
 export async function FearGreedCard() {
+  const t = await getT();
   const fng = await fetchFng();
   const alert = fng.value >= 75 || fng.value <= 25;
   const angle = (fng.value / 100) * 180;
   const weekDelta = fng.value - fng.weekAgo;
-  const ins = fngInsight(fng.value);
+  const ins = fngInsight(fng.value, t);
   return (
     <Card label="Fear & Greed" via="via alternative.me" alert={alert}>
       <div className="flex items-end gap-3">
@@ -283,7 +290,8 @@ export async function FearGreedCard() {
             {fng.value}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {fngLabelKo(fng.label)} · 어제 {fng.change > 0 ? "+" : ""}
+            {fngLabelKo(fng.label, t)} · {t("market.cards.fng.yesterday")}{" "}
+            {fng.change > 0 ? "+" : ""}
             {fng.change}
           </p>
         </div>
@@ -293,11 +301,11 @@ export async function FearGreedCard() {
 
       <div>
         <p className="mb-1 text-[9px] uppercase tracking-wider text-muted-foreground">
-          최근 7일
+          {t("market.cards.fng.last7d")}
         </p>
         <FngSparkline history={fng.history} color={fngTone(fng.value)} />
         <div className="mt-0.5 flex items-baseline justify-between text-[11px] text-muted-foreground">
-          <span>1주 전 {fng.weekAgo}</span>
+          <span>{t("market.cards.fng.weekAgo")} {fng.weekAgo}</span>
           <span
             className={cn(
               "font-mono tabular-nums",
@@ -321,53 +329,57 @@ export async function FearGreedCard() {
 
 // ─── 2. BTC Dominance ────────────────────────────────────────────
 
-function dominanceInsight(btc: number): { title: string; body: React.ReactNode } {
+function dominanceInsight(
+  btc: number,
+  t: (k: string) => string,
+): { title: string; body: React.ReactNode } {
   if (btc >= 60)
     return {
-      title: "BTC 우위장 · 알트 약세",
+      title: t("market.cards.dominance.insight.btcStrong.title"),
       body: (
         <>
-          <p>· 자금이 알트 → BTC로 회귀. 알트는 개별 호재 없으면 약세 지속.</p>
-          <p>· 포트폴리오에서 BTC 비중 ↑, 알트 비중 ↓ 권장.</p>
-          <p>· 알트 매매는 짧은 스윙 위주, 추세 추종 X.</p>
+          <p>{t("market.cards.dominance.insight.btcStrong.l1")}</p>
+          <p>{t("market.cards.dominance.insight.btcStrong.l2")}</p>
+          <p>{t("market.cards.dominance.insight.btcStrong.l3")}</p>
         </>
       ),
     };
   if (btc >= 55)
     return {
-      title: "BTC 우위 · 알트 선별",
+      title: t("market.cards.dominance.insight.btcLead.title"),
       body: (
         <>
-          <p>· BTC 추세가 주도. 알트는 시총 상위 메이저(ETH/SOL) 위주로만.</p>
-          <p>· 도미넌스가 ↓ 전환되면 알트 시즌 신호.</p>
+          <p>{t("market.cards.dominance.insight.btcLead.l1")}</p>
+          <p>{t("market.cards.dominance.insight.btcLead.l2")}</p>
         </>
       ),
     };
   if (btc >= 50)
     return {
-      title: "균형 · 섹터 로테이션",
+      title: t("market.cards.dominance.insight.balance.title"),
       body: (
         <>
-          <p>· 자금이 BTC ↔ 알트 사이 이동. 특정 섹터(L1/DeFi/AI) 강세 출현 가능.</p>
-          <p>· 거래량 동반 강세 섹터 추종이 유리.</p>
+          <p>{t("market.cards.dominance.insight.balance.l1")}</p>
+          <p>{t("market.cards.dominance.insight.balance.l2")}</p>
         </>
       ),
     };
   return {
-    title: "알트 우위 · 알트 시즌 가능",
+    title: t("market.cards.dominance.insight.altLead.title"),
     body: (
       <>
-        <p>· 자금이 BTC → 알트로 이동 중. 알트 시즌 진입 신호.</p>
-        <p>· 메이저 알트(ETH/SOL/AVAX) 추세 추종 우호.</p>
-        <p>· BTC 비중 ↓, 알트 비중 ↑ 가능.</p>
+        <p>{t("market.cards.dominance.insight.altLead.l1")}</p>
+        <p>{t("market.cards.dominance.insight.altLead.l2")}</p>
+        <p>{t("market.cards.dominance.insight.altLead.l3")}</p>
       </>
     ),
   };
 }
 
 export async function DominanceCard() {
+  const t = await getT();
   const d = await fetchDominance();
-  const ins = dominanceInsight(d.btc);
+  const ins = dominanceInsight(d.btc, t);
   return (
     <Card label="BTC Dominance" via="via CoinGecko">
       <div>
@@ -375,7 +387,7 @@ export async function DominanceCard() {
           {d.btc.toFixed(1)}
           <span className="text-lg text-muted-foreground">%</span>
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">전체 시총 중 BTC 비중</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("market.cards.dominance.subtitle")}</p>
       </div>
 
       <div>
@@ -393,7 +405,7 @@ export async function DominanceCard() {
             { k: "BTC", v: d.btc, c: "bg-amber-400/80" },
             { k: "ETH", v: d.eth, c: "bg-sky-400/80" },
             { k: "Stables", v: d.stables, c: "bg-grade-a/70" },
-            { k: "기타", v: d.others, c: "bg-muted-foreground/40" },
+            { k: t("market.cards.dominance.others"), v: d.others, c: "bg-muted-foreground/40" },
           ].map((row) => (
             <li key={row.k} className="flex items-center gap-1.5">
               <span className={cn("inline-block h-2 w-2 rounded-sm", row.c)} />
@@ -418,54 +430,58 @@ function altTone(v: number) {
   return "text-amber-400";
 }
 
-function altInsight(v: number): { title: string; body: React.ReactNode } {
+function altInsight(
+  v: number,
+  t: (k: string) => string,
+): { title: string; body: React.ReactNode } {
   if (v >= 75)
     return {
-      title: "알트 시즌 진행 중",
+      title: t("market.cards.alt.insight.altSeason.title"),
       body: (
         <>
-          <p>· Top 50 알트 대다수가 BTC 초과. 자금 회전 빠름.</p>
-          <p>· 메이저 알트(ETH/SOL/AVAX) 추세 추종 적극.</p>
-          <p>· 단, 75+ 구간 장기화 시 끝물 신호 — 익절 라인 점검.</p>
+          <p>{t("market.cards.alt.insight.altSeason.l1")}</p>
+          <p>{t("market.cards.alt.insight.altSeason.l2")}</p>
+          <p>{t("market.cards.alt.insight.altSeason.l3")}</p>
         </>
       ),
     };
   if (v >= 50)
     return {
-      title: "알트 우위",
+      title: t("market.cards.alt.insight.altLead.title"),
       body: (
         <>
-          <p>· 알트 절반 이상이 BTC 초과. 선별 진입 우호.</p>
-          <p>· 시총 상위 + 거래량 동반 알트 위주.</p>
+          <p>{t("market.cards.alt.insight.altLead.l1")}</p>
+          <p>{t("market.cards.alt.insight.altLead.l2")}</p>
         </>
       ),
     };
   if (v >= 25)
     return {
-      title: "중립 · 신중",
+      title: t("market.cards.alt.insight.neutral.title"),
       body: (
         <>
-          <p>· 특별한 방향성 없음. 섹터 로테이션 가능.</p>
-          <p>· 알트는 짧은 스윙 위주, 큰 베팅 회피.</p>
+          <p>{t("market.cards.alt.insight.neutral.l1")}</p>
+          <p>{t("market.cards.alt.insight.neutral.l2")}</p>
         </>
       ),
     };
   return {
-    title: "BTC 시즌",
+    title: t("market.cards.alt.insight.btcSeason.title"),
     body: (
       <>
-        <p>· 알트 대부분이 BTC 대비 약세. 알트 변동성 ↓.</p>
-        <p>· BTC 비중 ↑ 권장. 알트는 매수 후 보유보단 짧은 매매.</p>
+        <p>{t("market.cards.alt.insight.btcSeason.l1")}</p>
+        <p>{t("market.cards.alt.insight.btcSeason.l2")}</p>
       </>
     ),
   };
 }
 
 export async function AltSeasonCard() {
+  const t = await getT();
   const r = await fetchAltSeasonIndex();
-  const ins = altInsight(r.index);
+  const ins = altInsight(r.index, t);
   return (
-    <Card label="Alt Season Index" via="via CoinGecko · 자체 산정 (90d, Top 50)">
+    <Card label="Alt Season Index" via={t("market.cards.alt.via")}>
       <div>
         <p
           className={cn(
@@ -487,18 +503,18 @@ export async function AltSeasonCard() {
           />
         </div>
         <div className="mt-1 flex justify-between text-[9px] uppercase tracking-wider text-muted-foreground">
-          <span>BTC 시즌</span>
-          <span>중립</span>
-          <span>알트 시즌</span>
+          <span>{t("market.cards.alt.btcSeason")}</span>
+          <span>{t("market.cards.alt.neutral")}</span>
+          <span>{t("market.cards.alt.altSeason")}</span>
         </div>
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Top 50 중 BTC 초과:{" "}
+        {t("market.cards.alt.outperform")}{" "}
         <span className="font-mono font-medium text-foreground">
           {r.outperformers}/{r.totalCompared}
         </span>
-        {" · "}BTC 90일:{" "}
+        {" · "}{t("market.cards.alt.btc90d")}{" "}
         <span
           className={cn(
             "font-mono tabular-nums",
@@ -524,66 +540,70 @@ function kimchiTone(v: number) {
   return "text-grade-a";
 }
 
-function kimchiInsight(v: number): { title: string; body: React.ReactNode } {
+function kimchiInsight(
+  v: number,
+  t: (k: string) => string,
+): { title: string; body: React.ReactNode } {
   if (v >= 4)
     return {
-      title: "한국 과열 · 추격 X",
+      title: t("market.cards.kimchi.insight.overheat.title"),
       body: (
         <>
-          <p>· Upbit가 글로벌 대비 4% 이상 비쌈. 차익거래 매물 압력.</p>
-          <p>· 한국 시장 추격 매수 위험. 단기 조정 가능.</p>
-          <p>· 글로벌(Binance) 가격이 따라잡거나 한국이 빠지는 형태로 수렴.</p>
+          <p>{t("market.cards.kimchi.insight.overheat.l1")}</p>
+          <p>{t("market.cards.kimchi.insight.overheat.l2")}</p>
+          <p>{t("market.cards.kimchi.insight.overheat.l3")}</p>
         </>
       ),
     };
   if (v >= 2)
     return {
-      title: "FOMO 진입 단계",
+      title: t("market.cards.kimchi.insight.fomo.title"),
       body: (
         <>
-          <p>· 한국 매수세 강함. 변동성 ↑.</p>
-          <p>· 신규 진입 시 분할, 사이즈 ↓.</p>
+          <p>{t("market.cards.kimchi.insight.fomo.l1")}</p>
+          <p>{t("market.cards.kimchi.insight.fomo.l2")}</p>
         </>
       ),
     };
   if (v <= -2)
     return {
-      title: "역프 · 단기 바닥 후보",
+      title: t("market.cards.kimchi.insight.reverse.title"),
       body: (
         <>
-          <p>· 한국이 글로벌보다 싸짐. 한국 매도 쏠림 또는 USD 강세.</p>
-          <p>· 글로벌 매수 우위 신호일 수 있음.</p>
-          <p>· 단기 반등 후보 — 분할 매수 검토.</p>
+          <p>{t("market.cards.kimchi.insight.reverse.l1")}</p>
+          <p>{t("market.cards.kimchi.insight.reverse.l2")}</p>
+          <p>{t("market.cards.kimchi.insight.reverse.l3")}</p>
         </>
       ),
     };
   return {
-    title: "정상 · 글로벌 동조",
+    title: t("market.cards.kimchi.insight.normal.title"),
     body: (
       <>
-        <p>· ±2% 이내 — 한국·글로벌 가격 차이가 합리적 범위.</p>
-        <p>· 김프 신호 의미 없음. 다른 지표(기술적·뉴스) 우선.</p>
+        <p>{t("market.cards.kimchi.insight.normal.l1")}</p>
+        <p>{t("market.cards.kimchi.insight.normal.l2")}</p>
       </>
     ),
   };
 }
 
 export async function KimchiCard() {
+  const t = await getT();
   const rows = await fetchKimchiPremium();
   if (rows.length === 0) {
     return (
-      <Card label="김치 프리미엄" via="via Upbit · Binance">
-        <p className="text-xs text-muted-foreground">데이터 없음</p>
+      <Card label={t("market.cards.kimchi.title")} via="via Upbit · Binance">
+        <p className="text-xs text-muted-foreground">{t("market.cards.noData")}</p>
       </Card>
     );
   }
   const btc = rows.find((r) => r.symbol === "BTC") ?? rows[0];
   const alert = btc.premiumPct >= 4 || btc.premiumPct <= -2;
-  const ins = kimchiInsight(btc.premiumPct);
+  const ins = kimchiInsight(btc.premiumPct, t);
 
   return (
     <Card
-      label="김치 프리미엄"
+      label={t("market.cards.kimchi.title")}
       via="via Upbit · Binance · USDT/KRW"
       alert={alert}
     >
@@ -609,7 +629,7 @@ export async function KimchiCard() {
               <th className="pb-1 font-medium" />
               <th className="pb-1 text-right font-medium">Upbit (KRW)</th>
               <th className="pb-1 text-right font-medium">Binance (USD)</th>
-              <th className="pb-1 text-right font-medium">김프</th>
+              <th className="pb-1 text-right font-medium">{t("market.cards.kimchi.premium")}</th>
             </tr>
           </thead>
           <tbody>
@@ -646,45 +666,49 @@ export async function KimchiCard() {
 
 // ─── 5. Stablecoin Mcap ──────────────────────────────────────────
 
-function stablecapInsight(v: number): { title: string; body: React.ReactNode } {
+function stablecapInsight(
+  v: number,
+  t: (k: string) => string,
+): { title: string; body: React.ReactNode } {
   if (v >= 1)
     return {
-      title: "매수 탄약 누적 · risk-on",
+      title: t("market.cards.stablecap.insight.riskOn.title"),
       body: (
         <>
-          <p>· 스테이블 발행량 증가 = 시장 진입 자금 ↑.</p>
-          <p>· 위험자산 매수 우호 환경. BTC/알트 매수 유리.</p>
-          <p>· 단, 발행 → 실제 매수 전환에 시차 있음.</p>
+          <p>{t("market.cards.stablecap.insight.riskOn.l1")}</p>
+          <p>{t("market.cards.stablecap.insight.riskOn.l2")}</p>
+          <p>{t("market.cards.stablecap.insight.riskOn.l3")}</p>
         </>
       ),
     };
   if (v <= -1)
     return {
-      title: "유동성 회수 · 변동성 ↑",
+      title: t("market.cards.stablecap.insight.drain.title"),
       body: (
         <>
-          <p>· 스테이블 시총 감소 = 자금이 시장 밖으로.</p>
-          <p>· 변동성 ↑, 하락 압력. 포지션 축소 검토.</p>
-          <p>· 손절 좁히고 신규 진입 보수적.</p>
+          <p>{t("market.cards.stablecap.insight.drain.l1")}</p>
+          <p>{t("market.cards.stablecap.insight.drain.l2")}</p>
+          <p>{t("market.cards.stablecap.insight.drain.l3")}</p>
         </>
       ),
     };
   return {
-    title: "안정 · 큰 자금 이동 없음",
+    title: t("market.cards.stablecap.insight.stable.title"),
     body: (
       <>
-        <p>· ±1% 이내 — 자금 유출입 균형.</p>
-        <p>· 시장 방향성은 다른 지표(심리·기술적)로 판단.</p>
+        <p>{t("market.cards.stablecap.insight.stable.l1")}</p>
+        <p>{t("market.cards.stablecap.insight.stable.l2")}</p>
       </>
     ),
   };
 }
 
 export async function StablecapCard() {
+  const t = await getT();
   const r = await fetchStablecoinMcap();
-  const ins = stablecapInsight(r.total7dDeltaPct);
+  const ins = stablecapInsight(r.total7dDeltaPct, t);
   return (
-    <Card label="Stablecoin Mcap" via="via CoinGecko · 7d 시총 변화">
+    <Card label="Stablecoin Mcap" via={t("market.cards.stablecap.via")}>
       <div>
         <p className="font-mono text-[30px] font-bold leading-none tabular-nums">
           {fmtBn(r.total)}
@@ -695,7 +719,7 @@ export async function StablecapCard() {
             r.total7dDeltaPct >= 0 ? "text-grade-a" : "text-grade-d",
           )}
         >
-          7일: {fmtPct(r.total7dDeltaPct)}
+          {t("market.cards.stablecap.days7")} {fmtPct(r.total7dDeltaPct)}
         </p>
       </div>
 
@@ -728,55 +752,58 @@ export async function StablecapCard() {
 
 // ─── 6. Long/Short Ratio ─────────────────────────────────────────
 
-function lsInsight(longPct: number): { title: string; body: React.ReactNode } {
+function lsInsight(
+  longPct: number,
+  t: (k: string) => string,
+): { title: string; body: React.ReactNode } {
   if (longPct >= 65)
     return {
-      title: "롱 과열 · 청산 위험",
+      title: t("market.cards.ls.insight.longOverheat.title"),
       body: (
         <>
-          <p>· 65% 이상 롱 쏠림. 청산 캐스케이드 후보.</p>
-          <p>· 신규 롱 자제. 숏 카운터 트레이드 후보.</p>
-          <p>· 펀딩비도 같이 양수 高면 신호 강함.</p>
+          <p>{t("market.cards.ls.insight.longOverheat.l1")}</p>
+          <p>{t("market.cards.ls.insight.longOverheat.l2")}</p>
+          <p>{t("market.cards.ls.insight.longOverheat.l3")}</p>
         </>
       ),
     };
   if (longPct >= 58)
     return {
-      title: "롱 우위 · 추세 추종 우호",
+      title: t("market.cards.ls.insight.longLead.title"),
       body: (
         <>
-          <p>· 추세 추종에 유리한 환경.</p>
-          <p>· 단, 펀딩비 + 도미넌스 같이 보고 판단.</p>
+          <p>{t("market.cards.ls.insight.longLead.l1")}</p>
+          <p>{t("market.cards.ls.insight.longLead.l2")}</p>
         </>
       ),
     };
   if (longPct <= 35)
     return {
-      title: "숏 과열 · 스퀴즈 가능",
+      title: t("market.cards.ls.insight.shortOverheat.title"),
       body: (
         <>
-          <p>· 숏 포지션 쏠림. 숏 스퀴즈 발생 가능.</p>
-          <p>· 매수 우호 구간. 신규 숏 자제.</p>
-          <p>· 갑작스러운 ↑ 변동에 주의.</p>
+          <p>{t("market.cards.ls.insight.shortOverheat.l1")}</p>
+          <p>{t("market.cards.ls.insight.shortOverheat.l2")}</p>
+          <p>{t("market.cards.ls.insight.shortOverheat.l3")}</p>
         </>
       ),
     };
   if (longPct <= 42)
     return {
-      title: "숏 우위 · 바운스 후보",
+      title: t("market.cards.ls.insight.shortLead.title"),
       body: (
         <>
-          <p>· 단기 약세 심리 우세.</p>
-          <p>· 깊은 풀백 후 바운스 트레이드 후보.</p>
+          <p>{t("market.cards.ls.insight.shortLead.l1")}</p>
+          <p>{t("market.cards.ls.insight.shortLead.l2")}</p>
         </>
       ),
     };
   return {
-    title: "균형 · 쏠림 없음",
+    title: t("market.cards.ls.insight.balance.title"),
     body: (
       <>
-        <p>· 명확한 포지셔닝 쏠림 없음.</p>
-        <p>· 기술적 신호와 펀딩비 우선 참고.</p>
+        <p>{t("market.cards.ls.insight.balance.l1")}</p>
+        <p>{t("market.cards.ls.insight.balance.l2")}</p>
       </>
     ),
   };
@@ -835,11 +862,12 @@ function LsSparkline({ series }: { series: LongShortPoint[] }) {
 }
 
 export async function LongShortCard() {
+  const t = await getT();
   const r = await fetchLongShortRatio("BTCUSDT");
   if (!r.latest) {
     return (
       <Card label="Long/Short · BTC" via="via Binance">
-        <p className="text-xs text-muted-foreground">데이터 없음</p>
+        <p className="text-xs text-muted-foreground">{t("market.cards.noData")}</p>
       </Card>
     );
   }
@@ -847,7 +875,7 @@ export async function LongShortCard() {
   const shortPct = r.latest.shortPct * 100;
   const ratio = r.latest.ratio;
   const alert = longPct >= 65 || shortPct >= 65;
-  const ins = lsInsight(longPct);
+  const ins = lsInsight(longPct, t);
 
   return (
     <Card
@@ -860,7 +888,7 @@ export async function LongShortCard() {
           {ratio.toFixed(2)}
           <span className="ml-1 text-lg text-muted-foreground">×</span>
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">롱/숏 계좌 비율</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("market.cards.ls.ratioLabel")}</p>
       </div>
 
       <div>
@@ -884,7 +912,7 @@ export async function LongShortCard() {
 
       <div>
         <p className="mb-1 text-[9px] uppercase tracking-wider text-muted-foreground">
-          24h · Long 비중
+          {t("market.cards.ls.longShare24h")}
         </p>
         <LsSparkline series={r.series} />
         <p
@@ -897,9 +925,9 @@ export async function LongShortCard() {
                 : "text-muted-foreground",
           )}
         >
-          24h:{" "}
+          {t("market.cards.ls.h24")}{" "}
           {Math.abs(r.deltaLongPct) < 0.05
-            ? "변동 없음"
+            ? t("market.cards.ls.noChange")
             : `${r.deltaLongPct >= 0 ? "+" : ""}${r.deltaLongPct.toFixed(1)}pp`}
         </p>
       </div>

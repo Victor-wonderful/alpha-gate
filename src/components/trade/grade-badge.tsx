@@ -1,14 +1,18 @@
+"use client";
+
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 import type { Grade } from "@/types/trade";
 
-const STYLES: Record<Grade, { bg: string; ring: string; label: string }> = {
-  A: { bg: "bg-grade-a", ring: "ring-grade-a/30", label: "진입 가능" },
-  B: { bg: "bg-grade-b", ring: "ring-grade-b/30", label: "조건부 진입" },
-  C: { bg: "bg-grade-c", ring: "ring-grade-c/30", label: "비추천 · 축소" },
-  D: { bg: "bg-grade-d", ring: "ring-grade-d/30", label: "강한 자제" },
+const STYLES: Record<Grade, { bg: string; ring: string }> = {
+  A: { bg: "bg-grade-a", ring: "ring-grade-a/30" },
+  B: { bg: "bg-grade-b", ring: "ring-grade-b/30" },
+  C: { bg: "bg-grade-c", ring: "ring-grade-c/30" },
+  D: { bg: "bg-grade-d", ring: "ring-grade-d/30" },
 };
 
 export function GradeBadge({ grade, size = "lg" }: { grade: Grade; size?: "sm" | "lg" }) {
+  const t = useT();
   const s = STYLES[grade];
   if (size === "sm") {
     return (
@@ -34,8 +38,8 @@ export function GradeBadge({ grade, size = "lg" }: { grade: Grade; size?: "sm" |
         {grade}
       </span>
       <div>
-        <div className="text-lg font-semibold">{s.label}</div>
-        <div className="text-xs text-muted-foreground">매매 등급 {grade}</div>
+        <div className="text-lg font-semibold">{t(`grade.${grade}.label`)}</div>
+        <div className="text-xs text-muted-foreground">{t("grade.badgeLabel", { grade })}</div>
       </div>
     </div>
   );

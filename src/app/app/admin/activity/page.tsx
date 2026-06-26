@@ -2,12 +2,14 @@ import { getSupabaseService } from "@/lib/supabase/service";
 import { listAllUsers } from "@/lib/admin/data";
 import { formatNumber } from "@/lib/utils";
 import { ActivityFeed, type ActivityEvent } from "@/components/admin/activity-feed";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 const LIMIT = 100;
 
 export default async function AdminActivityPage() {
+  const t = await getT();
   const svc = getSupabaseService();
   const [users, analysesRes, tradesRes, txRes, logRes] = await Promise.all([
     listAllUsers(),
@@ -39,17 +41,17 @@ export default async function AdminActivityPage() {
       at: a.created_at,
       userId: a.user_id,
       label: emailOf.get(a.user_id) ?? a.user_id,
-      detail: `${a.symbol} 분석`,
+      detail: t("admin.detailAnalysis", { symbol: a.symbol }),
     });
   }
-  for (const t of (tradesRes.data ?? []) as { id: string; user_id: string; symbol: string; direction: string; pre_grade: string; created_at: string }[]) {
+  for (const tr of (tradesRes.data ?? []) as { id: string; user_id: string; symbol: string; direction: string; pre_grade: string; created_at: string }[]) {
     events.push({
-      id: `t-${t.id}`,
+      id: `t-${tr.id}`,
       kind: "trade",
-      at: t.created_at,
-      userId: t.user_id,
-      label: emailOf.get(t.user_id) ?? t.user_id,
-      detail: `${t.symbol} ${t.direction} 거래 (${t.pre_grade})`,
+      at: tr.created_at,
+      userId: tr.user_id,
+      label: emailOf.get(tr.user_id) ?? tr.user_id,
+      detail: t("admin.detailTrade", { symbol: tr.symbol, direction: tr.direction, grade: tr.pre_grade }),
     });
   }
   for (const x of (txRes.data ?? []) as { id: string; user_id: string; kind: string; amount: number; created_at: string }[]) {
@@ -69,7 +71,7 @@ export default async function AdminActivityPage() {
       at: l.created_at,
       userId: l.target_user_id,
       label: l.admin_email,
-      detail: `관리자: ${l.action}${l.target_user_id ? ` → ${emailOf.get(l.target_user_id) ?? l.target_user_id}` : ""}`,
+      detail: `${t("admin.detailAdminPrefix")}: ${l.action}${l.target_user_id ? ` → ${emailOf.get(l.target_user_id) ?? l.target_user_id}` : ""}`,
     });
   }
 

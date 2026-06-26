@@ -1,4 +1,5 @@
 import type { TradingStyle } from "./style";
+import type { TFunction } from "@/lib/i18n/messages";
 
 /**
  * 글로벌 마켓 세션 + 유동성 구간 — 단일 소스.
@@ -39,32 +40,32 @@ const ACTIVE_EU_START = 16 * 60; //  16:00 (런던 개장)
 // quiet  = 09:00~16:00 (아시아)
 
 /** 현재 KST 분누계의 유동성 등급을 판정. */
-export function classifyLiquidity(totalMin: number): LiquidityInfo {
+export function classifyLiquidity(totalMin: number, t: TFunction): LiquidityInfo {
   if (inRange(totalMin, GOLDEN_START, GOLDEN_END)) {
     return {
       tier: "golden",
-      label: "골든 타임",
-      note: "런던·뉴욕 겹침 — 최고 유동성·추세 발생. 분석 신뢰도 최상.",
+      label: t("sessions.liq.golden.label"),
+      note: t("sessions.liq.golden.note"),
     };
   }
   if (inRange(totalMin, DEAD_START, DEAD_END)) {
     return {
       tier: "dead",
-      label: "죽은 구간",
-      note: "미국 마감~아시아 개장 — 유동성 최저·휩쏘 빈발. 단기 매매 비권장.",
+      label: t("sessions.liq.dead.label"),
+      note: t("sessions.liq.dead.note"),
     };
   }
   if (inRange(totalMin, ACTIVE_EU_START, GOLDEN_START) || inRange(totalMin, GOLDEN_END, DEAD_START)) {
     return {
       tier: "active",
-      label: "활성 세션",
-      note: "유럽·미국 세션 — 유동성 양호. 추세·돌파 분석에 적합.",
+      label: t("sessions.liq.active.label"),
+      note: t("sessions.liq.active.note"),
     };
   }
   return {
     tier: "quiet",
-    label: "한산 세션",
-    note: "아시아 세션 — 변동성 낮고 박스 잦음. 단기 신호 신뢰도 보통.",
+    label: t("sessions.liq.quiet.label"),
+    note: t("sessions.liq.quiet.note"),
   };
 }
 
@@ -143,16 +144,16 @@ export interface EntrySuitability {
  * 골든 타임 > 활성 세션 > 아시아 한산 > 죽은 구간. 펀딩 ±10분은 잠시 회피.
  * 주말은 유동성 낮아 한 단계 하향.
  */
-export function entrySuitability(totalMin: number, dow: number): EntrySuitability {
+export function entrySuitability(totalMin: number, dow: number, t: TFunction): EntrySuitability {
   if (inFundingWindow(totalMin)) {
     return {
       tier: "avoid",
-      label: "펀딩 정산 — 잠시 회피",
-      advice: "정산 ±10분은 변동성 노이즈. 10분 뒤가 깔끔합니다.",
+      label: t("sessions.entry.funding.label"),
+      advice: t("sessions.entry.funding.advice"),
     };
   }
 
-  const liq = classifyLiquidity(totalMin);
+  const liq = classifyLiquidity(totalMin, t);
   const weekend = dow === 0 || dow === 6;
 
   let tier: EntryTier =
@@ -163,20 +164,20 @@ export function entrySuitability(totalMin: number, dow: number): EntrySuitabilit
 
   const advice: Record<EntryTier, string> = {
     optimal: weekend
-      ? "유동성은 좋지만 주말이라 갭 위험 — 사이즈 줄여서."
-      : "런던·뉴욕 겹침 — 추세·유동성 최상. 진입에 가장 좋은 시간.",
-    good: "유럽·미국 세션 — 유동성 양호. 추세·돌파 진입에 적합.",
+      ? t("sessions.entry.optimal.adviceWeekend")
+      : t("sessions.entry.optimal.advice"),
+    good: t("sessions.entry.good.advice"),
     caution: weekend
-      ? "주말 — 유동성 낮고 박스·갭 위험. 신규 진입 신중."
-      : "아시아 한산 — 박스 잦고 돌파가 가짜인 경우 많음. 신중히.",
-    avoid: "죽은 구간(미국 마감~아시아 개장) — 유동성 최저·휩쏘. 진입 비권장.",
+      ? t("sessions.entry.caution.adviceWeekend")
+      : t("sessions.entry.caution.advice"),
+    avoid: t("sessions.entry.avoid.advice"),
   };
 
   const label: Record<EntryTier, string> = {
-    optimal: "진입 최적",
-    good: "진입 양호",
-    caution: "진입 신중",
-    avoid: "진입 비권장",
+    optimal: t("sessions.entry.optimal.label"),
+    good: t("sessions.entry.good.label"),
+    caution: t("sessions.entry.caution.label"),
+    avoid: t("sessions.entry.avoid.label"),
   };
 
   return { tier, label: label[tier], advice: advice[tier] };
@@ -210,6 +211,7 @@ export function analysisEntryLink(
   style: TradingStyle,
   totalMin: number,
   entry: EntrySuitability,
+  t: TFunction,
 ): string {
   const coupling = STYLE_ENTRY_COUPLING[style];
   const good = nextGoodEntry(totalMin);
@@ -217,26 +219,26 @@ export function analysisEntryLink(
 
   if (coupling === "tight") {
     // 스캘핑 — 분석=진입
-    if (actionable) return `분석=진입 동시 · 지금 바로 실행 가능 (${entry.label})`;
+    if (actionable) return t("sessions.link.tight.actionable", { label: entry.label });
     return good.now
-      ? `분석=진입 동시 · 현재 ${entry.label} — 신중히`
-      : `분석=진입 동시 · 지금은 진입 어려움 → ${fmtClock(good.at)} KST 이후 분석+진입 권장`;
+      ? t("sessions.link.tight.now", { label: entry.label })
+      : t("sessions.link.tight.later", { clock: fmtClock(good.at) });
   }
   if (coupling === "moderate") {
     // 데이 — 같은 세션 안에서 진입
-    if (actionable) return `분석 후 바로 진입 가능 (${entry.label})`;
+    if (actionable) return t("sessions.link.moderate.actionable", { label: entry.label });
     return good.now
-      ? `지금 분석·진입 가능하나 ${entry.label}`
-      : `지금 분석해 계획 → 좋은 진입은 ${fmtClock(good.at)} KST부터`;
+      ? t("sessions.link.moderate.now", { label: entry.label })
+      : t("sessions.link.moderate.later", { clock: fmtClock(good.at) });
   }
   if (coupling === "loose") {
     // 스윙 — 분석은 계획, 진입은 따로
     return good.now
-      ? "분석=계획용 · 실제 진입도 지금 유동성 양호"
-      : `분석=계획용 · 실제 진입 추천 ${fmtClock(good.at)} KST (유동성 좋을 때)`;
+      ? t("sessions.link.loose.now")
+      : t("sessions.link.loose.later", { clock: fmtClock(good.at) });
   }
   // 포지션 — 타이밍 무관
-  return "진입 타이밍 영향 적음 · 며칠에 걸쳐 분산 진입";
+  return t("sessions.link.none");
 }
 
 // ─── 분석 시간 텔레그램 알림 ──────────────────────────────────────────
@@ -252,27 +254,29 @@ export interface AnalysisAlertOption {
 }
 
 /** 알림으로 고를 수 있는 추천 분석 시각 (스타일별 베스트 타이밍). */
-export const ANALYSIS_ALERT_OPTIONS: AnalysisAlertOption[] = [
-  { min: 9 * 60 + 10, time: "09:10", label: "일봉 마감 — 스윙·포지션" },
-  { min: 16 * 60, time: "16:00", label: "런던 개장 — 스캘핑" },
-  { min: 21 * 60, time: "21:00", label: "4H 마감 — 스윙" },
-  { min: 21 * 60 + 30, time: "21:30", label: "미국 개장 전 — 데이" },
-  { min: 22 * 60 + 30, time: "22:30", label: "골든 타임 — 스캘핑" },
-  { min: 5 * 60, time: "05:00", label: "미국 마감 후 — 데이" },
-];
+export function getAnalysisAlertOptions(t: TFunction): AnalysisAlertOption[] {
+  return [
+    { min: 9 * 60 + 10, time: "09:10", label: t("sessions.times.dailyClose") },
+    { min: 16 * 60, time: "16:00", label: t("sessions.times.londonOpen") },
+    { min: 21 * 60, time: "21:00", label: t("sessions.times.h4Close") },
+    { min: 21 * 60 + 30, time: "21:30", label: t("sessions.times.usPreOpen") },
+    { min: 22 * 60 + 30, time: "22:30", label: t("sessions.times.goldenTime") },
+    { min: 5 * 60, time: "05:00", label: t("sessions.times.usPostClose") },
+  ];
+}
 
 /** 요일 효과 메모. dow = KST 기준 요일(0=일 … 6=토). */
-export function dayOfWeekNote(dow: number): string {
+export function dayOfWeekNote(dow: number, t: TFunction): string {
   switch (dow) {
     case 2:
     case 3:
     case 4:
-      return "화·수·목 — 추세 가장 안정적, 베스트 트레이딩 요일";
+      return t("sessions.dow.midweek");
     case 1:
-      return "월요일 — 주말 갭 소화로 변동성 큼 (기회이자 위험)";
+      return t("sessions.dow.monday");
     case 5:
-      return "금요일 — 오후부터 포지션 정리, 신규 스윙은 신중";
+      return t("sessions.dow.friday");
     default:
-      return "주말 — 유동성 낮음, 일요일 밤 스파이크 주의";
+      return t("sessions.dow.weekend");
   }
 }

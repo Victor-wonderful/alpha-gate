@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/context";
 import {
   ArrowRight,
   TrendingDown,
@@ -40,7 +41,6 @@ import { effectiveRR } from "@/lib/analysis/standards";
 import type { TradingStyle } from "@/lib/analysis/style";
 import {
   MARKET_CHECK_KEYS,
-  MARKET_CHECK_LABELS,
   TRIGGER_CHECK_KEYS,
   type MarketCheckKey,
   type MoneyContext,
@@ -217,6 +217,7 @@ export function AnalysisResult({
   /** 서버에서 fetch한 실제 자금 관리 컨텍스트 (오늘 R, 진행 포지션 등) */
   money: MoneyContext;
 }) {
+  const t = useT();
   const [activeScenario, setActiveScenario] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(true);
   const [showChart, setShowChart] = useState(false);
@@ -268,7 +269,7 @@ export function AnalysisResult({
     const entry = watchStates[scenarioIndex];
     if (!entry) {
       // 아직 scenario_outcomes 에 등록 안 됨 (저장 직후 race) — 잠시 후 다시 시도
-      toast.info("시나리오가 아직 등록 중입니다. 잠시 후 다시 시도해 주세요.");
+      toast.info(t("analyze.result.watch.registering"));
       return;
     }
     const newWatch = !entry.watch;
@@ -281,7 +282,7 @@ export function AnalysisResult({
       setWatchStates(watchStates);
       toast.error(r.error);
     } else {
-      toast.success(newWatch ? "🔔 알림 등록됨 — 가격 도달 시 Telegram/Discord 발송" : "알림 해제됨");
+      toast.success(newWatch ? t("analyze.result.watch.registered") : t("analyze.result.watch.removed"));
     }
   }
   const captureRef = useRef<HTMLDivElement>(null);
@@ -339,9 +340,9 @@ export function AnalysisResult({
         <div className="flex items-start gap-2 rounded-md border border-grade-c/40 bg-grade-c/10 p-3 text-sm text-grade-c">
           <RefreshCw className="mt-0.5 h-4 w-4 flex-none" />
           <div>
-            <div className="font-semibold">데이터가 오래됐습니다</div>
+            <div className="font-semibold">{t("analyze.result.stale.title")}</div>
             <div className="text-xs">
-              {formatElapsed(elapsedSec)} 경과. 다시 분석하는 것을 권장합니다.
+              {t("analyze.result.stale.desc", { elapsed: formatElapsed(elapsedSec, t) })}
             </div>
           </div>
         </div>
@@ -368,7 +369,7 @@ export function AnalysisResult({
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
-              <span>{generatedKst} · {formatElapsed(elapsedSec)} 전</span>
+              <span>{generatedKst} · {t("analyze.result.header.ago", { elapsed: formatElapsed(elapsedSec, t) })}</span>
               <span>·</span>
               <a
                 href={`https://www.binance.com/en/futures/${snapshot.symbol}`}
@@ -376,36 +377,36 @@ export function AnalysisResult({
                 rel="noopener noreferrer"
                 className="underline-offset-2 hover:text-foreground hover:underline"
               >
-                Binance에서 확인 →
+                {t("analyze.result.header.binanceLink")}
               </a>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
               <span className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
-                스타일 <span className="font-mono text-foreground">{snapshot.style}</span>
+                {t("analyze.result.meta.style")} <span className="font-mono text-foreground">{snapshot.style}</span>
               </span>
               {!rangeCone.insufficient ? (
                 <span
                   className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground"
-                  title={`다음 구간 80% 예상 변동폭 (${rangeCone.lowPct.toFixed(1)}% ~ +${rangeCone.highPct.toFixed(1)}%). 과거 변동성 부트스트랩(드리프트 0) — 방향 예측 아님.`}
+                  title={t("analyze.result.meta.expectedRangeTitle", { low: rangeCone.lowPct.toFixed(1), high: rangeCone.highPct.toFixed(1) })}
                 >
-                  예상폭 <span className="font-mono text-foreground">±{((rangeCone.highPct - rangeCone.lowPct) / 2).toFixed(1)}%</span>
+                  {t("analyze.result.meta.expectedRange")} <span className="font-mono text-foreground">±{((rangeCone.highPct - rangeCone.lowPct) / 2).toFixed(1)}%</span>
                 </span>
               ) : null}
               <span className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
-                자금 <span className="font-mono text-foreground">{formatCurrency(accountSize, currency)}</span>
+                {t("analyze.result.meta.account")} <span className="font-mono text-foreground">{formatCurrency(accountSize, currency)}</span>
               </span>
               {riskPctOverride !== null ? (
                 <>
                   <span className="rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground">
-                    리스크 <span className="font-mono text-foreground">{riskPctOverride}%</span> (고정)
+                    {t("analyze.result.meta.risk")} <span className="font-mono text-foreground">{riskPctOverride}%</span> {t("analyze.result.meta.riskFixed")}
                   </span>
                   <span className="text-[10px] text-muted-foreground/70">
-                    = 거래당 <span className="font-mono">{formatCurrency(accountSize * riskPctOverride / 100, currency)}</span> 손실
+                    {t("analyze.result.meta.riskPerTrade")} <span className="font-mono">{formatCurrency(accountSize * riskPctOverride / 100, currency)}</span> {t("analyze.result.meta.riskLoss")}
                   </span>
                 </>
               ) : (
                 <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary">
-                  리스크 <span className="font-mono">AI 자동</span> (시나리오마다 다름)
+                  {t("analyze.result.meta.risk")} <span className="font-mono">{t("analyze.result.meta.riskAuto")}</span> {t("analyze.result.meta.riskAutoNote")}
                 </span>
               )}
             </div>
@@ -431,7 +432,7 @@ export function AnalysisResult({
           />
           <div className="min-w-0">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              지금 할 일
+              {t("analyze.result.actionNow.label")}
             </div>
             <h2 className="mt-1 text-lg font-bold leading-snug sm:text-xl">{report.actionNow}</h2>
           </div>
@@ -450,15 +451,15 @@ export function AnalysisResult({
             <CardContent className="flex flex-col items-start gap-3 p-6">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-6 w-6 flex-none text-primary" />
-                <div className="text-lg font-semibold">지금은 진입 보류</div>
+                <div className="text-lg font-semibold">{t("analyze.result.noEntry.filteredTitle")}</div>
                 {report.noEntry.direction ? (
                   <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                    {report.noEntry.direction === "short" ? "하락 우위" : "상승 우위"}
+                    {report.noEntry.direction === "short" ? t("analyze.result.noEntry.biasShort") : t("analyze.result.noEntry.biasLong")}
                   </span>
                 ) : null}
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                방향성 우위는 보이지만, <strong className="text-foreground">현재 변동성에서는 {snapshot.styleLabel} 기준 셋업이 수수료·노이즈 기준을 넘지 못해</strong> 진입 가능한 시나리오가 없습니다. 무리하게 들어가면 수수료가 손익비를 잠식합니다.
+                {t("analyze.result.noEntry.filteredPrefix")} <strong className="text-foreground">{t("analyze.result.noEntry.filteredStrong", { style: snapshot.styleLabel })}</strong> {t("analyze.result.noEntry.filteredSuffix")}
               </p>
               {strategy.reasoning ? (
                 <p className="rounded-md bg-muted/40 px-3 py-2 text-sm leading-relaxed text-foreground">
@@ -468,7 +469,7 @@ export function AnalysisResult({
               {report.noEntry.reasons.length > 0 ? (
                 <div className="w-full">
                   <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    폐기된 셋업 사유
+                    {t("analyze.result.noEntry.discardedReasons")}
                   </div>
                   <ul className="space-y-1 text-xs text-muted-foreground">
                     {report.noEntry.reasons.map((r, i) => (
@@ -489,10 +490,10 @@ export function AnalysisResult({
           <Card>
             <CardContent className="flex flex-col items-center gap-2 p-10 text-center">
               <AlertTriangle className="h-7 w-7 text-grade-c" />
-              <div className="text-lg font-semibold">지금 진입하지 마세요</div>
+              <div className="text-lg font-semibold">{t("analyze.result.noEntry.dontEnterTitle")}</div>
               <p className="max-w-md text-sm text-muted-foreground">
                 {report.noEntry?.suggestion ??
-                  "AI가 보기에 지금은 매매 우위가 없습니다. 시장이 정리될 때까지 기다리세요."}
+                  t("analyze.result.noEntry.dontEnterFallback")}
               </p>
             </CardContent>
           </Card>
@@ -549,9 +550,9 @@ export function AnalysisResult({
           >
             <span className="flex items-center gap-2 text-muted-foreground">
               <ChartCandlestick className="h-4 w-4" />
-              차트로 보기
+              {t("analyze.result.chart.viewChart")}
               <span className="hidden text-xs font-normal text-muted-foreground/60 sm:inline">
-                — 진입·손절·목표 레벨을 캔들 차트에 표시
+                {t("analyze.result.chart.viewChartHint")}
               </span>
             </span>
             <ChevronDown
@@ -566,7 +567,7 @@ export function AnalysisResult({
             <Card className="mt-4">
               <CardHeader className="space-y-3">
                 <div className="flex flex-row items-center justify-between gap-3">
-                  <CardTitle className="text-base">차트로 보기</CardTitle>
+                  <CardTitle className="text-base">{t("analyze.result.chart.viewChart")}</CardTitle>
                   {report.scenarios.length > 1 ? (
                     <div className="flex flex-wrap gap-1">
                       {report.scenarios.map((s, i) => (
@@ -582,10 +583,10 @@ export function AnalysisResult({
                               : "border-border bg-background/40 text-muted-foreground hover:bg-accent/40",
                           )}
                         >
-                          {String.fromCharCode(65 + i)} · {s.direction === "long" ? "롱" : "숏"}
+                          {String.fromCharCode(65 + i)} · {s.direction === "long" ? t("common.long") : t("common.short")}
                           {i === 0 ? (
                             <span className="ml-1 rounded bg-primary/20 px-1 py-0 text-[9px] uppercase tracking-wider text-primary">
-                              메인
+                              {t("analyze.result.chart.main")}
                             </span>
                           ) : null}
                         </button>
@@ -599,7 +600,7 @@ export function AnalysisResult({
                 <ChartErrorBoundary
                   fallback={
                     <div className="flex h-[480px] items-center justify-center rounded-md border border-border bg-card/30 text-sm text-muted-foreground">
-                      차트를 다시 그리는 중...
+                      {t("analyze.result.chart.redrawing")}
                     </div>
                   }
                 >
@@ -641,7 +642,7 @@ export function AnalysisResult({
         >
           <span className="flex items-center gap-2 text-muted-foreground">
             <Target className="h-4 w-4" />
-            전문가 정보 보기
+            {t("analyze.result.expert.toggle")}
           </span>
           <ChevronDown
             className={cn(
@@ -655,13 +656,13 @@ export function AnalysisResult({
           <div className="mt-3 space-y-2">
             {report.marketTrend ? (
               <ExpertRow
-                title="추세 · 지표"
+                title={t("analyze.result.expert.trendTitle")}
                 summary={`${
                   report.marketTrend.direction === "up"
-                    ? "상승"
+                    ? t("analyze.result.trend.up")
                     : report.marketTrend.direction === "down"
-                      ? "하락"
-                      : "횡보"
+                      ? t("analyze.result.trend.down")
+                      : t("analyze.result.trend.range")
                 }${snapshot.trendMetrics?.adx ? ` · ADX ${snapshot.trendMetrics.adx.value.toFixed(1)}` : ""}${
                   snapshot.trendMetrics?.ker ? ` · KER ${snapshot.trendMetrics.ker.value.toFixed(2)}` : ""
                 }`}
@@ -674,14 +675,14 @@ export function AnalysisResult({
               </ExpertRow>
             ) : null}
 
-            <ExpertRow title="시장 구조" summary={report.structure.htf}>
+            <ExpertRow title={t("analyze.result.expert.structureTitle")} summary={report.structure.htf}>
               <div className="space-y-2 text-sm">
-                <Row label="큰 시간대 (1D/4H)" value={report.structure.htf} />
-                <Row label="작은 시간대 (1H/15M)" value={report.structure.ltf} />
+                <Row label={t("analyze.result.expert.structureHtf")} value={report.structure.htf} />
+                <Row label={t("analyze.result.expert.structureLtf")} value={report.structure.ltf} />
               </div>
             </ExpertRow>
 
-            <ExpertRow title="핵심 가격대" summary={`${report.keyLevels.length}개 레벨`}>
+            <ExpertRow title={t("analyze.result.expert.keyLevelsTitle")} summary={t("analyze.result.expert.keyLevelsSummary", { n: report.keyLevels.length })}>
               <ul className="space-y-2 text-sm">
                 {report.keyLevels.map((k, i) => (
                   <li
@@ -699,14 +700,14 @@ export function AnalysisResult({
             </ExpertRow>
 
             <ExpertRow
-              title="시장 상태"
-              summary={`매수 ${(snapshot.flow1m.buyRatio * 100).toFixed(0)}% · 펀딩 ${snapshot.funding.bias}`}
+              title={t("analyze.result.expert.marketStateTitle")}
+              summary={t("analyze.result.expert.marketStateSummary", { buy: (snapshot.flow1m.buyRatio * 100).toFixed(0), funding: snapshot.funding.bias })}
             >
               <div className="space-y-2 text-sm">
-                <Row label="최근 매수 비율" value={`${(snapshot.flow1m.buyRatio * 100).toFixed(1)}%`} />
-                <Row label="펀딩비" value={snapshot.funding.bias} />
+                <Row label={t("analyze.result.expert.buyRatio")} value={`${(snapshot.flow1m.buyRatio * 100).toFixed(1)}%`} />
+                <Row label={t("analyze.result.expert.funding")} value={snapshot.funding.bias} />
                 {snapshot.macro.btcDominance != null ? (
-                  <Row label="BTC 도미넌스" value={`${snapshot.macro.btcDominance.toFixed(2)}%`} />
+                  <Row label={t("analyze.result.expert.btcDominance")} value={`${snapshot.macro.btcDominance.toFixed(2)}%`} />
                 ) : null}
                 <div className="border-t border-border pt-2 text-xs text-muted-foreground">
                   {report.flow.note}
@@ -715,7 +716,7 @@ export function AnalysisResult({
             </ExpertRow>
 
             {report.warnings.length > 0 ? (
-              <ExpertRow title="주의 사항" summary={`${report.warnings.length}건`}>
+              <ExpertRow title={t("analyze.result.expert.warningsTitle")} summary={t("analyze.result.expert.warningsSummary", { n: report.warnings.length })}>
                 <ul className="space-y-2 text-sm">
                   {report.warnings.map((w, i) => (
                     <li key={i} className="flex gap-2 text-grade-c">
@@ -730,8 +731,8 @@ export function AnalysisResult({
             {/* Detailed scenario panel (with full checklist + grade actions) */}
             {report.scenarios.length > 0 ? (
               <ExpertRow
-                title="시나리오 상세"
-                summary={`체크리스트 + 점수 · ${report.scenarios.length}개`}
+                title={t("analyze.result.expert.scenarioDetailTitle")}
+                summary={t("analyze.result.expert.scenarioDetailSummary", { n: report.scenarios.length })}
               >
                 <div className="space-y-4">
                   {report.scenarios.map((s, i) => {
@@ -752,9 +753,9 @@ export function AnalysisResult({
                         <div className="flex items-center gap-2">
                           <GradeBadge grade={grade.grade} size="sm" />
                           <span className="font-semibold">
-                            {String.fromCharCode(65 + i)} · {s.direction === "long" ? "롱" : "숏"} · {s.name}
+                            {String.fromCharCode(65 + i)} · {s.direction === "long" ? t("common.long") : t("common.short")} · {s.name}
                           </span>
-                          <span className="ml-auto text-muted-foreground">손익비 {grade.rr.toFixed(2)}R · {grade.score}점</span>
+                          <span className="ml-auto text-muted-foreground">{t("analyze.result.scenarioDetail.rrScore", { rr: grade.rr.toFixed(2), score: grade.score })}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
                           {MARKET_CHECK_KEYS.map((k: MarketCheckKey) => (
@@ -775,18 +776,18 @@ export function AnalysisResult({
                                     : "hsl(var(--border))",
                                 }}
                               />
-                              {MARKET_CHECK_LABELS[k]}
+                              {t(`check.market.${k}`)}
                             </span>
                           ))}
                         </div>
-                        {grade.actions.length > 0 && grade.grade !== "A" ? (
+                        {grade.actionItems.length > 0 && grade.grade !== "A" ? (
                           <ul className="space-y-0.5 border-t border-border/60 pt-2 text-muted-foreground">
-                            {grade.actions.slice(0, 2).map((a, idx) => (
-                              <li key={idx}>· {a}</li>
+                            {grade.actionItems.slice(0, 2).map((a, idx) => (
+                              <li key={idx}>· {t(`grade.action.${a.code}`, a.params)}</li>
                             ))}
                           </ul>
                         ) : null}
-                        <div className="text-muted-foreground">진입 중간값 ${formatNumber(entry)}</div>
+                        <div className="text-muted-foreground">{t("analyze.result.scenarioDetail.entryMid", { price: formatNumber(entry) })}</div>
                       </div>
                     );
                   })}
@@ -800,7 +801,7 @@ export function AnalysisResult({
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        본 분석은 투자 자문이 아닙니다. 모든 거래 결정과 결과는 사용자 본인의 책임입니다.
+        {t("analyze.result.disclaimer")}
       </p>
       </div>
     </div>
@@ -851,14 +852,15 @@ function RailVerdictCard({
   report: AnalysisReport;
   historicalStats?: import("@/lib/analysis/scenario-stats").ScenarioStats | null;
 }) {
+  const t = useT();
   const isWait = strategy.primary === "wait";
   const dirLabel =
     strategy.direction === "long"
-      ? "롱"
+      ? t("common.long")
       : strategy.direction === "short"
-        ? "숏"
+        ? t("common.short")
         : strategy.primary === "range_fade"
-          ? "양방향"
+          ? t("analyze.result.rail.bothDirections")
           : null;
   const decided = historicalStats ? historicalStats.target + historicalStats.stop : 0;
   // 내부용 "시나리오 제외:" 로그는 숨기고, 사용자용 경고만 노출.
@@ -887,11 +889,11 @@ function RailVerdictCard({
             {dirLabel ? ` · ${dirLabel}` : ""}
           </Badge>
           <span className="text-muted-foreground">
-            신뢰도 <span className="font-mono text-foreground">{Math.round(strategy.confidence * 100)}%</span>
+            {t("analyze.result.rail.confidence")} <span className="font-mono text-foreground">{Math.round(strategy.confidence * 100)}%</span>
           </span>
           {historicalStats && decided >= 3 ? (
             <span className="text-muted-foreground">
-              · 과거 적중률{" "}
+              · {t("analyze.result.rail.historicalWinRate")}{" "}
               <span
                 className={cn(
                   "font-mono font-semibold",
@@ -904,10 +906,10 @@ function RailVerdictCard({
               >
                 {Math.round(historicalStats.winRate * 100)}%
               </span>{" "}
-              ({decided}건)
+              {t("analyze.result.rail.winRateCount", { n: decided })}
             </span>
           ) : historicalStats && historicalStats.total > 0 ? (
-            <span className="text-[11px] text-muted-foreground">· 과거 표본 {historicalStats.total}개 (부족)</span>
+            <span className="text-[11px] text-muted-foreground">· {t("analyze.result.rail.sampleInsufficient", { n: historicalStats.total })}</span>
           ) : null}
         </div>
 
@@ -926,7 +928,7 @@ function RailVerdictCard({
 
         {strategy.rejected.length > 0 ? (
           <div className="border-t border-border/50 pt-2.5">
-            <div className="text-[11px] font-semibold text-muted-foreground">검토 후 제외한 전략</div>
+            <div className="text-[11px] font-semibold text-muted-foreground">{t("analyze.result.rail.rejectedTitle")}</div>
             <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground/80">
               {strategy.rejected.map((r, i) => (
                 <li key={i}>
@@ -953,12 +955,13 @@ function MarketTrendBody({
   metrics?: AnalysisSnapshot["trendMetrics"];
   dominance?: NonNullable<AnalysisSnapshot["macro"]>["dominanceRegime"];
 }) {
+  const t = useT();
   const dirMap = {
-    up: { label: "상승 추세", color: "text-grade-a", bg: "bg-grade-a/10", border: "border-grade-a/30", icon: TrendingUp },
-    down: { label: "하락 추세", color: "text-grade-d", bg: "bg-grade-d/10", border: "border-grade-d/30", icon: TrendingDown },
-    range: { label: "횡보", color: "text-muted-foreground", bg: "bg-muted/30", border: "border-border", icon: ArrowRight },
+    up: { label: t("analyze.result.trendBody.upTrend"), color: "text-grade-a", bg: "bg-grade-a/10", border: "border-grade-a/30", icon: TrendingUp },
+    down: { label: t("analyze.result.trendBody.downTrend"), color: "text-grade-d", bg: "bg-grade-d/10", border: "border-grade-d/30", icon: TrendingDown },
+    range: { label: t("analyze.result.trend.range"), color: "text-muted-foreground", bg: "bg-muted/30", border: "border-border", icon: ArrowRight },
   } as const;
-  const strengthMap = { strong: "강함", moderate: "보통", weak: "약함" } as const;
+  const strengthMap = { strong: t("analyze.result.trendBody.strong"), moderate: t("analyze.result.trendBody.moderate"), weak: t("analyze.result.trendBody.weak") } as const;
   const d = dirMap[trend.direction] ?? dirMap.range;
   const Icon = d.icon;
   return (
@@ -968,9 +971,9 @@ function MarketTrendBody({
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">현재 추세</span>
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t("analyze.result.trendBody.current")}</span>
           <span className={cn("text-base font-semibold", d.color)}>{d.label}</span>
-          <Badge className={cn("border", d.border, d.color, d.bg)}>강도 {strengthMap[trend.strength] ?? trend.strength}</Badge>
+          <Badge className={cn("border", d.border, d.color, d.bg)}>{t("analyze.result.trendBody.strength")} {strengthMap[trend.strength] ?? trend.strength}</Badge>
         </div>
         <p className="mt-1 text-sm text-foreground/80">{trend.note}</p>
         {metrics ? (
@@ -981,7 +984,7 @@ function MarketTrendBody({
                 citation="Wilder 1978"
                 value={metrics.adx ? metrics.adx.value.toFixed(1) : "—"}
                 verdict={metrics.adx?.verdict}
-                thresholdLabel="≥25 추세 / <20 횡보"
+                thresholdLabel={t("analyze.result.indicator.adxThreshold")}
                 extra={metrics.adx ? `+DI ${metrics.adx.plusDI.toFixed(1)} / −DI ${metrics.adx.minusDI.toFixed(1)}` : undefined}
               />
               <TrendIndicator
@@ -989,26 +992,25 @@ function MarketTrendBody({
                 citation="Kaufman 1995"
                 value={metrics.ker ? metrics.ker.value.toFixed(2) : "—"}
                 verdict={metrics.ker?.verdict}
-                thresholdLabel="≥0.6 추세 / <0.3 노이즈"
+                thresholdLabel={t("analyze.result.indicator.kerThreshold")}
               />
               <TrendIndicator
                 name="Choppiness"
                 citation="Dreiss"
                 value={metrics.choppiness ? metrics.choppiness.value.toFixed(1) : "—"}
                 verdict={metrics.choppiness?.verdict}
-                thresholdLabel="<38.2 추세 / >61.8 혼조"
+                thresholdLabel={t("analyze.result.indicator.choppinessThreshold")}
               />
             </div>
             <div className="text-[10px] text-muted-foreground">
-              3개 지표 다수결 → 추세 {metrics.trendVotes}표 · 횡보 {metrics.rangeVotes}표
-              {" · "}기준 TF {metrics.refTf}
+              {t("analyze.result.indicator.voteSummary", { trend: metrics.trendVotes, range: metrics.rangeVotes, tf: metrics.refTf })}
             </div>
           </div>
         ) : null}
         {dominance ? (
           <div className="mt-3 rounded border border-border/60 bg-background/40 p-2.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">시장 국면</span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("analyze.result.trendBody.regime")}</span>
               <Badge className={cn(
                 "border",
                 dominance.regime === "alt_season" || dominance.regime === "risk_on" ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
@@ -1041,6 +1043,7 @@ function TrendIndicator({
   thresholdLabel: string;
   extra?: string;
 }) {
+  const t = useT();
   const tone =
     verdict === "trend"
       ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
@@ -1049,13 +1052,13 @@ function TrendIndicator({
         : "border-amber-500/40 bg-amber-500/10 text-amber-400";
   const verdictLabel =
     verdict === "trend"
-      ? "추세"
+      ? t("analyze.result.indicator.verdictTrend")
       : verdict === "range"
-        ? "횡보"
+        ? t("analyze.result.indicator.verdictRange")
         : verdict === "mixed"
-          ? "혼조"
+          ? t("analyze.result.indicator.verdictMixed")
           : verdict === "developing"
-            ? "약함"
+            ? t("analyze.result.indicator.verdictWeak")
             : "—";
   return (
     <div className="rounded border border-border/60 bg-background/40 p-2.5">
@@ -1110,6 +1113,7 @@ function SimpleScenarioCard({
   watchState?: { id: string; watch: boolean; status: string } | null;
   onToggleWatch?: () => void;
 }) {
+  const t = useT();
   const isLong = scenario.direction === "long";
   const stopPct = (Math.abs(entry - scenario.invalidation) / entry) * 100;
   const targetPct = (Math.abs(scenario.target - entry) / entry) * 100;
@@ -1117,10 +1121,10 @@ function SimpleScenarioCard({
   // 주문 유형 라벨 (시안 sub) — orderHint 우선, 없으면 entryType로 추정.
   const orderTypeLabel =
     scenario.orderHint === "stop"
-      ? "역지정가"
+      ? t("analyze.result.scenario.orderStop")
       : scenario.orderHint === "market" || scenario.entryType === "immediate"
-        ? "시장가"
-        : "지정가";
+        ? t("analyze.result.scenario.orderMarket")
+        : t("analyze.result.scenario.orderLimit");
 
   return (
     <Card
@@ -1151,14 +1155,14 @@ function SimpleScenarioCard({
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="text-base font-semibold leading-snug">
-              시나리오 {index + 1} — {scenario.name}
+              {t("analyze.result.scenario.title", { n: index + 1, name: scenario.name })}
             </h3>
             <div className="mt-0.5 text-xs text-muted-foreground">
               {orderTypeLabel}
               {Number.isFinite(expectedRangeHalfPct) && expectedRangeHalfPct > 0
-                ? ` · 예상폭 ±${expectedRangeHalfPct.toFixed(1)}%`
+                ? ` · ${t("analyze.result.scenario.expectedRange", { pct: expectedRangeHalfPct.toFixed(1) })}`
                 : ""}
-              {onToggleWatch ? " · 시나리오 알림 등록 가능" : ""}
+              {onToggleWatch ? ` · ${t("analyze.result.scenario.watchAvailable")}` : ""}
             </div>
           </div>
           {onToggleWatch && watchState !== undefined ? (
@@ -1168,8 +1172,8 @@ function SimpleScenarioCard({
               disabled={!watchState}
               title={
                 watchState?.watch
-                  ? "알림 해제 (가격 도달 알림 받지 않음)"
-                  : "알림 등록 (entry/target/stop 도달 시 Telegram/Discord 발송)"
+                  ? t("analyze.result.scenario.watchOffTitle")
+                  : t("analyze.result.scenario.watchOnTitle")
               }
               className={cn(
                 "inline-flex h-8 w-8 flex-none items-center justify-center rounded-full border text-base transition-colors",
@@ -1186,7 +1190,7 @@ function SimpleScenarioCard({
 
         {/* 트리거 */}
         <div className="rounded-lg bg-muted/30 px-4 py-3 text-sm leading-relaxed">
-          <span className="font-semibold">트리거</span>
+          <span className="font-semibold">{t("analyze.result.scenario.trigger")}</span>
           <span className="ml-2 text-foreground/90">{scenario.trigger}</span>
         </div>
 
@@ -1195,7 +1199,7 @@ function SimpleScenarioCard({
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
             <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-400">
               <AlertTriangle className="h-3.5 w-3.5" />
-              검토 항목 — 표준 미달 (진입 전 본인 판단)
+              {t("analyze.result.scenario.qualityIssuesTitle")}
             </div>
             <ul className="space-y-0.5 text-[11px] text-amber-300/80">
               {scenario.qualityIssues.map((q, qi) => (
@@ -1208,22 +1212,22 @@ function SimpleScenarioCard({
         {/* 진입가 / 손절가 / 목표가 / 손익비 (시안 4칸) */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <StatCell
-            label={scenario.entries && scenario.entries.length > 0 ? "평균 진입가" : "진입가"}
+            label={scenario.entries && scenario.entries.length > 0 ? t("analyze.result.stat.avgEntry") : t("analyze.result.stat.entry")}
             value={formatNumber(entry)}
           />
           <StatCell
-            label="손절가"
+            label={t("analyze.result.stat.stop")}
             value={formatNumber(scenario.invalidation)}
             delta={`(-${stopPct.toFixed(1)}%)`}
             tone="bad"
           />
           <StatCell
-            label="목표가"
+            label={t("analyze.result.stat.target")}
             value={formatNumber(scenario.target)}
             delta={`(+${targetPct.toFixed(1)}%)`}
             tone="good"
           />
-          <StatCell label="손익비" value={grade.rr.toFixed(2)} delta={`(실효 ${effRR.toFixed(2)})`} />
+          <StatCell label={t("analyze.result.stat.rr")} value={grade.rr.toFixed(2)} delta={t("analyze.result.stat.effectiveRR", { rr: effRR.toFixed(2) })} />
         </div>
 
         {/* 도달 확률 (몬테카를로) — 한 줄 */}
@@ -1249,12 +1253,12 @@ function SimpleScenarioCard({
             onClick={onShowChart}
             className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
           >
-            차트로 보기
+            {t("analyze.result.scenario.viewChart")}
             <ChartCandlestick className="h-4 w-4" />
           </button>
           <Link href={tradeFormHref(symbol, scenario, index, accountSize, riskPct)}>
             <Button size="lg">
-              거래 실행으로
+              {t("analyze.result.scenario.goToTrade")}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
@@ -1264,12 +1268,12 @@ function SimpleScenarioCard({
   );
 }
 
-function formatElapsed(sec: number) {
-  if (sec < 60) return `${sec}초`;
+function formatElapsed(sec: number, t: ReturnType<typeof useT>) {
+  if (sec < 60) return t("analyze.result.elapsed.seconds", { n: sec });
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}분`;
+  if (min < 60) return t("analyze.result.elapsed.minutes", { n: min });
   const hr = Math.floor(min / 60);
-  return `${hr}시간 ${min % 60}분`;
+  return t("analyze.result.elapsed.hoursMinutes", { h: hr, m: min % 60 });
 }
 
 function Row({
@@ -1305,11 +1309,12 @@ function BacktestSimulationInline({
   sim: NonNullable<AnalysisReport["scenarios"][number]["simulation"]>;
   direction: "long" | "short";
 }) {
+  const t = useT();
   const reasonLabel = {
-    target: { text: "🎯 목표 도달", tone: "border-grade-a/40 bg-grade-a/10 text-grade-a" },
-    stop: { text: "🛑 손절", tone: "border-grade-d/40 bg-grade-d/10 text-grade-d" },
-    time: { text: "⏰ 시간 만료", tone: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
-    no_entry: { text: "❌ 미체결", tone: "border-muted-foreground/40 bg-muted/30 text-muted-foreground" },
+    target: { text: t("analyze.result.backtest.reasonTarget"), tone: "border-grade-a/40 bg-grade-a/10 text-grade-a" },
+    stop: { text: t("analyze.result.backtest.reasonStop"), tone: "border-grade-d/40 bg-grade-d/10 text-grade-d" },
+    time: { text: t("analyze.result.backtest.reasonTime"), tone: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
+    no_entry: { text: t("analyze.result.backtest.reasonNoEntry"), tone: "border-muted-foreground/40 bg-muted/30 text-muted-foreground" },
   }[sim.exitReason];
   const rPos = sim.resultR >= 0;
   const formatTime = (iso: string | null) =>
@@ -1326,14 +1331,14 @@ function BacktestSimulationInline({
     <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-amber-300">
-          ⏮ 백테스트 결과
+          {t("analyze.result.backtest.title")}
         </span>
         <Badge className={cn("border text-[10px]", reasonLabel.tone)}>{reasonLabel.text}</Badge>
       </div>
       {sim.exitReason !== "no_entry" ? (
         <>
           <div className="flex items-baseline gap-2">
-            <span className="text-[10px] uppercase text-muted-foreground">실현 R</span>
+            <span className="text-[10px] uppercase text-muted-foreground">{t("analyze.result.backtest.realizedR")}</span>
             <span
               className={cn(
                 "font-mono text-lg font-bold tabular-nums",
@@ -1344,38 +1349,38 @@ function BacktestSimulationInline({
               {sim.resultR.toFixed(2)}R
             </span>
             <span className="ml-auto text-[10px] text-muted-foreground">
-              {sim.meta.barsHeld}봉 보유 ({sim.meta.interval})
+              {t("analyze.result.backtest.barsHeld", { n: sim.meta.barsHeld, interval: sim.meta.interval })}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">진입</span>
+              <span className="text-muted-foreground">{t("analyze.result.backtest.entry")}</span>
               <span className="font-mono">${formatNumber(sim.entryFillPrice)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">청산</span>
+              <span className="text-muted-foreground">{t("analyze.result.backtest.exit")}</span>
               <span className="font-mono">${formatNumber(sim.exitPrice)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">최대 유리</span>
+              <span className="text-muted-foreground">{t("analyze.result.backtest.mfe")}</span>
               <span className="font-mono text-grade-a">+{sim.meta.mfePct.toFixed(2)}%</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">최대 불리</span>
+              <span className="text-muted-foreground">{t("analyze.result.backtest.mae")}</span>
               <span className="font-mono text-grade-d">-{sim.meta.maePct.toFixed(2)}%</span>
             </div>
           </div>
           <div className="border-t border-amber-500/20 pt-1.5 text-[10px] text-muted-foreground">
-            진입봉 {formatTime(sim.meta.entryCandleTime)} · 청산봉 {formatTime(sim.meta.exitCandleTime)}
+            {t("analyze.result.backtest.candleTimes", { entry: formatTime(sim.meta.entryCandleTime), exit: formatTime(sim.meta.exitCandleTime) })}
           </div>
         </>
       ) : (
         <div className="text-[11px] text-muted-foreground">
-          진입가 도달 없이 시간 만료 — 트리거 미발생 시나리오.
+          {t("analyze.result.backtest.noEntryMsg")}
         </div>
       )}
       <div className="text-[10px] text-muted-foreground/70">
-        ※ 실제 체결과 다를 수 있음 (슬리피지·수수료 미반영, 같은 봉 손절·목표 동시 터치 시 보수적 손절)
+        {t("analyze.result.backtest.disclaimer")}
       </div>
       {/* direction은 향후 long/short 별도 표기에 사용 — 현재 reason 라벨로 충분 */}
       <span className="sr-only">{direction}</span>
@@ -1391,6 +1396,7 @@ function ScenarioExplainer({
   scenarios: AnalysisReport["scenarios"];
   active: number;
 }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const count = scenarios.length;
   const current = scenarios[active];
@@ -1403,13 +1409,14 @@ function ScenarioExplainer({
         <div className="flex-1 space-y-1.5">
           {count === 1 ? (
             <div className="leading-relaxed text-muted-foreground">
-              <span className="font-semibold text-foreground">시나리오 1개</span> — 현재는 메인 시나리오 1개만 잡혔습니다. AI가 보조 시나리오를 만들 만큼 명확한 대안 구조를 찾지 못했다는 뜻입니다.
+              <span className="font-semibold text-foreground">{t("analyze.result.explainer.singleLead")}</span> {t("analyze.result.explainer.singleRest")}
             </div>
           ) : (
             <div className="leading-relaxed text-muted-foreground">
-              <span className="font-semibold text-foreground">시나리오 {count}개</span> —
-              <span className="ml-1 font-semibold text-primary">A는 메인</span>(가장 확률 높은 진입),
-              <span className="ml-1">B{count >= 3 ? "/C" : ""}는 대안</span>(같은 방향의 다른 트리거 또는 메인 무효화 시 작동). 탭을 눌러 비교하고, <strong className="text-foreground">동시에 진입하지 마세요</strong> — 트리거가 가장 먼저 발생한 1개만 진입.
+              <span className="font-semibold text-foreground">{t("analyze.result.explainer.multiLead", { count })}</span>
+              {" — "}
+              <span className="ml-1 font-semibold text-primary">{t("analyze.result.explainer.multiMain")}</span>{t("analyze.result.explainer.multiMainNote")}
+              <span className="ml-1">{t("analyze.result.explainer.multiAlt", { letters: count >= 3 ? "B/C" : "B" })}</span>{t("analyze.result.explainer.multiAltNote")} <strong className="text-foreground">{t("analyze.result.explainer.multiWarn")}</strong> {t("analyze.result.explainer.multiWarnNote")}
             </div>
           )}
 
@@ -1417,7 +1424,7 @@ function ScenarioExplainer({
           {current ? (
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               <span className="rounded bg-primary/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">
-                지금 보는 중: {activeLetter}
+                {t("analyze.result.explainer.nowShowing", { letter: activeLetter })}
               </span>
               <span className="text-muted-foreground">{current.name}</span>
             </div>
@@ -1425,9 +1432,9 @@ function ScenarioExplainer({
 
           {expanded ? (
             <ul className="mt-2 space-y-1 border-t border-border pt-2 leading-relaxed text-muted-foreground">
-              <li>• AI는 시장 상황에 따라 1~3개의 시나리오를 만듭니다. 억지로 양방향을 만들지 않습니다.</li>
-              <li>• 각 시나리오의 <span className="font-mono">트리거 / 진입가 / 손절 / 목표</span>는 모두 다릅니다.</li>
-              <li>• 진입 후에는 그 시나리오의 손절가만 지키세요. 다른 시나리오의 손절은 무관합니다.</li>
+              <li>{t("analyze.result.explainer.tip1")}</li>
+              <li>{t("analyze.result.explainer.tip2Prefix")} <span className="font-mono">{t("analyze.result.explainer.tip2Fields")}</span>{t("analyze.result.explainer.tip2Suffix")}</li>
+              <li>{t("analyze.result.explainer.tip3")}</li>
             </ul>
           ) : null}
 
@@ -1436,7 +1443,7 @@ function ScenarioExplainer({
             onClick={() => setExpanded(!expanded)}
             className="text-[11px] text-primary hover:underline"
           >
-            {expanded ? "접기" : "자세히 보기"}
+            {expanded ? t("analyze.result.explainer.collapse") : t("analyze.result.explainer.expand")}
           </button>
         </div>
       </div>

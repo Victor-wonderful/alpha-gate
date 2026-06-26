@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 import type { KimchiOpportunity } from "@/lib/arbitrage/constants";
 import type { KimchiVolatility } from "@/lib/arbitrage/volatility";
 import { slippageRateFor } from "@/lib/arbitrage/slippage";
@@ -93,6 +94,7 @@ export function ArbitrageUI({
   closedPositions,
   cyclesByPosition,
 }: Props) {
+  const t = useT();
   const [entryTarget, setEntryTarget] = useState<KimchiOpportunity | null>(null);
 
   // symbol → 현재 시세 (Upbit USD / Binance USD)
@@ -109,15 +111,15 @@ export function ArbitrageUI({
       {/* 헤더 + 잔액 */}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold leading-[1.15]">김프 리밸런싱</h1>
+          <h1 className="text-3xl font-bold leading-[1.15]">{t("arb.title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            🇰🇷 델타 중립 김프 차익거래 — Upbit 현물 롱 + Binance 선물 숏. 코인 가격 노출 0, 김프 진동만 수익. 김프 ±임계값 도달 시 자동 리밸런싱.
+            {t("arb.subtitle")}
           </p>
         </div>
         {wallet ? (
           <div className="rounded-md border border-border bg-card/40 px-3 py-2 text-xs">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              사용 가능 잔액
+              {t("arb.availableBalance")}
             </div>
             <div className="font-mono text-base font-bold tabular-nums">
               {formatNumber(wallet.available, { maximumFractionDigits: 0 })}{" "}
@@ -140,7 +142,7 @@ export function ArbitrageUI({
         <section className="space-y-3">
           <div className="flex items-baseline justify-between">
             <h2 className="text-base font-semibold">
-              진행 중 리밸런싱 포지션 ({openPositions.length})
+              {t("arb.openPositionsHeading", { n: openPositions.length })}
             </h2>
             <RunCronButton />
           </div>
@@ -162,7 +164,7 @@ export function ArbitrageUI({
       {closedPositions.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-base font-semibold">
-            종료된 차익 포지션 ({closedPositions.length})
+            {t("arb.closedPositionsHeading", { n: closedPositions.length })}
           </h2>
           <ClosedPositionsList rows={closedPositions} />
         </section>
@@ -192,6 +194,7 @@ function VolatilitySection({
   kimchi: KimchiOpportunity[];
   onEnter: (k: KimchiOpportunity) => void;
 }) {
+  const t = useT();
   const PREVIEW_COUNT = 8;
   const [expanded, setExpanded] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -223,11 +226,11 @@ function VolatilitySection({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold">
-            기대 수익 랭킹 (백테스트)
-            {merged.length > 0 ? <span className="ml-2 text-muted-foreground">({merged.length}개)</span> : null}
+            {t("arb.rankingHeading")}
+            {merged.length > 0 ? <span className="ml-2 text-muted-foreground">{t("arb.countSuffix", { n: merged.length })}</span> : null}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            최근 7일 김프 시계열에 실제 cron 로직을 그대로 돌린 결과 — $1000 노출 + 임계값 ±{threshold}% 가정. 인벤토리 고갈까지 반영됨 (코인 가격 변동은 현물 롱+선물 숏으로 헤지되어 상쇄).
+            {t("arb.rankingDesc", { threshold })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -242,59 +245,59 @@ function VolatilitySection({
                 : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
             )}
           >
-            {showDetails ? "기본 보기" : "상세 보기"}
+            {showDetails ? t("arb.basicView") : t("arb.detailView")}
           </button>
         </div>
       </div>
 
       {merged.length === 0 ? (
-        <EmptyMessage text="김프 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요." />
+        <EmptyMessage text={t("arb.noKimchiData")} />
       ) : (
         <div className="space-y-2">
           {lowConfidence ? (
             <p className="text-[11px] text-amber-400">
-              ⚠️ 사이클 통계 표본 적음
+              {t("arb.lowConfidencePrefix")}
               {rows.length > 0
-                ? ` (최소 ${minSamples}개 · 측정 ${maxSpan.toFixed(1)}시간)`
-                : " (데이터 누적 중)"}
-              . 24시간 이후 의미 있는 추정, 일주일 후 신뢰도 충분.
+                ? t("arb.lowConfidenceSamples", { n: minSamples, h: maxSpan.toFixed(1) })
+                : t("arb.lowConfidenceAccruing")}
+              {t("arb.lowConfidenceSuffix")}
             </p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              측정 구간 {maxSpan.toFixed(1)}시간 · 5분마다 김프 ≥ ±임계값 인 tick 을 사이클로 카운트
+              {t("arb.measureSpan", { h: maxSpan.toFixed(1) })}
             </p>
           )}
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className={cn("w-full text-sm", showDetails ? "min-w-[1240px]" : "min-w-[760px]")}>
               <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-3 text-left">순위</th>
-                  <th className="px-3 py-3 text-left">코인</th>
-                  <th className="px-3 py-3 text-right">현재 김프</th>
-                  <th className="px-3 py-3 text-right" title="$1000 노출 가정, 7일 시뮬레이션 누적 PnL (인벤토리 고갈 반영, 코인가 변동은 헤지로 상쇄)">
-                    예상 수익 ($)
+                  <th className="px-3 py-3 text-left">{t("arb.colRank")}</th>
+                  <th className="px-3 py-3 text-left">{t("arb.colCoin")}</th>
+                  <th className="px-3 py-3 text-right">{t("arb.colCurrentPremium")}</th>
+                  <th className="px-3 py-3 text-right" title={t("arb.colExpProfitTip")}>
+                    {t("arb.colExpProfit")}
                   </th>
-                  <th className="px-3 py-3 text-right" title="실제 인벤토리가 이동한 사이클 수 (백테스트)">
-                    실효 사이클
+                  <th className="px-3 py-3 text-right" title={t("arb.colEffCyclesTip")}>
+                    {t("arb.colEffCycles")}
                   </th>
-                  <th className="px-3 py-3 text-center" title="+ : - 방향 사이클 비율. 50/50 균형 = 지속 가능, 한쪽 쏠림 = 빨리 고갈">
-                    방향
+                  <th className="px-3 py-3 text-center" title={t("arb.colDirectionTip")}>
+                    {t("arb.colDirection")}
                   </th>
                   {showDetails ? (
                     <>
-                      <th className="px-3 py-3 text-right">일환산</th>
-                      <th className="px-3 py-3 text-center" title="백테스트 종료 시 코인 분포 (Upbit %). 50% 균형, 0%/100% 고갈">
-                        최종 코인
+                      <th className="px-3 py-3 text-right">{t("arb.colPerDay")}</th>
+                      <th className="px-3 py-3 text-center" title={t("arb.colFinalCoinTip")}>
+                        {t("arb.colFinalCoin")}
                       </th>
-                      <th className="px-3 py-3 text-center" title="백테스트 종료 시 USDT 분포 (Upbit %)">
-                        최종 USDT
+                      <th className="px-3 py-3 text-center" title={t("arb.colFinalUsdtTip")}>
+                        {t("arb.colFinalUsdt")}
                       </th>
-                      <th className="px-3 py-3 text-right">표준편차</th>
-                      <th className="px-3 py-3 text-right">평균</th>
-                      <th className="px-3 py-3 text-right">표본</th>
+                      <th className="px-3 py-3 text-right">{t("arb.colStdev")}</th>
+                      <th className="px-3 py-3 text-right">{t("arb.colAvg")}</th>
+                      <th className="px-3 py-3 text-right">{t("arb.colSamples")}</th>
                     </>
                   ) : null}
-                  <th className="px-3 py-3 text-center">액션</th>
+                  <th className="px-3 py-3 text-center">{t("arb.colAction")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -377,7 +380,7 @@ function VolatilitySection({
                     ) : null}
                     <td className="px-3 py-2.5 text-center">
                       <Button size="sm" className="h-7 px-3 text-xs" onClick={() => onEnter(opp)}>
-                        진입
+                        {t("arb.enter")}
                       </Button>
                     </td>
                   </tr>
@@ -395,12 +398,12 @@ function VolatilitySection({
               {expanded ? (
                 <>
                   <ChevronUp className="h-3.5 w-3.5" />
-                  접기
+                  {t("arb.collapse")}
                 </>
               ) : (
                 <>
                   <ChevronDown className="h-3.5 w-3.5" />
-                  전체 보기 ({merged.length - PREVIEW_COUNT}개 더)
+                  {t("arb.expandAll", { n: merged.length - PREVIEW_COUNT })}
                 </>
               )}
             </button>
@@ -420,6 +423,7 @@ function BacktestSummary({
   volatility: KimchiVolatility;
   threshold: number;
 }) {
+  const t = useT();
   const v = volatility;
   const profitClass = v.simProfit >= 0 ? "text-grade-a" : "text-grade-d";
   const totalCycles = v.simPositiveCycles + v.simNegativeCycles;
@@ -431,25 +435,25 @@ function BacktestSummary({
   return (
     <div className="rounded-md border border-border/60 bg-background/40 p-3 text-[11px] space-y-2">
       <div className="flex items-center justify-between">
-        <span className="font-semibold">📊 {symbol} 백테스트 요약 (최근 7일, ±{threshold}%)</span>
+        <span className="font-semibold">{t("arb.backtestSummaryTitle", { sym: symbol, threshold })}</span>
         <span className="text-muted-foreground">
-          측정 {v.spanHours.toFixed(1)}h · 표본 {v.samples}개
+          {t("arb.measureSamples", { h: v.spanHours.toFixed(1), n: v.samples })}
         </span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded border border-border/40 bg-muted/20 p-2 space-y-0.5">
-          <div className="text-[10px] uppercase text-muted-foreground">예상 수익 ($1000)</div>
+          <div className="text-[10px] uppercase text-muted-foreground">{t("arb.expProfit1000")}</div>
           <div className={cn("font-mono tabular-nums text-sm font-bold", profitClass)}>
             {v.simProfit >= 0 ? "+" : ""}${v.simProfit.toFixed(2)}
           </div>
           <div className="text-[10px] font-mono tabular-nums text-muted-foreground">
-            일환산 {v.simProfitPerDay >= 0 ? "+" : ""}${v.simProfitPerDay.toFixed(2)}
+            {t("arb.perDayLabel")} {v.simProfitPerDay >= 0 ? "+" : ""}${v.simProfitPerDay.toFixed(2)}
           </div>
         </div>
         <div className="rounded border border-border/40 bg-muted/20 p-2 space-y-0.5">
-          <div className="text-[10px] uppercase text-muted-foreground">실효 사이클</div>
+          <div className="text-[10px] uppercase text-muted-foreground">{t("arb.colEffCycles")}</div>
           <div className="font-mono tabular-nums text-sm font-bold text-emerald-400">
-            {v.simEffectiveCycles}회
+            {t("arb.cyclesCount", { n: v.simEffectiveCycles })}
           </div>
           <div className="text-[10px] font-mono tabular-nums text-muted-foreground">
             <span className="text-amber-400">+{v.simPositiveCycles}</span>
@@ -458,7 +462,7 @@ function BacktestSummary({
           </div>
         </div>
         <div className="rounded border border-border/40 bg-muted/20 p-2 space-y-0.5">
-          <div className="text-[10px] uppercase text-muted-foreground">최종 인벤토리</div>
+          <div className="text-[10px] uppercase text-muted-foreground">{t("arb.finalInventory")}</div>
           <div className="text-xs">
             {symbol}:{" "}
             <span
@@ -480,7 +484,7 @@ function BacktestSummary({
       </div>
       {exhaustedFlag ? (
         <div className="text-[10px] text-amber-400">
-          ⚠️ 한 방향 쏠림 — 시간이 갈수록 인벤토리 고갈로 사이클 발생 감소 예상
+          {t("arb.exhaustWarning")}
         </div>
       ) : null}
     </div>
@@ -494,6 +498,7 @@ function ThresholdControl({
   current: number;
   presets: number[];
 }) {
+  const t = useT();
   const router = useRouter();
   const [custom, setCustom] = useState<string>(
     presets.includes(current) ? "" : current.toString(),
@@ -506,7 +511,7 @@ function ThresholdControl({
 
   return (
     <div className="flex items-center gap-1">
-      <span className="text-[11px] text-muted-foreground mr-1">임계값</span>
+      <span className="text-[11px] text-muted-foreground mr-1">{t("arb.threshold")}</span>
       {presets.map((t) => {
         const active = t === current;
         return (
@@ -539,7 +544,7 @@ function ThresholdControl({
           onKeyDown={(e) => {
             if (e.key === "Enter") apply(Number(custom));
           }}
-          placeholder="커스텀"
+          placeholder={t("arb.custom")}
           className="h-7 w-16 rounded-md border border-border bg-muted/30 px-2 text-xs font-mono tabular-nums focus:border-primary focus:outline-none"
         />
         {custom !== "" && Number(custom) !== current ? (
@@ -548,7 +553,7 @@ function ThresholdControl({
             onClick={() => apply(Number(custom))}
             className="rounded-md border border-primary bg-primary/20 px-2 py-1 text-xs text-primary"
           >
-            적용
+            {t("arb.apply")}
           </button>
         ) : null}
       </div>
@@ -563,6 +568,7 @@ function PriceExposureWarning({
   symbol: string;
   volatility: KimchiVolatility | null;
 }) {
+  const t = useT();
   // 델타 중립 모델 — 코인 가격 노출이 헤지되어 있음을 안내.
   const { priceMaxDrawdownPct, priceMaxRunupPct } = volatility ?? {
     priceMaxDrawdownPct: 0,
@@ -571,25 +577,22 @@ function PriceExposureWarning({
   return (
     <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-[11px] space-y-2">
       <div className="flex items-center gap-1.5 font-semibold text-emerald-400">
-        ✓ 델타 중립 — {symbol} 가격 노출 헤지됨
+        {t("arb.deltaNeutralHeading", { sym: symbol })}
       </div>
       <p className="text-muted-foreground">
-        Upbit 현물 <span className="text-amber-400">롱</span> + Binance 선물{" "}
-        <span className="text-sky-300">숏</span>이 서로 상쇄되어, {symbol} 절대가가 오르내려도
-        손익은 거의 0입니다. 수익은 오직 <span className="text-foreground">김프(두 거래소 가격 괴리)</span>의
-        진동에서만 발생합니다.
+        {t("arb.deltaNeutralBody", { sym: symbol })}
       </p>
       {volatility && (priceMaxDrawdownPct > 0 || priceMaxRunupPct > 0) ? (
         <div className="border-t border-border/40 pt-2 text-muted-foreground">
-          참고 — 지난 7일 {symbol} 가격 변동 폭{" "}
+          {t("arb.priceMovePrefix", { sym: symbol })}{" "}
           <span className="font-mono text-red-400">-{priceMaxDrawdownPct.toFixed(1)}%</span>
           {" / "}
           <span className="font-mono text-emerald-400">+{priceMaxRunupPct.toFixed(1)}%</span>
-          {" "}— 이 변동은 헤지로 상쇄됩니다 (현물 롱 손익 ≈ 숏 손익 반대).
+          {" "}{t("arb.priceMoveSuffix")}
         </div>
       ) : null}
       <div className="border-t border-border/40 pt-2 text-[10px] text-muted-foreground">
-        잔여 리스크: 펀딩비(숏 보유 비용), 거래소간 김프가 한 방향으로 장기 고착 시 인벤토리 고갈, 청산/슬리피지.
+        {t("arb.residualRisk")}
       </div>
     </div>
   );
@@ -652,17 +655,18 @@ function EmptyMessage({ text }: { text: string }) {
 }
 
 function RunCronButton() {
+  const t = useT();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   function onRun() {
     startTransition(async () => {
       const r = await runArbitrageCronAction();
       if (!r.ok) {
-        toast.error(r.error ?? "실행 실패");
+        toast.error(r.error ?? t("arb.runFailed"));
         return;
       }
       toast.success(
-        `cron 완료 — 체크 ${r.checked}건, 사이클 ${r.cycles}회, 청산 ${r.closed}건`,
+        t("arb.cronDone", { checked: r.checked ?? 0, cycles: r.cycles ?? 0, closed: r.closed ?? 0 }),
       );
       router.refresh();
     });
@@ -674,10 +678,10 @@ function RunCronButton() {
       onClick={onRun}
       disabled={pending}
       className="text-xs"
-      title="resolve-arbitrage cron 즉시 호출 (테스트용)"
+      title={t("arb.runCronTitle")}
     >
       <Repeat className="mr-1 h-3 w-3" />
-      {pending ? "실행 중…" : "지금 cron 실행"}
+      {pending ? t("arb.running") : t("arb.runCronNow")}
     </Button>
   );
 }
@@ -693,6 +697,7 @@ function ActivePositionCard({
   currentPrices: { upbitUsd: number; binanceUsd: number } | null;
   cycles: CycleEvent[];
 }) {
+  const t = useT();
   const [historyOpen, setHistoryOpen] = useState(false);
   const router = useRouter();
   const [closing, startClose] = useTransition();
@@ -732,16 +737,23 @@ function ActivePositionCard({
   const msToExpiry = expiry.getTime() - Date.now();
   const expiryText =
     msToExpiry > 0
-      ? `${Math.floor(msToExpiry / 86400000)}일 ${Math.floor((msToExpiry % 86400000) / 3600000)}h`
-      : "만료";
+      ? t("arb.expiryRemaining", {
+          d: Math.floor(msToExpiry / 86400000),
+          h: Math.floor((msToExpiry % 86400000) / 3600000),
+        })
+      : t("arb.expired");
 
   function onClose() {
     if (!currentPrices) {
-      toast.error("현재 가격을 가져올 수 없습니다.");
+      toast.error(t("arb.noCurrentPrice"));
       return;
     }
     if (!confirm(
-      `${pos.symbol} 리밸런싱 포지션 청산하시겠습니까? (현재 자산 $${totalAssetUsd?.toFixed(2) ?? "—"}, 손익 ${unrealizedPnl != null ? (unrealizedPnl >= 0 ? "+" : "") + unrealizedPnl.toFixed(2) : "—"})`,
+      t("arb.closeConfirm", {
+        sym: pos.symbol,
+        asset: totalAssetUsd?.toFixed(2) ?? "—",
+        pnl: unrealizedPnl != null ? (unrealizedPnl >= 0 ? "+" : "") + unrealizedPnl.toFixed(2) : "—",
+      }),
     ))
       return;
     startClose(async () => {
@@ -751,10 +763,10 @@ function ActivePositionCard({
         currentPrices.binanceUsd,
       );
       if (!r.ok) {
-        toast.error(r.error ?? "청산 실패");
+        toast.error(r.error ?? t("arb.closeFailed"));
         return;
       }
-      toast.success(`청산 완료 — PnL ${(r.pnl ?? 0).toFixed(2)} vUSDT`);
+      toast.success(t("arb.closeDone", { pnl: (r.pnl ?? 0).toFixed(2) }));
       router.refresh();
     });
   }
@@ -766,22 +778,24 @@ function ActivePositionCard({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-              리밸런싱
+              {t("arb.rebalanceBadge")}
             </span>
             <span className="font-mono text-base font-bold">{pos.symbol}</span>
             <span className="text-xs text-muted-foreground">
-              노출 ${formatNumber(notional, { maximumFractionDigits: 0 })} × 2 · 임계값 ±
-              {threshold.toFixed(1)}%
+              {t("arb.exposureThreshold", {
+                exposure: formatNumber(notional, { maximumFractionDigits: 0 }),
+                threshold: threshold.toFixed(1),
+              })}
             </span>
           </div>
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
               <Clock className="h-3 w-3" />
-              만료까지 {expiryText}
+              {t("arb.expiryIn", { time: expiryText })}
             </span>
             <Button size="sm" variant="outline" onClick={onClose} disabled={closing}>
               <X className="mr-1 h-3 w-3" />
-              {closing ? "청산 중…" : "청산"}
+              {closing ? t("arb.closing") : t("arb.close")}
             </Button>
           </div>
         </div>
@@ -789,7 +803,7 @@ function ActivePositionCard({
         {/* 김프 상태 + 사이클 통계 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
           <StatBox
-            label="진입 김프"
+            label={t("arb.entryPremium")}
             value={
               entryPct != null
                 ? `${entryPct >= 0 ? "+" : ""}${entryPct.toFixed(3)}%`
@@ -797,7 +811,7 @@ function ActivePositionCard({
             }
           />
           <StatBox
-            label="현재 김프"
+            label={t("arb.currentPremium")}
             value={
               currentPremium != null
                 ? `${currentPremium >= 0 ? "+" : ""}${currentPremium.toFixed(3)}%`
@@ -813,13 +827,13 @@ function ActivePositionCard({
             label={
               <span className="inline-flex items-center gap-1">
                 <Repeat className="h-3 w-3" />
-                사이클
+                {t("arb.cycle")}
               </span>
             }
-            value={`${cyclesCount}회`}
+            value={t("arb.cyclesCount", { n: cyclesCount })}
           />
           <StatBox
-            label="누적 사이클 수익"
+            label={t("arb.accruedCycleProfit")}
             value={`${accrued >= 0 ? "+" : ""}${accrued.toFixed(2)}`}
             valueClass={
               accrued > 0 ? "text-grade-a" : accrued < 0 ? "text-grade-d" : ""
@@ -830,7 +844,7 @@ function ActivePositionCard({
         {/* 인벤토리 양쪽 */}
         <div className="grid gap-3 sm:grid-cols-2">
           <InventoryBox
-            label="Upbit 현물 롱 (KRW 환산)"
+            label={t("arb.upbitSpotLong")}
             tone="upbit"
             symbol={pos.symbol}
             coin={coinUpbit}
@@ -838,7 +852,7 @@ function ActivePositionCard({
             currentCoinUsd={currentPrices?.upbitUsd}
           />
           <InventoryBox
-            label="Binance 선물 숏 (USDT)"
+            label={t("arb.binanceFuturesShort")}
             tone="binance"
             symbol={pos.symbol}
             coin={shortBinance}
@@ -864,14 +878,14 @@ function ActivePositionCard({
         {/* 미실현 손익 합계 */}
         <div className="space-y-1 border-t border-border/60 pt-3 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">현재 자산 합계 (USDT)</span>
+            <span className="text-muted-foreground">{t("arb.currentAssetTotal")}</span>
             <span className="font-mono tabular-nums font-semibold">
               ${totalAssetUsd != null ? totalAssetUsd.toFixed(2) : "—"} /{" "}
-              <span className="text-muted-foreground">시작 ${(2 * notional).toFixed(0)}</span>
+              <span className="text-muted-foreground">{t("arb.startLabel")} ${(2 * notional).toFixed(0)}</span>
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">미실현 손익 (김프 사이클 — 가격 노출 헤지됨)</span>
+            <span className="text-muted-foreground">{t("arb.unrealizedPnl")}</span>
             {unrealizedPnl != null ? (
               <span
                 className={cn(
@@ -883,18 +897,18 @@ function ActivePositionCard({
                 {unrealizedPnl.toFixed(2)} vUSDT
               </span>
             ) : (
-              <span className="text-muted-foreground">데이터 없음</span>
+              <span className="text-muted-foreground">{t("arb.noData")}</span>
             )}
           </div>
           {coinPriceDelta != null ? (
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
-                진입 후 {pos.symbol} 평균가 변동 (영향 헤지됨)
+                {t("arb.avgPriceChangeSinceEntry", { sym: pos.symbol })}
               </span>
               <span className="font-mono tabular-nums">
                 {coinPriceDelta >= 0 ? "+" : ""}
-                {coinPriceDelta.toFixed(2)}% · 순 노출 {netCoinExposure >= 0 ? "+" : ""}
+                {coinPriceDelta.toFixed(2)}% · {t("arb.netExposure")} {netCoinExposure >= 0 ? "+" : ""}
                 {netCoinExposure.toFixed(6)} {pos.symbol}
               </span>
             </div>
@@ -910,35 +924,35 @@ function ActivePositionCard({
           >
             <span className="inline-flex items-center gap-1.5">
               <Repeat className="h-3 w-3" />
-              사이클 이력 {cycles.length}건
+              {t("arb.cycleHistory", { n: cycles.length })}
             </span>
-            <span className="text-[10px]">{historyOpen ? "▴ 접기" : "▾ 펼치기"}</span>
+            <span className="text-[10px]">{historyOpen ? t("arb.collapseArrow") : t("arb.expandArrow")}</span>
           </button>
           {historyOpen ? (
             cycles.length === 0 ? (
               <p className="mt-3 text-xs text-muted-foreground text-center py-3">
-                아직 사이클 이력 없음. 김프가 ±임계값 도달하면 cron 이 자동 실행.
+                {t("arb.noCycleHistory")}
               </p>
             ) : (
               <div className="mt-3 overflow-x-auto rounded-md border border-border/60">
                 <table className="w-full min-w-[640px] text-xs">
                   <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-3 py-2 text-left">시간</th>
-                      <th className="px-3 py-2 text-left">방향</th>
-                      <th className="px-3 py-2 text-right">김프</th>
-                      <th className="px-3 py-2 text-right">이동 {pos.symbol}</th>
-                      <th className="px-3 py-2 text-right">수익 (USDT)</th>
+                      <th className="px-3 py-2 text-left">{t("arb.colTime")}</th>
+                      <th className="px-3 py-2 text-left">{t("arb.colDir")}</th>
+                      <th className="px-3 py-2 text-right">{t("arb.colPremium")}</th>
+                      <th className="px-3 py-2 text-right">{t("arb.colMoved", { sym: pos.symbol })}</th>
+                      <th className="px-3 py-2 text-right">{t("arb.colProfitUsdt")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {cycles.map((c) => {
-                      const t = new Date(c.executed_at);
+                      const execDt = new Date(c.executed_at);
                       const isPositive = c.direction === "positive";
                       return (
                         <tr key={c.id} className="border-t border-border/40">
                           <td className="px-3 py-2 font-mono">
-                            {t.toLocaleString("ko-KR", {
+                            {execDt.toLocaleString("ko-KR", {
                               month: "numeric",
                               day: "numeric",
                               hour: "2-digit",
@@ -956,8 +970,8 @@ function ActivePositionCard({
                               )}
                               title={
                                 isPositive
-                                  ? "Upbit 현물 매도 + Binance 숏 커버"
-                                  : "Upbit 현물 매수 + Binance 숏 추가"
+                                  ? t("arb.dirPositiveTip")
+                                  : t("arb.dirNegativeTip")
                               }
                             >
                               {isPositive ? "↗ +" : "↘ -"}
@@ -1040,6 +1054,7 @@ function InventoryBox({
   currentCoinUsd?: number;
   isShort?: boolean;
 }) {
+  const t = useT();
   // 숏이면 코인 가치는 부채(−), 순자산 = usdt − coin×price.
   const coinUsd = currentCoinUsd ? coin * currentCoinUsd : null;
   const total =
@@ -1067,7 +1082,7 @@ function InventoryBox({
       </div>
       <div className="space-y-0.5 font-mono text-xs tabular-nums">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">{isShort ? `${symbol} 숏` : symbol}</span>
+          <span className="text-muted-foreground">{isShort ? t("arb.symbolShort", { sym: symbol }) : symbol}</span>
           <span>
             {isShort ? "−" : ""}{coin.toFixed(6)}{" "}
             {coinUsd != null ? (
@@ -1078,13 +1093,13 @@ function InventoryBox({
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">{isShort ? "증거금+대금" : "USDT"}</span>
+          <span className="text-muted-foreground">{isShort ? t("arb.marginPlusProceeds") : "USDT"}</span>
           <span>${usdt.toFixed(2)}</span>
         </div>
         {total != null ? (
           <>
             <div className="flex justify-between border-t border-border/40 pt-1 font-semibold">
-              <span className="text-muted-foreground">{isShort ? "순자산" : "합계"}</span>
+              <span className="text-muted-foreground">{isShort ? t("arb.netAsset") : t("arb.total")}</span>
               <span>${total.toFixed(2)}</span>
             </div>
             {!isShort && coinPct != null ? (
@@ -1129,6 +1144,7 @@ function BalanceCapacityBar({
   upbitUsd: number;
   binanceUsd: number;
 }) {
+  const t = useT();
   // 롱(Upbit 현물) / 숏(Binance 선물) 균형 — 50/50 = 델타 중립
   const totalCoin = coinUpbit + shortBinance;
   const coinUpbitPct = totalCoin > 0 ? (coinUpbit / totalCoin) * 100 : 50;
@@ -1160,9 +1176,9 @@ function BalanceCapacityBar({
       {/* 롱/숏 균형 (델타 중립) */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">{symbol} 롱/숏 균형 (50/50 = 델타 중립)</span>
+          <span className="text-muted-foreground">{t("arb.longShortBalance", { sym: symbol })}</span>
           <span className="font-mono tabular-nums text-muted-foreground">
-            순 노출 {(coinUpbit - shortBinance >= 0 ? "+" : "")}{(coinUpbit - shortBinance).toFixed(6)} {symbol}
+            {t("arb.netExposure")} {(coinUpbit - shortBinance >= 0 ? "+" : "")}{(coinUpbit - shortBinance).toFixed(6)} {symbol}
           </span>
         </div>
         <div className="flex h-2 overflow-hidden rounded-full bg-muted/40">
@@ -1171,10 +1187,10 @@ function BalanceCapacityBar({
         </div>
         <div className="flex justify-between text-[10px] font-mono tabular-nums">
           <span className="text-amber-400">
-            Upbit 롱 {coinUpbit.toFixed(6)} ({coinUpbitPct.toFixed(0)}%)
+            {t("arb.upbitLong")} {coinUpbit.toFixed(6)} ({coinUpbitPct.toFixed(0)}%)
           </span>
           <span className="text-sky-300">
-            Binance 숏 {shortBinance.toFixed(6)} ({(100 - coinUpbitPct).toFixed(0)}%)
+            {t("arb.binanceShort")} {shortBinance.toFixed(6)} ({(100 - coinUpbitPct).toFixed(0)}%)
           </span>
         </div>
       </div>
@@ -1182,9 +1198,9 @@ function BalanceCapacityBar({
       {/* USDT 거래소간 분포 */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">USDT 거래소간 분포</span>
+          <span className="text-muted-foreground">{t("arb.usdtDistribution")}</span>
           <span className="font-mono tabular-nums text-muted-foreground">
-            총 ${totalUsdt.toFixed(2)}
+            {t("arb.totalLabel")} ${totalUsdt.toFixed(2)}
           </span>
         </div>
         <div className="flex h-2 overflow-hidden rounded-full bg-muted/40">
@@ -1204,15 +1220,15 @@ function BalanceCapacityBar({
       {/* 다음 사이클 여력 */}
       <div className="space-y-1.5 border-t border-border/40 pt-3">
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">다음 사이클 이동 가능량 (인벤토리 25%)</span>
+          <span className="text-muted-foreground">{t("arb.nextCycleCapacity")}</span>
           {heavilyImbalanced ? (
-            <span className="text-[10px] text-amber-400">⚠️ 한 방향 인벤토리 거의 고갈</span>
+            <span className="text-[10px] text-amber-400">{t("arb.imbalanceWarning")}</span>
           ) : null}
         </div>
         <div className="grid grid-cols-2 gap-2 text-[11px]">
           <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2">
             <div className="text-[10px] uppercase text-amber-400 font-semibold">
-              ↗ + 방향 (Upbit 매도 + 숏 커버)
+              {t("arb.capPositiveDir")}
             </div>
             <div className="mt-1 font-mono tabular-nums">
               {positiveCapCoin.toFixed(6)} {symbol}
@@ -1223,7 +1239,7 @@ function BalanceCapacityBar({
           </div>
           <div className="rounded border border-sky-500/30 bg-sky-500/5 p-2">
             <div className="text-[10px] uppercase text-sky-300 font-semibold">
-              ↘ - 방향 (Upbit 매수 + 숏 추가)
+              {t("arb.capNegativeDir")}
             </div>
             <div className="mt-1 font-mono tabular-nums">
               {negativeCapCoin.toFixed(6)} {symbol}
@@ -1239,19 +1255,20 @@ function BalanceCapacityBar({
 }
 
 function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
+  const t = useT();
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[820px] text-sm">
         <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
           <tr>
-            <th className="px-4 py-3 text-left">종료</th>
-            <th className="px-4 py-3 text-left">코인</th>
-            <th className="px-4 py-3 text-right">노출</th>
-            <th className="px-4 py-3 text-right">진입 김프</th>
-            <th className="px-4 py-3 text-right">임계값</th>
-            <th className="px-4 py-3 text-right">사이클</th>
+            <th className="px-4 py-3 text-left">{t("arb.colClosed")}</th>
+            <th className="px-4 py-3 text-left">{t("arb.colCoin")}</th>
+            <th className="px-4 py-3 text-right">{t("arb.colExposure")}</th>
+            <th className="px-4 py-3 text-right">{t("arb.entryPremium")}</th>
+            <th className="px-4 py-3 text-right">{t("arb.threshold")}</th>
+            <th className="px-4 py-3 text-right">{t("arb.cycle")}</th>
             <th className="px-4 py-3 text-right">PnL</th>
-            <th className="px-4 py-3 text-left">사유</th>
+            <th className="px-4 py-3 text-left">{t("arb.colReason")}</th>
           </tr>
         </thead>
         <tbody>
@@ -1296,9 +1313,9 @@ function ClosedPositionsList({ rows }: { rows: ClosedPosition[] }) {
                 </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">
                   {r.close_reason === "manual"
-                    ? "수동"
+                    ? t("arb.reasonManual")
                     : r.close_reason === "expired"
-                      ? "만료"
+                      ? t("arb.reasonExpired")
                       : r.close_reason ?? "—"}
                 </td>
               </tr>
@@ -1321,6 +1338,7 @@ function EntryModal({
   volatility: KimchiVolatility | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const router = useRouter();
   const [notional, setNotional] = useState(1000);
   const [threshold, setThreshold] = useState(1.0);
@@ -1348,7 +1366,7 @@ function EntryModal({
 
   function submit() {
     if (!valid) {
-      toast.error("입력값을 확인하세요.");
+      toast.error(t("arb.checkInputs"));
       return;
     }
     startTransition(async () => {
@@ -1361,11 +1379,11 @@ function EntryModal({
         thresholdPct: threshold,
       });
       if (!r.ok) {
-        toast.error(r.error ?? "진입 실패");
+        toast.error(r.error ?? t("arb.enterFailed"));
         return;
       }
       toast.success(
-        `리밸런싱 포지션 진입 완료. 김프가 ±${threshold.toFixed(1)}% 도달 시 cron 이 자동 리밸런싱.`,
+        t("arb.enterDone", { threshold: threshold.toFixed(1) }),
       );
       onClose();
       router.refresh();
@@ -1379,16 +1397,16 @@ function EntryModal({
           <div className="flex items-center gap-2">
             <ArrowLeftRight className="h-4 w-4 text-primary" />
             <h3 className="text-base font-bold">
-              김프 리밸런싱 진입 — {target.symbol}
+              {t("arb.entryModalTitle", { sym: target.symbol })}
             </h3>
             <span className="ml-auto rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-              ⚡ 자동 사이클
+              {t("arb.autoCycle")}
             </span>
           </div>
 
           <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs space-y-1">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">진입 시점 김프</span>
+              <span className="text-muted-foreground">{t("arb.entryTimePremium")}</span>
               <span
                 className={cn(
                   "font-mono",
@@ -1400,8 +1418,7 @@ function EntryModal({
               </span>
             </div>
             <div className="text-[11px] text-muted-foreground">
-              Upbit 현물 롱 + Binance 선물 숏 (델타 중립). 코인 가격 노출 0. 김프가 ±임계값 도달 시
-              자동 리밸런싱(25%씩) → 김프 진동 수익만 누적. 양방향 모두 수익 가능.
+              {t("arb.entryModalDesc")}
             </div>
           </div>
 
@@ -1415,7 +1432,7 @@ function EntryModal({
 
           <div>
             <Label htmlFor="notional" className="text-xs">
-              한쪽 다리 노출 금액 (USD)
+              {t("arb.legExposureLabel")}
             </Label>
             <Input
               id="notional"
@@ -1428,11 +1445,10 @@ function EntryModal({
               className="mt-1 font-mono"
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              필요 마진 = ${formatNumber(totalMargin, { maximumFractionDigits: 0 })} (양쪽
-              합산){" "}
+              {t("arb.requiredMargin", { margin: formatNumber(totalMargin, { maximumFractionDigits: 0 }) })}{" "}
               {wallet ? (
                 <span className={canAfford ? "text-muted-foreground" : "text-grade-d"}>
-                  · 사용 가능 ${formatNumber(wallet.available, { maximumFractionDigits: 0 })}
+                  {t("arb.availableSuffix", { available: formatNumber(wallet.available, { maximumFractionDigits: 0 }) })}
                 </span>
               ) : null}
             </p>
@@ -1440,7 +1456,7 @@ function EntryModal({
 
           <div>
             <Label htmlFor="threshold" className="text-xs">
-              리밸런싱 임계값 |김프| (%)
+              {t("arb.rebalanceThresholdLabel")}
             </Label>
             <Input
               id="threshold"
@@ -1453,7 +1469,7 @@ function EntryModal({
               className="mt-1 font-mono"
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              현재 김프{" "}
+              {t("arb.currentPremium")}{" "}
               <span
                 className={cn(
                   "font-mono",
@@ -1463,10 +1479,10 @@ function EntryModal({
                 {target.premiumPct >= 0 ? "+" : ""}
                 {target.premiumPct.toFixed(3)}%
               </span>{" "}
-              · 사이클 발동 ±{threshold.toFixed(1)}%
+              {t("arb.cycleTrigger", { threshold: threshold.toFixed(1) })}
               <br />
               <span className="text-[10px]">
-                1회 사이클 (인벤토리 25% 이동) 순수익 ≈{" "}
+                {t("arb.perCycleNetPrefix")}{" "}
                 <span
                   className={cn(
                     "font-mono font-semibold",
@@ -1476,7 +1492,11 @@ function EntryModal({
                   {estPerCycle >= 0 ? "+" : ""}
                   {estPerCycle.toFixed(2)} USDT
                 </span>{" "}
-                (gross ${cycleGross.toFixed(2)} − 수수료 ${cycleFees.toFixed(2)} − 슬리피지 ${cycleSlippage.toFixed(2)})
+                {t("arb.perCycleBreakdown", {
+                  gross: cycleGross.toFixed(2),
+                  fees: cycleFees.toFixed(2),
+                  slippage: cycleSlippage.toFixed(2),
+                })}
               </span>
             </p>
           </div>
@@ -1484,35 +1504,35 @@ function EntryModal({
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
               <div className="text-[10px] font-semibold uppercase text-amber-400">
-                Upbit 현물 롱
+                {t("arb.upbitSpotLongShort")}
               </div>
               <div className="font-mono text-[11px]">
                 {target.symbol} {(notional / 2 / (target.upbitKrw / target.usdKrwRate)).toFixed(6)}
               </div>
               <div className="font-mono text-[11px] text-muted-foreground">
-                현금 ${(notional / 2).toFixed(2)}
+                {t("arb.cash")} ${(notional / 2).toFixed(2)}
               </div>
             </div>
             <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-2">
               <div className="text-[10px] font-semibold uppercase text-sky-300">
-                Binance 선물 숏
+                {t("arb.binanceFuturesShortShort")}
               </div>
               <div className="font-mono text-[11px]">
-                {target.symbol} 숏 {(notional / 2 / target.binanceUsd).toFixed(6)}
+                {t("arb.symbolShort", { sym: target.symbol })} {(notional / 2 / target.binanceUsd).toFixed(6)}
               </div>
               <div className="font-mono text-[11px] text-muted-foreground">
-                증거금 ${(notional / 2).toFixed(2)}
+                {t("arb.margin")} ${(notional / 2).toFixed(2)}
               </div>
             </div>
           </div>
 
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={onClose} disabled={pending}>
-              취소
+              {t("arb.cancel")}
             </Button>
             <Button className="flex-1" onClick={submit} disabled={pending || !valid}>
               <Wallet className="mr-2 h-4 w-4" />
-              {pending ? "진입 중…" : "리밸런싱 진입"}
+              {pending ? t("arb.entering") : t("arb.rebalanceEnter")}
             </Button>
           </div>
         </CardContent>

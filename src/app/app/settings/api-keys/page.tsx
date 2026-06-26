@@ -1,9 +1,11 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getT } from "@/lib/i18n/server";
 import { ApiKeysClient } from "./api-keys-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function ApiKeysPage() {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -19,10 +21,9 @@ export default async function ApiKeysPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">거래소 API 키</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("settings.apiKeys.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          등록된 키로 거래 실행에서 "거래 시작" 버튼이 실제 주문으로 연결됩니다. 출금 권한이
-          켜진 키는 등록할 수 없으며, 모든 키는 AES-256-GCM으로 암호화되어 저장됩니다.
+          {t("settings.apiKeys.description")}
         </p>
       </div>
       <ApiKeysClient initial={keys ?? []} />

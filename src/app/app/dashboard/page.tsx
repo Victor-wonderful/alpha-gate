@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { HelpLink } from "@/components/app/help-link";
 import { parseMode, type TradeMode } from "@/components/app/mode-filter";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/messages";
 
 interface ClosedRow {
   pre_grade: Grade;
@@ -47,6 +49,7 @@ export default async function DashboardPage({
   searchParams: Promise<{ mode?: string }>;
 }) {
   const sp = await searchParams;
+  const t = await getT();
   const tradeMode: TradeMode = parseMode(sp.mode);
   // 탭: 가상거래(live) / 백테스트(backtest). 실거래(real exchange)는 아직 없음.
   const activeTab: "live" | "backtest" = tradeMode === "backtest" ? "backtest" : "live";
@@ -143,11 +146,11 @@ export default async function DashboardPage({
       {/* 페이지 헤더 — 제목 + 액션 */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">성과 분석</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("dashboard.title")}</h1>
           <p className="text-xs text-muted-foreground">
             {activeTab === "backtest"
-              ? `종료된 백테스트 거래 ${n}건 기준 — 등급·방향·청산 사유 분석.`
-              : `종료된 가상거래 ${n}건 기준 — 등급·방향·청산 사유 분석.`}
+              ? t("dashboard.subtitleBacktest", { n })
+              : t("dashboard.subtitleLive", { n })}
           </p>
         </div>
         <HelpLink href="/app/guide/results" />
@@ -156,12 +159,12 @@ export default async function DashboardPage({
       {/* 실거래 / 가상거래 / 백테스트 탭 */}
       <div className="flex flex-wrap items-center gap-2">
         <div
-          title="Bybit 연동 예정"
+          title={t("dashboard.tab.realSoon")}
           className="flex cursor-default items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 opacity-50"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-grade-a" />
-          <span className="text-sm font-medium text-muted-foreground">실거래</span>
-          <span className="text-[10px] text-muted-foreground/60">Bybit 연동 예정</span>
+          <span className="text-sm font-medium text-muted-foreground">{t("dashboard.tab.real")}</span>
+          <span className="text-[10px] text-muted-foreground/60">{t("dashboard.tab.realSoon")}</span>
         </div>
         <Link
           href="/app/dashboard?mode=live"
@@ -173,7 +176,7 @@ export default async function DashboardPage({
           )}
         >
           <Wallet className={cn("h-3.5 w-3.5", activeTab === "live" && "text-primary")} />
-          가상거래
+          {t("dashboard.tab.live")}
           <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-primary">
             {liveCount}
           </span>
@@ -188,7 +191,7 @@ export default async function DashboardPage({
           )}
         >
           <History className={cn("h-3.5 w-3.5", activeTab === "backtest" && "text-amber-300")} />
-          백테스트
+          {t("dashboard.tab.backtest")}
           <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-amber-300/90">
             {backtestCount}
           </span>
@@ -200,7 +203,7 @@ export default async function DashboardPage({
           <CardContent className="flex flex-col items-center justify-center gap-3 p-16 text-center">
             <TrendingUp className="h-8 w-8 text-muted-foreground/40" />
             <div className="text-sm text-muted-foreground">
-              종료된 거래가 없습니다. 거래를 저장하고 손절·목표 도달 시 자동 정산되면 여기에 표시됩니다.
+              {t("dashboard.empty")}
             </div>
           </CardContent>
         </Card>
@@ -210,46 +213,46 @@ export default async function DashboardPage({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <>
                 <Kpi
-                  label="누적 R"
+                  label={t("dashboard.kpi.totalR")}
                   value={`${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)}R`}
-                  sub={`${n}건 · 거래당 평균 ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R`}
+                  sub={t("dashboard.kpi.totalRSub", { n, avg: `${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}` })}
                   tone={totalR >= 0 ? "good" : "bad"}
                   icon={totalR >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                 />
                 <Kpi
-                  label="누적 PnL"
+                  label={t("dashboard.kpi.totalPnl")}
                   value={`${totalPnl >= 0 ? "+" : ""}${totalPnl.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}`}
-                  sub="vUSDT — 종료된 거래의 실현 손익 합계"
+                  sub={t("dashboard.kpi.totalPnlSub")}
                   tone={totalPnl >= 0 ? "good" : "bad"}
                   icon={totalPnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                 />
                 <Kpi
-                  label="ROI"
+                  label={t("dashboard.kpi.roi")}
                   value={`${roiPct >= 0 ? "+" : ""}${roiPct.toFixed(2)}%`}
-                  sub={`시작 잔액 ${startingBalance.toLocaleString("ko-KR")} vUSDT 기준`}
+                  sub={t("dashboard.kpi.roiSub", { balance: startingBalance.toLocaleString("ko-KR") })}
                   tone={roiPct >= 0 ? "good" : "bad"}
                 />
                 <Kpi
-                  label="승률"
+                  label={t("dashboard.kpi.winRate")}
                   value={`${winRate.toFixed(1)}%`}
-                  sub={`승 ${wins} · 패 ${losses}${breakeven ? ` · BE ${breakeven}` : ""}`}
+                  sub={`${t("dashboard.kpi.winRateSub", { wins, losses })}${breakeven ? ` · ${t("dashboard.kpi.breakeven", { be: breakeven })}` : ""}`}
                   tone={winRate >= 50 ? "good" : winRate >= 35 ? "neutral" : "bad"}
                 />
                 <Kpi
-                  label="Profit Factor"
+                  label={t("dashboard.kpi.profitFactor")}
                   value={profitFactor > 0 ? profitFactor.toFixed(2) : "—"}
-                  sub={profitFactor >= 1 ? "장기 수익 우위" : "장기 손실 우위"}
+                  sub={profitFactor >= 1 ? t("dashboard.kpi.pfPositive") : t("dashboard.kpi.pfNegative")}
                   tone={profitFactor >= 1.5 ? "good" : profitFactor >= 1 ? "neutral" : "bad"}
                 />
                 <Kpi
-                  label="현재 연속"
+                  label={t("dashboard.kpi.streak")}
                   value={streak > 0 ? `${streakSign === "win" ? "🔥 " : streakSign === "loss" ? "🥶 " : ""}${streak}` : "—"}
                   sub={
                     streakSign === "win"
-                      ? `${streak}연승 진행 중`
+                      ? t("dashboard.kpi.streakWin", { streak })
                       : streakSign === "loss"
-                        ? `${streak}연패 — 리스크 절반 권장`
-                        : "기록 없음"
+                        ? t("dashboard.kpi.streakLoss", { streak })
+                        : t("dashboard.kpi.streakNone")
                   }
                   tone={streakSign === "win" ? "good" : streakSign === "loss" ? "bad" : "neutral"}
                 />
@@ -260,16 +263,16 @@ export default async function DashboardPage({
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
               <div>
-                <CardTitle className="text-base">자본 곡선 (Equity Curve)</CardTitle>
-                <p className="mt-0.5 text-xs text-muted-foreground">시간순 누적 R. 0선 위는 이익, 아래는 손실.</p>
+                <CardTitle className="text-base">{t("dashboard.equity.title")}</CardTitle>
+                <p className="mt-0.5 text-xs text-muted-foreground">{t("dashboard.equity.desc")}</p>
               </div>
               <div className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">최고</span>
+                <span className="text-muted-foreground">{t("dashboard.equity.best")}</span>
                 <span className="font-mono font-semibold text-grade-a tabular-nums">
                   {best === -Infinity ? "—" : `+${best.toFixed(2)}R`}
                 </span>
                 <span className="text-muted-foreground">·</span>
-                <span className="text-muted-foreground">최저</span>
+                <span className="text-muted-foreground">{t("dashboard.equity.worst")}</span>
                 <span className="font-mono font-semibold text-grade-d tabular-nums">
                   {worst === Infinity ? "—" : `${worst.toFixed(2)}R`}
                 </span>
@@ -285,7 +288,7 @@ export default async function DashboardPage({
             {/* 등급별 */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">진입 등급별 성과</CardTitle>
+                <CardTitle className="text-base">{t("dashboard.byGrade.title")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2.5">
                 {(["A", "B", "C", "D"] as Grade[]).map((g) => {
@@ -296,14 +299,14 @@ export default async function DashboardPage({
                       <div className="flex items-center justify-between gap-2 text-xs">
                         <div className="flex items-center gap-2">
                           <GradeBadge grade={g} size="sm" />
-                          <span className="text-muted-foreground">{s.n}건 · {pct.toFixed(0)}%</span>
+                          <span className="text-muted-foreground">{t("dashboard.byGrade.count", { n: s.n, pct: pct.toFixed(0) })}</span>
                         </div>
                         <div className="flex items-baseline gap-2 font-mono tabular-nums">
                           <span className={cn("font-semibold", s.sumR >= 0 ? "text-grade-a" : "text-grade-d")}>
                             {s.sumR >= 0 ? "+" : ""}{s.sumR.toFixed(2)}R
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            평균 {s.n > 0 ? (s.sumR / s.n).toFixed(2) : "—"}
+                            {t("dashboard.byGrade.avg", { v: s.n > 0 ? (s.sumR / s.n).toFixed(2) : "—" })}
                           </span>
                         </div>
                       </div>
@@ -322,18 +325,18 @@ export default async function DashboardPage({
             {/* 방향별 */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">방향별 성과</CardTitle>
+                <CardTitle className="text-base">{t("dashboard.byDir.title")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <DirectionRow label="롱 (매수)" stats={longStats} />
-                <DirectionRow label="숏 (매도)" stats={shortStats} />
+                <DirectionRow label={t("dashboard.byDir.long")} stats={longStats} t={t} />
+                <DirectionRow label={t("dashboard.byDir.short")} stats={shortStats} t={t} />
               </CardContent>
             </Card>
 
             {/* 청산 사유 */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">청산 사유</CardTitle>
+                <CardTitle className="text-base">{t("dashboard.exit.title")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <ExitStackedBar
@@ -341,6 +344,7 @@ export default async function DashboardPage({
                   stop={exitStats.stop}
                   manual={exitStats.manual}
                   total={n}
+                  t={t}
                 />
               </CardContent>
             </Card>
@@ -396,31 +400,33 @@ function Kpi({
 function DirectionRow({
   label,
   stats,
+  t,
 }: {
   label: string;
   stats: { n: number; sumR: number; avgR: number; winRate: number };
+  t: TFunction;
 }) {
   return (
     <div className="rounded-md border border-border bg-background/40 p-2.5">
       <div className="flex items-center justify-between text-xs">
         <span className="font-medium">{label}</span>
-        <span className="text-muted-foreground">{stats.n}건</span>
+        <span className="text-muted-foreground">{t("dashboard.byDir.count", { n: stats.n })}</span>
       </div>
       <div className="mt-1.5 grid grid-cols-3 gap-2 font-mono text-xs tabular-nums">
         <div>
-          <div className="text-[10px] text-muted-foreground">누적</div>
+          <div className="text-[10px] text-muted-foreground">{t("dashboard.byDir.total")}</div>
           <div className={cn("font-semibold", stats.sumR >= 0 ? "text-grade-a" : "text-grade-d")}>
             {stats.sumR >= 0 ? "+" : ""}{stats.sumR.toFixed(2)}R
           </div>
         </div>
         <div>
-          <div className="text-[10px] text-muted-foreground">평균</div>
+          <div className="text-[10px] text-muted-foreground">{t("dashboard.byDir.avg")}</div>
           <div className={cn("font-semibold", stats.avgR >= 0 ? "text-grade-a" : "text-grade-d")}>
             {stats.n > 0 ? `${stats.avgR >= 0 ? "+" : ""}${stats.avgR.toFixed(2)}` : "—"}
           </div>
         </div>
         <div>
-          <div className="text-[10px] text-muted-foreground">승률</div>
+          <div className="text-[10px] text-muted-foreground">{t("dashboard.byDir.winRate")}</div>
           <div className="font-semibold">{stats.n > 0 ? `${stats.winRate.toFixed(0)}%` : "—"}</div>
         </div>
       </div>
@@ -433,11 +439,13 @@ function ExitStackedBar({
   stop,
   manual,
   total,
+  t,
 }: {
   target: number;
   stop: number;
   manual: number;
   total: number;
+  t: TFunction;
 }) {
   const tPct = total > 0 ? (target / total) * 100 : 0;
   const sPct = total > 0 ? (stop / total) * 100 : 0;
@@ -450,15 +458,15 @@ function ExitStackedBar({
         <div className="bg-muted-foreground/40 transition-all" style={{ width: `${mPct}%` }} />
       </div>
       <ul className="space-y-1.5 text-xs">
-        <ExitRow color="bg-grade-a" label="목표 도달" n={target} pct={tPct} />
-        <ExitRow color="bg-grade-d" label="손절 적중" n={stop} pct={sPct} />
-        <ExitRow color="bg-muted-foreground/40" label="임의/타임아웃" n={manual} pct={mPct} />
+        <ExitRow color="bg-grade-a" label={t("dashboard.exit.target")} n={target} pct={tPct} t={t} />
+        <ExitRow color="bg-grade-d" label={t("dashboard.exit.stop")} n={stop} pct={sPct} t={t} />
+        <ExitRow color="bg-muted-foreground/40" label={t("dashboard.exit.manual")} n={manual} pct={mPct} t={t} />
       </ul>
     </div>
   );
 }
 
-function ExitRow({ color, label, n, pct }: { color: string; label: string; n: number; pct: number }) {
+function ExitRow({ color, label, n, pct, t }: { color: string; label: string; n: number; pct: number; t: TFunction }) {
   return (
     <li className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
@@ -466,7 +474,7 @@ function ExitRow({ color, label, n, pct }: { color: string; label: string; n: nu
         <span className="text-foreground">{label}</span>
       </div>
       <div className="flex items-baseline gap-2 font-mono tabular-nums">
-        <span className="text-muted-foreground">{n}건</span>
+        <span className="text-muted-foreground">{t("dashboard.exit.count", { n })}</span>
         <span>{pct.toFixed(0)}%</span>
       </div>
     </li>

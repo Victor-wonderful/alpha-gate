@@ -3,6 +3,7 @@ import { Users, UserCheck, UserX, Coins, Sparkles, LineChart, CheckCircle2, Cloc
 import { Card, CardContent } from "@/components/ui/card";
 import { listAllUsers } from "@/lib/admin/data";
 import { formatNumber } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ function StatCard({
 }
 
 export default async function AdminDashboardPage() {
+  const t = await getT();
   const users = await listAllUsers();
 
   const total = users.length;
@@ -62,22 +64,22 @@ export default async function AdminDashboardPage() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard icon={Users} label="총 회원" value={formatNumber(total)} sub={`최근 7일 +${newThisWeek}`} />
-        <StatCard icon={UserCheck} label="활성" value={formatNumber(active)} tone="primary" />
-        <StatCard icon={UserX} label="비활성" value={formatNumber(disabled)} tone={disabled ? "destructive" : "default"} />
-        <StatCard icon={Clock} label="신규(7일)" value={formatNumber(newThisWeek)} />
-        <StatCard icon={Coins} label="총 vUSDT" value={formatNumber(totalVusdt, { maximumFractionDigits: 0 })} tone="primary" />
-        <StatCard icon={Sparkles} label="총 AI 크레딧" value={formatNumber(totalCredits)} tone="amber" />
-        <StatCard icon={LineChart} label="총 분석" value={formatNumber(totalAnalyses)} />
-        <StatCard icon={CheckCircle2} label="총 거래" value={formatNumber(totalTrades)} />
+        <StatCard icon={Users} label={t("admin.statTotalUsers")} value={formatNumber(total)} sub={t("admin.statNewSub", { n: newThisWeek })} />
+        <StatCard icon={UserCheck} label={t("admin.statActive")} value={formatNumber(active)} tone="primary" />
+        <StatCard icon={UserX} label={t("admin.statDisabled")} value={formatNumber(disabled)} tone={disabled ? "destructive" : "default"} />
+        <StatCard icon={Clock} label={t("admin.statNew7d")} value={formatNumber(newThisWeek)} />
+        <StatCard icon={Coins} label={t("admin.statTotalVusdt")} value={formatNumber(totalVusdt, { maximumFractionDigits: 0 })} tone="primary" />
+        <StatCard icon={Sparkles} label={t("admin.statTotalCredits")} value={formatNumber(totalCredits)} tone="amber" />
+        <StatCard icon={LineChart} label={t("admin.statTotalAnalyses")} value={formatNumber(totalAnalyses)} />
+        <StatCard icon={CheckCircle2} label={t("admin.statTotalTrades")} value={formatNumber(totalTrades)} />
       </div>
 
       <Card>
         <CardContent className="p-0">
-          <div className="border-b border-border px-4 py-3 text-sm font-semibold">최근 가입 회원</div>
+          <div className="border-b border-border px-4 py-3 text-sm font-semibold">{t("admin.recentSignups")}</div>
           <div className="divide-y divide-border">
             {recent.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-muted-foreground">회원이 없습니다.</div>
+              <div className="px-4 py-6 text-center text-sm text-muted-foreground">{t("admin.noUsers")}</div>
             ) : (
               recent.map((u) => (
                 <Link
@@ -91,7 +93,7 @@ export default async function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     {u.disabled ? (
-                      <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-destructive">비활성</span>
+                      <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-destructive">{t("admin.disabled")}</span>
                     ) : null}
                     <span className="font-mono tabular-nums">
                       {new Date(u.createdAt).toLocaleDateString("ko-KR")}

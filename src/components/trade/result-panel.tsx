@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { GradeBadge } from "./grade-badge";
@@ -25,6 +26,7 @@ export function ResultPanel({
   leverage: number;
   onApplyLeverage?: (lev: number) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
 
   const lev = Math.max(1, leverage);
@@ -44,14 +46,14 @@ export function ResultPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>매매 평가</CardTitle>
+        <CardTitle>{t("trade.result.title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         <GradeBadge grade={grade.grade} />
 
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <Metric label="손익비" value={grade.rr > 0 ? `${grade.rr.toFixed(2)} R` : "—"} />
-          <Metric label="점수" value={`${grade.score}점`} />
+          <Metric label={t("trade.result.rr")} value={grade.rr > 0 ? `${grade.rr.toFixed(2)} R` : "—"} />
+          <Metric label={t("trade.result.score")} value={t("trade.result.scorePts", { score: grade.score })} />
         </div>
 
         {/* Risk-based sizing block */}
@@ -59,21 +61,21 @@ export function ResultPanel({
           <div className="space-y-3 rounded-md border border-border bg-background/30 p-3">
             <div className="grid grid-cols-2 gap-3 text-xs">
               <Cell
-                label="잃을 한도"
+                label={t("trade.result.maxLoss")}
                 value={`${riskPct.toFixed(2)}%`}
-                sub={`${formatCurrency(sizing.maxLoss, currency)} (계좌의)`}
+                sub={`${formatCurrency(sizing.maxLoss, currency)} ${t("trade.result.ofAccount")}`}
                 tone="bad"
               />
               <Cell
-                label="노출 금액"
+                label={t("trade.result.exposure")}
                 value={`${positionPctOfAccount.toFixed(1)}%`}
-                sub={`${formatCurrency(sizing.positionSize, currency)} (계좌의)`}
+                sub={`${formatCurrency(sizing.positionSize, currency)} ${t("trade.result.ofAccount")}`}
               />
-              <Cell label="매수 수량" value={formatNumber(sizing.quantity)} />
+              <Cell label={t("trade.result.quantity")} value={formatNumber(sizing.quantity)} />
               <Cell
-                label={`필요 마진 (${lev}x)`}
+                label={t("trade.result.requiredMargin", { lev })}
                 value={`${marginPctOfAccount.toFixed(2)}%`}
-                sub={`${formatCurrency(requiredMargin, currency)} (계좌의)`}
+                sub={`${formatCurrency(requiredMargin, currency)} ${t("trade.result.ofAccount")}`}
                 tone={marginExceedsAccount ? "bad" : undefined}
               />
             </div>
@@ -82,12 +84,17 @@ export function ResultPanel({
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
                   <span>
-                    {lev}x 로는 필요 마진({formatCurrency(requiredMargin, currency)})이 계좌($
-                    {formatNumber(accountSize, { maximumFractionDigits: 0 })})를 초과합니다.
+                    {t("trade.result.marginExceed", {
+                      lev,
+                      margin: formatCurrency(requiredMargin, currency),
+                      account: `$${formatNumber(accountSize, { maximumFractionDigits: 0 })}`,
+                    })}
                     <span className="ml-1 font-semibold">
-                      {recommendedLev}x 이상 권장
+                      {t("trade.result.recommendLev", { lev: recommendedLev })}
                     </span>
-                    {" "}— 노출은 그대로지만 필요 마진은 {formatCurrency(sizing.positionSize / recommendedLev, currency)}로 줄어듭니다.
+                    {t("trade.result.marginReduced", {
+                      margin: formatCurrency(sizing.positionSize / recommendedLev, currency),
+                    })}
                   </span>
                 </div>
                 {onApplyLeverage ? (
@@ -96,32 +103,32 @@ export function ResultPanel({
                     onClick={() => onApplyLeverage(recommendedLev)}
                     className="w-full rounded border border-grade-d/60 bg-grade-d/20 py-1 text-[11px] font-semibold text-foreground transition-colors hover:bg-grade-d/30"
                   >
-                    {recommendedLev}x로 적용
+                    {t("trade.result.applyLev", { lev: recommendedLev })}
                   </button>
                 ) : null}
               </div>
             ) : null}
             <div className="text-[10px] leading-relaxed text-muted-foreground">
-              <strong>노출 금액</strong>(진입가 × 수량) = 이 거래가 시장에 노출되는 총 금액. 레버리지와 무관하게 BTC 1% 변동 시 노출의 1%가 손익. 레버리지는 묶이는 마진만 줄여줍니다.
+              <strong>{t("trade.result.exposureWord")}</strong>{t("trade.result.exposureExplain")}
             </div>
           </div>
         ) : null}
 
-        {!sizing.valid && sizing.reason ? (
+        {!sizing.valid && (sizing.reasonCode || sizing.reason) ? (
           <div className="rounded-md border border-grade-d/40 bg-grade-d/10 p-3 text-sm text-grade-d">
-            {sizing.reason}
+            {sizing.reasonCode ? t(`sizing.${sizing.reasonCode}`) : sizing.reason}
           </div>
         ) : null}
 
         <Separator />
 
         <div>
-          <h4 className="mb-2 text-sm font-semibold">지금 해야 할 행동</h4>
+          <h4 className="mb-2 text-sm font-semibold">{t("trade.result.actionsTitle")}</h4>
           <ul className="space-y-1.5 text-sm">
-            {grade.actions.map((a, i) => (
+            {grade.actionItems.map((a, i) => (
               <li key={i} className="flex gap-2">
                 <span className="mt-1 inline-block h-1.5 w-1.5 flex-none rounded-full bg-primary" />
-                <span>{a}</span>
+                <span>{t(`grade.action.${a.code}`, a.params)}</span>
               </li>
             ))}
           </ul>
@@ -132,14 +139,14 @@ export function ResultPanel({
           className="flex w-full items-center justify-between text-sm text-muted-foreground hover:text-foreground"
           onClick={() => setOpen(!open)}
         >
-          <span>점수 내역 보기</span>
+          <span>{t("trade.result.scoreBreakdown")}</span>
           {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
         {open ? (
           <ul className="space-y-1.5 text-sm">
             {grade.reasons.map((r, i) => (
               <li key={i} className="flex items-center justify-between">
-                <span className="text-muted-foreground">{r.label}</span>
+                <span className="text-muted-foreground">{t(`grade.reason.${r.code}`, r.params)}</span>
                 <span
                   className={cn(
                     "font-mono",

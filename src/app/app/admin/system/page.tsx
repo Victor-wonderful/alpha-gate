@@ -2,6 +2,7 @@ import { CheckCircle2, XCircle, Clock, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { formatNumber } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ function minutesAgo(iso: string | null): number | null {
 }
 
 export default async function AdminSystemPage() {
+  const t = await getT();
   const svc = getSupabaseService();
 
   const [kimchiRes, totalAnalysesRes, dayAnalysesRes, totalTradesRes] = await Promise.all([
@@ -41,16 +43,16 @@ export default async function AdminSystemPage() {
       {/* Cron status */}
       <Card>
         <CardHeader>
-          <CardTitle>Cron 상태</CardTitle>
+          <CardTitle>{t("admin.cronStatus")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-3">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <div>
-                <div className="text-sm font-medium">record-kimchi (5분 주기)</div>
+                <div className="text-sm font-medium">{t("admin.recordKimchiLabel")}</div>
                 <div className="text-xs text-muted-foreground">
-                  {lastKimchi ? new Date(lastKimchi).toLocaleString("ko-KR") : "기록 없음"}
+                  {lastKimchi ? new Date(lastKimchi).toLocaleString("ko-KR") : t("admin.noRecord")}
                 </div>
               </div>
             </div>
@@ -61,11 +63,11 @@ export default async function AdminSystemPage() {
                   : "bg-destructive/10 text-destructive"
               }`}
             >
-              {kimchiAge == null ? "—" : kimchiHealthy ? `${kimchiAge}분 전` : `지연 ${kimchiAge}분`}
+              {kimchiAge == null ? "—" : kimchiHealthy ? t("admin.minutesAgo", { n: kimchiAge }) : t("admin.delayedMinutes", { n: kimchiAge })}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
-            record-kimchi가 15분 이상 지연되면 Vercel Cron 또는 Upbit/Binance API를 점검하세요.
+            {t("admin.cronHint")}
           </p>
         </CardContent>
       </Card>
@@ -73,26 +75,26 @@ export default async function AdminSystemPage() {
       {/* AI usage */}
       <Card>
         <CardHeader>
-          <CardTitle>AI · 활동 사용량</CardTitle>
+          <CardTitle>{t("admin.aiUsage")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="rounded-lg border border-border bg-muted/20 p-3">
               <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                <Sparkles className="h-3 w-3 text-primary" /> 총 분석
+                <Sparkles className="h-3 w-3 text-primary" /> {t("admin.totalAnalyses")}
               </div>
               <div className="mt-1 font-mono text-lg font-bold tabular-nums">
                 {formatNumber(totalAnalysesRes.count ?? 0)}
               </div>
             </div>
             <div className="rounded-lg border border-border bg-muted/20 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">24h 분석</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("admin.analyses24h")}</div>
               <div className="mt-1 font-mono text-lg font-bold tabular-nums">
                 {formatNumber(dayAnalysesRes.count ?? 0)}
               </div>
             </div>
             <div className="rounded-lg border border-border bg-muted/20 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">총 거래</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("admin.totalTrades")}</div>
               <div className="mt-1 font-mono text-lg font-bold tabular-nums">
                 {formatNumber(totalTradesRes.count ?? 0)}
               </div>
@@ -104,7 +106,7 @@ export default async function AdminSystemPage() {
       {/* Env checks */}
       <Card className="md:col-span-2">
         <CardHeader>
-          <CardTitle>환경 변수 점검</CardTitle>
+          <CardTitle>{t("admin.envChecks")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -116,18 +118,18 @@ export default async function AdminSystemPage() {
                 <span className="font-mono text-sm">{c.key}</span>
                 {c.ok ? (
                   <span className="inline-flex items-center gap-1 text-xs text-primary">
-                    <CheckCircle2 className="h-4 w-4" /> 설정됨
+                    <CheckCircle2 className="h-4 w-4" /> {t("admin.envSet")}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-xs text-destructive">
-                    <XCircle className="h-4 w-4" /> 없음
+                    <XCircle className="h-4 w-4" /> {t("admin.envMissing")}
                   </span>
                 )}
               </div>
             ))}
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            값은 노출하지 않고 설정 여부만 표시합니다. 서버 런타임 기준.
+            {t("admin.envNote")}
           </p>
         </CardContent>
       </Card>

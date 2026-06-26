@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/context";
 import { deleteTradeAction } from "./_actions";
 
 export function DeleteTradeButton({ id, symbol }: { id: string; symbol: string }) {
+  const t = useT();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
@@ -26,7 +28,7 @@ export function DeleteTradeButton({ id, symbol }: { id: string; symbol: string }
         setConfirming(false);
         return;
       }
-      toast.success("거래를 삭제했습니다.");
+      toast.success(t("journal.cmp.deleteSuccess"));
       router.push("/app/journal");
       router.refresh();
     });
@@ -42,7 +44,7 @@ export function DeleteTradeButton({ id, symbol }: { id: string; symbol: string }
       className="gap-1.5"
     >
       <Trash2 className="h-3.5 w-3.5" />
-      {pending ? "삭제 중..." : confirming ? `${symbol} 정말 삭제? (다시 클릭)` : "삭제"}
+      {pending ? t("journal.cmp.deleting") : confirming ? t("journal.cmp.deleteConfirm", { symbol }) : t("journal.cmp.delete")}
     </Button>
   );
 }

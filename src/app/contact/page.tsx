@@ -11,28 +11,41 @@ import {
   IconBadge,
 } from "@/components/marketing/section";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "문의 — Alpha Gate",
-  description: "Alpha Gate 운영팀에 문의하기. 영업일 기준 24시간 이내 회신 드립니다.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("legal.contact.metaTitle"),
+    description: t("legal.contact.metaDesc"),
+  };
+}
 
 const SUPPORT_EMAIL = "hello@alphagate.app";
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const t = await getT();
+  const TOPICS = [
+    { label: t("legal.contact.topicRefund"), href: "/refund" },
+    { label: t("legal.contact.topicPlanChange"), href: "/faq" },
+    { label: t("legal.contact.topicAiCount"), href: "/faq" },
+    { label: t("legal.contact.topicAccount"), href: "/faq" },
+    { label: t("legal.contact.topicDataDelete"), href: "/privacy" },
+    { label: t("legal.contact.topicTerms"), href: "/terms" },
+  ];
   return (
     <main className="flex min-h-screen flex-col bg-[#02060f] text-white">
       <MarketingHeader />
 
       <SectionShell glowPosition="top" className="border-t-0">
         <SectionHeader
-          eyebrow="문의"
+          eyebrow={t("legal.contact.eyebrow")}
           title={
             <>
-              바로 <GradientText>답변 드립니다</GradientText>
+              {t("legal.contact.titlePre")}<GradientText>{t("legal.contact.titleHighlight")}</GradientText>
             </>
           }
-          body="결제·환불·기술 문제·기능 제안 무엇이든 환영합니다. 영업일 기준 24시간 이내 회신해드립니다."
+          body={t("legal.contact.body")}
         />
       </SectionShell>
 
@@ -40,8 +53,8 @@ export default function ContactPage() {
         <div className="grid gap-5 md:grid-cols-3">
           <ChannelCard
             icon={Mail}
-            title="이메일"
-            body="자세한 내용을 적어 보내주세요. 결제·환불·계정 관련 문의는 이메일이 가장 빠릅니다."
+            title={t("legal.contact.channelEmailTitle")}
+            body={t("legal.contact.channelEmailBody")}
             cta={`mailto:${SUPPORT_EMAIL}`}
             ctaLabel={SUPPORT_EMAIL}
             external
@@ -49,28 +62,28 @@ export default function ContactPage() {
           />
           <ChannelCard
             icon={MessageSquare}
-            title="기능 제안"
-            body="원하는 기능이나 개선 아이디어가 있다면 알려주세요. 우선순위에 반영됩니다."
+            title={t("legal.contact.channelFeatureTitle")}
+            body={t("legal.contact.channelFeatureBody")}
             cta={`mailto:${SUPPORT_EMAIL}?subject=%5B%EA%B8%B0%EB%8A%A5%20%EC%A0%9C%EC%95%88%5D`}
-            ctaLabel="제안 보내기"
+            ctaLabel={t("legal.contact.channelFeatureCta")}
             external
           />
           <ChannelCard
             icon={Clock}
-            title="응답 시간"
-            body="영업일 기준 24시간 이내. 결제·환불·기술 문제 모두 동일하게 회신해드립니다."
+            title={t("legal.contact.channelTimeTitle")}
+            body={t("legal.contact.channelTimeBody")}
             cta="/pricing"
-            ctaLabel="플랜 비교"
+            ctaLabel={t("legal.contact.channelTimeCta")}
           />
         </div>
 
         {/* Topics */}
         <div className="mt-20">
           <SectionHeader
-            eyebrow="자주 문의 주제"
+            eyebrow={t("legal.contact.topicsEyebrow")}
             title={
               <>
-                FAQ에서 <GradientText>먼저 확인</GradientText>
+                {t("legal.contact.topicsTitlePre")}<GradientText>{t("legal.contact.topicsTitleHighlight")}</GradientText>
               </>
             }
             align="left"
@@ -101,30 +114,30 @@ export default function ContactPage() {
             <div className="relative">
               <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300/80">
                 <span className="inline-block h-px w-8 bg-cyan-400/70" />
-                직접 보내기
+                {t("legal.contact.directEyebrow")}
               </div>
               <h3 className="mt-4 text-2xl font-bold">
                 <GradientText>{SUPPORT_EMAIL}</GradientText>
               </h3>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/70">
-                아래 항목을 함께 적어주시면 더 빠르게 도와드릴 수 있습니다.
+                {t("legal.contact.directBody")}
               </p>
               <ul className="mt-5 space-y-2 text-sm text-white/70">
                 <li className="flex items-start gap-2.5">
                   <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-none rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-                  가입 이메일 (계정 관련 문의 시)
+                  {t("legal.contact.directItem1")}
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-none rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-                  사용 중인 플랜 (Free / Standard / Pro)
+                  {t("legal.contact.directItem2")}
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-none rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-                  발생한 화면 스크린샷 (기술 문제 시)
+                  {t("legal.contact.directItem3")}
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-none rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-                  재현 단계 또는 거래 ID
+                  {t("legal.contact.directItem4")}
                 </li>
               </ul>
               <div className="mt-7">
@@ -132,7 +145,7 @@ export default function ContactPage() {
                   href={`mailto:${SUPPORT_EMAIL}`}
                   className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-6 py-3 text-sm font-semibold text-[#02060f] shadow-[0_0_24px_rgba(56,189,248,0.45)] transition-all hover:gap-3 hover:shadow-[0_0_36px_rgba(56,189,248,0.6)]"
                 >
-                  이메일 작성
+                  {t("legal.contact.directComposeEmail")}
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </div>
@@ -145,15 +158,6 @@ export default function ContactPage() {
     </main>
   );
 }
-
-const TOPICS = [
-  { label: "결제 후 환불 절차", href: "/refund" },
-  { label: "플랜 변경 / 업그레이드", href: "/faq" },
-  { label: "AI 분석 횟수 카운트 기준", href: "/faq" },
-  { label: "계정 / 비밀번호 문제", href: "/faq" },
-  { label: "데이터 삭제 / 탈퇴", href: "/privacy" },
-  { label: "이용약관 / 면책 사항", href: "/terms" },
-];
 
 function ChannelCard({
   icon,

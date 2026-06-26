@@ -1,8 +1,10 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getBalance, getAiCredits } from "@/lib/paper-wallet";
+import { getT } from "@/lib/i18n/server";
 import { CreditsClient } from "./credits-client";
 
 export default async function CreditsPage() {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -20,9 +22,9 @@ export default async function CreditsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">AI 크레딧 구매</h1>
+        <h1 className="text-2xl font-bold">{t("billing.credits.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          AI 분석 1회 사용 = 크레딧 1개 · vUSDT로 결제
+          {t("billing.credits.subtitle")}
         </p>
       </div>
       <CreditsClient initialBalance={balance} initialCredits={credits} />

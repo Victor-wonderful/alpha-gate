@@ -1,19 +1,25 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/messages";
 import { ExpiryActions } from "./expiry-banner-actions";
 
-function formatTimeLeft(ms: number): string {
-  if (ms <= 0) return "곧 만료";
+function formatTimeLeft(ms: number, t: TFunction): string {
+  if (ms <= 0) return t("trade.expiry.soonExpire");
   const totalMins = Math.round(ms / 60_000);
-  if (totalMins < 60) return `${totalMins}분`;
+  if (totalMins < 60) return t("trade.expiry.mins", { n: totalMins });
   const hours = Math.floor(totalMins / 60);
   const mins = totalMins % 60;
   if (hours < 24)
-    return mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`;
+    return mins > 0
+      ? t("trade.expiry.hoursMins", { h: hours, m: mins })
+      : t("trade.expiry.hours", { h: hours });
   const days = Math.floor(hours / 24);
   const remHours = hours % 24;
-  return remHours > 0 ? `${days}일 ${remHours}시간` : `${days}일`;
+  return remHours > 0
+    ? t("trade.expiry.daysHours", { d: days, h: remHours })
+    : t("trade.expiry.days", { d: days });
 }
 
 // resolve-trades/route.ts 의 TIMEOUT_MS 와 반드시 일치해야 함.
@@ -50,6 +56,7 @@ type Expiry = TradeExpiry | LimitExpiry;
 
 /** 사용자의 만료 임박 거래 + 지정가 주문을 모두 조회해 배너에 노출. */
 export async function ExpiryBanner() {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -150,13 +157,20 @@ export async function ExpiryBanner() {
                       >
                         {item.symbol}
                       </Link>{" "}
-                      {item.direction === "long" ? "롱" : "숏"} ·{" "}
-                      {item.timeframe}
+                      {item.direction === "long"
+                        ? t("common.long")
+                        : t("common.short")}{" "}
+                      · {item.timeframe}
                     </>
                   ) : (
                     <>
                       <span className="font-mono">{item.symbol}</span>{" "}
-                      {item.direction === "long" ? "롱" : "숏"} 지정가 @{" "}
+                      {t("trade.expiry.limitLabel", {
+                        dir:
+                          item.direction === "long"
+                            ? t("common.long")
+                            : t("common.short"),
+                      })}{" "}
                       <span className="font-mono">
                         {item.limitPrice.toLocaleString()}
                       </span>
@@ -164,9 +178,16 @@ export async function ExpiryBanner() {
                   )}
                 </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  {isFinal ? "⏰ 마지막 알림 — " : "곧 만료 — "}
-                  {formatTimeLeft(item.msLeft)} 후 자동{" "}
-                  {item.kind === "trade" ? "청산" : "취소"}
+                  {isFinal
+                    ? t("trade.expiry.finalNotice")
+                    : t("trade.expiry.expiringNotice")}
+                  {item.kind === "trade"
+                    ? t("trade.expiry.autoCloseIn", {
+                        time: formatTimeLeft(item.msLeft, t),
+                      })
+                    : t("trade.expiry.autoCancelIn", {
+                        time: formatTimeLeft(item.msLeft, t),
+                      })}
                 </div>
               </div>
             </div>

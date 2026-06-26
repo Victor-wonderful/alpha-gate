@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Sparkles, LineChart, Coins, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 export type ActivityKind = "analysis" | "trade" | "wallet" | "admin";
 
@@ -16,23 +17,24 @@ export interface ActivityEvent {
   detail: string;
 }
 
-const META: Record<ActivityKind, { icon: React.ComponentType<{ className?: string }>; tone: string; label: string }> = {
-  analysis: { icon: Sparkles, tone: "text-primary", label: "분석" },
-  trade: { icon: LineChart, tone: "text-foreground", label: "거래" },
-  wallet: { icon: Coins, tone: "text-amber-400", label: "지갑" },
-  admin: { icon: Shield, tone: "text-destructive", label: "관리자" },
+const META: Record<ActivityKind, { icon: React.ComponentType<{ className?: string }>; tone: string }> = {
+  analysis: { icon: Sparkles, tone: "text-primary" },
+  trade: { icon: LineChart, tone: "text-foreground" },
+  wallet: { icon: Coins, tone: "text-amber-400" },
+  admin: { icon: Shield, tone: "text-destructive" },
 };
 
-const TABS: { key: ActivityKind | "all"; label: string }[] = [
-  { key: "all", label: "전체" },
-  { key: "analysis", label: "분석" },
-  { key: "trade", label: "거래" },
-  { key: "wallet", label: "지갑" },
-  { key: "admin", label: "관리자" },
-];
-
 export function ActivityFeed({ events }: { events: ActivityEvent[] }) {
+  const t = useT();
   const [filter, setFilter] = useState<ActivityKind | "all">("all");
+
+  const TABS: { key: ActivityKind | "all"; label: string }[] = [
+    { key: "all", label: t("admin.tabAll") },
+    { key: "analysis", label: t("admin.tabAnalysis") },
+    { key: "trade", label: t("admin.tabTrade") },
+    { key: "wallet", label: t("admin.tabWallet") },
+    { key: "admin", label: t("admin.tabAdmin") },
+  ];
 
   const filtered = useMemo(
     () => (filter === "all" ? events : events.filter((e) => e.kind === filter)),
@@ -62,7 +64,7 @@ export function ActivityFeed({ events }: { events: ActivityEvent[] }) {
       <div className="overflow-hidden rounded-lg border border-border">
         <div className="divide-y divide-border">
           {filtered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">활동이 없습니다.</div>
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">{t("admin.noActivity")}</div>
           ) : (
             filtered.map((e) => {
               const M = META[e.kind];
@@ -91,7 +93,7 @@ export function ActivityFeed({ events }: { events: ActivityEvent[] }) {
         </div>
       </div>
 
-      <div className="text-xs text-muted-foreground">{filtered.length}건</div>
+      <div className="text-xs text-muted-foreground">{t("admin.countItems", { n: filtered.length })}</div>
     </div>
   );
 }

@@ -1,26 +1,28 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
 
 type StepKey = "analyze" | "trade" | "journal" | "dashboard";
 
 const STEPS: Array<{
   key: StepKey;
-  label: string;
-  desc: string;
+  labelKey: string;
+  descKey: string;
   href: string;
 }> = [
-  { key: "analyze", label: "AI 분석", desc: "시장 본다", href: "/app/analyze" },
-  { key: "trade", label: "거래 실행", desc: "이 거래 해도 되나", href: "/app/trade" },
-  { key: "journal", label: "거래 일지", desc: "결과 입력 + 복기", href: "/app/journal" },
-  { key: "dashboard", label: "성과 분석", desc: "패턴 발견", href: "/app/dashboard" },
+  { key: "analyze", labelKey: "nav.analyze", descKey: "flow.analyzeDesc", href: "/app/analyze" },
+  { key: "trade", labelKey: "nav.trade", descKey: "flow.tradeDesc", href: "/app/trade" },
+  { key: "journal", labelKey: "nav.journal", descKey: "flow.journalDesc", href: "/app/journal" },
+  { key: "dashboard", labelKey: "nav.performance", descKey: "flow.dashboardDesc", href: "/app/dashboard" },
 ];
 
-export function FlowStepper({ current }: { current: StepKey }) {
+export async function FlowStepper({ current }: { current: StepKey }) {
+  const t = await getT();
   const currentIndex = STEPS.findIndex((s) => s.key === current);
   return (
     <nav
-      aria-label="작업 단계"
+      aria-label={t("flow.aria")}
       className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-background/30 p-2 text-xs"
     >
       {STEPS.map((s, i) => {
@@ -53,9 +55,9 @@ export function FlowStepper({ current }: { current: StepKey }) {
                 {done ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
               </span>
               <div className="leading-tight">
-                <div className="text-[11px] font-semibold">{s.label}</div>
+                <div className="text-[11px] font-semibold">{t(s.labelKey)}</div>
                 <div className="text-[10px] text-muted-foreground/80 group-hover:text-muted-foreground">
-                  {s.desc}
+                  {t(s.descKey)}
                 </div>
               </div>
             </Link>

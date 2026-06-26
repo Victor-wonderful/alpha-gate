@@ -5,11 +5,14 @@ import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatCurrency } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/messages";
 import { VirtualTradeClient } from "../virtual-trade-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
+  const t = await getT();
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -36,11 +39,11 @@ export default async function WalletPage() {
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3 w-3" />
-          트레이딩으로
+          {t("paper.wallet.backToTrading")}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">지갑 관리</h1>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">{t("paper.wallet.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          가상 vUSDT 잔액 입출금 및 리셋. 진행 중 포지션 마진은 회수되지 않습니다.
+          {t("paper.wallet.subtitle")}
         </p>
       </div>
 
@@ -49,7 +52,7 @@ export default async function WalletPage() {
           <div>
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Wallet className="h-3.5 w-3.5" />
-              현재 잔액
+              {t("paper.wallet.currentBalance")}
             </div>
             <div className="mt-1 flex flex-wrap items-baseline gap-3">
               <span className="font-mono text-4xl font-bold tabular-nums">
@@ -67,8 +70,8 @@ export default async function WalletPage() {
               </span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              시작 자금 {formatCurrency(wallet.startingBalance, "USD")} · 사용 중 마진{" "}
-              {formatCurrency(wallet.usedMargin, "USD")} · 사용 가능{" "}
+              {t("paper.wallet.startingFunds")} {formatCurrency(wallet.startingBalance, "USD")} · {t("paper.wallet.usedMargin")}{" "}
+              {formatCurrency(wallet.usedMargin, "USD")} · {t("paper.wallet.available")}{" "}
               {formatCurrency(wallet.available, "USD")}
             </div>
           </div>
@@ -82,12 +85,12 @@ export default async function WalletPage() {
       <section className="space-y-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           <History className="h-3.5 w-3.5" />
-          지갑 활동 (최근 30건)
+          {t("paper.wallet.activityTitle", { n: 30 })}
         </h2>
         {!logs || logs.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center text-xs text-muted-foreground">
-              활동 없음
+              {t("paper.wallet.noActivity")}
             </CardContent>
           </Card>
         ) : (
@@ -101,7 +104,7 @@ export default async function WalletPage() {
                     (l.action === "settle" && Number(l.amount) > 0);
                   return (
                     <li key={l.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <ActionBadge action={l.action as string} />
+                      <ActionBadge action={l.action as string} t={t} />
                       <div className="flex-1 min-w-0 text-xs">
                         <div className="text-foreground">{l.note ?? l.action}</div>
                         <div className="text-muted-foreground">
@@ -119,7 +122,7 @@ export default async function WalletPage() {
                           {formatCurrency(Number(l.amount), "USD")}
                         </div>
                         <div className="text-[10px] text-muted-foreground">
-                          잔액 {formatCurrency(Number(l.balance_after), "USD")}
+                          {t("paper.wallet.balanceLabel")} {formatCurrency(Number(l.balance_after), "USD")}
                         </div>
                       </div>
                     </li>
@@ -134,12 +137,12 @@ export default async function WalletPage() {
   );
 }
 
-function ActionBadge({ action }: { action: string }) {
+function ActionBadge({ action, t }: { action: string; t: TFunction }) {
   const map: Record<string, { label: string; color: string }> = {
-    deposit: { label: "입금", color: "border-grade-a/40 bg-grade-a/10 text-grade-a" },
-    reset: { label: "리셋", color: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
-    lock: { label: "마진 lock", color: "border-primary/40 bg-primary/10 text-primary" },
-    settle: { label: "정산", color: "border-grade-b/40 bg-grade-b/10 text-grade-b" },
+    deposit: { label: t("paper.wallet.actionDeposit"), color: "border-grade-a/40 bg-grade-a/10 text-grade-a" },
+    reset: { label: t("paper.wallet.actionReset"), color: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
+    lock: { label: t("paper.wallet.actionLock"), color: "border-primary/40 bg-primary/10 text-primary" },
+    settle: { label: t("paper.wallet.actionSettle"), color: "border-grade-b/40 bg-grade-b/10 text-grade-b" },
   };
   const m = map[action] ?? {
     label: action,

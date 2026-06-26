@@ -14,6 +14,8 @@ import { Suspense } from "react";
 import { ClosedTradesTable, type ClosedTradeRow } from "./closed-trades-table";
 import { fetchTicker24h } from "@/lib/analysis/binance";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +53,8 @@ export default async function JournalListPage({
   searchParams: Promise<{ mode?: string }>;
 }) {
   const sp = await searchParams;
+  const t = await getT();
+  const tr = t; // 일부 .map((t) => ...) 콜백에서 t가 거래 변수로 가려져 사용하는 별칭
   const tradeMode: TradeMode = parseMode(sp.mode);
   const supabase = await getSupabaseServer();
 
@@ -228,8 +232,11 @@ export default async function JournalListPage({
   const pendingLimitCount = pendingLimits.length - pendingStopCount;
   const pendingSub =
     pendingLimits.length === 0
-      ? "없음"
-      : [pendingStopCount ? `역지정 ${pendingStopCount}` : null, pendingLimitCount ? `지정 ${pendingLimitCount}` : null]
+      ? t("journal.page.none")
+      : [
+          pendingStopCount ? t("journal.page.pendingStopN", { n: pendingStopCount }) : null,
+          pendingLimitCount ? t("journal.page.pendingLimitN", { n: pendingLimitCount }) : null,
+        ]
           .filter(Boolean)
           .join(" · ");
 
@@ -243,9 +250,9 @@ export default async function JournalListPage({
       {/* 페이지 헤더 — 제목 + 액션 */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">거래 일지</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("journal.page.title")}</h1>
           <p className="text-xs text-muted-foreground">
-            실거래 · 가상거래 · 백테스트를 분리해 기록합니다 — 청산 결과 · AI 복기 포함
+            {t("journal.page.subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -258,12 +265,12 @@ export default async function JournalListPage({
       <div className="flex flex-wrap items-center gap-2">
         {/* 실거래 — Bybit 연동 예정 (비활성) */}
         <div
-          title="Bybit 연동 예정"
+          title={t("journal.page.bybitSoon")}
           className="flex cursor-default items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 opacity-50"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-grade-a" />
-          <span className="text-sm font-medium text-muted-foreground">실거래</span>
-          <span className="text-[10px] text-muted-foreground/60">Bybit 연동 예정</span>
+          <span className="text-sm font-medium text-muted-foreground">{t("journal.page.realTrade")}</span>
+          <span className="text-[10px] text-muted-foreground/60">{t("journal.page.bybitSoon")}</span>
         </div>
         {/* 가상거래 (live) */}
         <Link
@@ -276,7 +283,7 @@ export default async function JournalListPage({
           )}
         >
           <Wallet className={cn("h-3.5 w-3.5", activeTab === "live" && "text-primary")} />
-          가상거래
+          {t("journal.page.virtualTrade")}
           <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-primary">
             {liveCount}
           </span>
@@ -292,7 +299,7 @@ export default async function JournalListPage({
           )}
         >
           <History className={cn("h-3.5 w-3.5", activeTab === "backtest" && "text-amber-300")} />
-          백테스트
+          {t("journal.page.backtest")}
           <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-amber-300/90">
             {backtestCount}
           </span>
@@ -302,33 +309,36 @@ export default async function JournalListPage({
       {/* KPI cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="오늘 실현 R"
+          label={t("journal.page.kpiTodayR")}
           value={todayClosed.length > 0 ? `${todayR >= 0 ? "+" : ""}${todayR.toFixed(2)}R` : "—"}
-          sub={todayClosed.length > 0 ? `${todayClosed.length}건 청산` : "오늘 청산 없음"}
+          sub={todayClosed.length > 0 ? t("journal.page.kpiClosedN", { n: todayClosed.length }) : t("journal.page.kpiNoCloseToday")}
           tone={todayR > 0 ? "good" : todayR < 0 ? "bad" : "neutral"}
         />
         <KpiCard
-          label="진행 중 포지션"
-          value={`${positions.length}건`}
+          label={t("journal.page.kpiOpenPositions")}
+          value={t("journal.page.countUnit", { n: positions.length })}
           sub={
             positions.length > 0
-              ? `미실현 ${totalUnrealizedR >= 0 ? "+" : ""}${totalUnrealizedR.toFixed(2)}R · ${totalUnrealizedUsd >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedUsd, "USD")}`
-              : "없음"
+              ? t("journal.page.kpiUnrealized", {
+                  r: `${totalUnrealizedR >= 0 ? "+" : ""}${totalUnrealizedR.toFixed(2)}`,
+                  usd: `${totalUnrealizedUsd >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedUsd, "USD")}`,
+                })
+              : t("journal.page.none")
           }
           tone={positions.length > 0 ? (totalUnrealizedR > 0 ? "good" : totalUnrealizedR < 0 ? "bad" : "neutral") : "neutral"}
         />
         <KpiCard
-          label="대기 중 주문"
-          value={`${pendingLimits.length}건`}
+          label={t("journal.page.kpiPendingOrders")}
+          value={t("journal.page.countUnit", { n: pendingLimits.length })}
           sub={pendingSub}
         />
         <KpiCard
-          label="총 노출"
+          label={t("journal.page.kpiTotalExposure")}
           value={positions.length > 0 ? `${totalExposurePct.toFixed(1)}%` : "—"}
           sub={
             positions.length > 0
               ? `${formatCurrency(totalNotional, "USD")} / ${formatCurrency(accountSize, "USD")}`
-              : "진행 중 없음"
+              : t("journal.page.kpiNoOpen")
           }
         />
       </div>
@@ -338,21 +348,21 @@ export default async function JournalListPage({
         <section className="space-y-2.5">
           <h2 className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-            대기 중 주문 (지정가 · 역지정가)
+            {t("journal.page.pendingSectionTitle")}
           </h2>
           <div className="overflow-hidden rounded-2xl border border-border bg-popover">
             <table className="w-full text-sm">
               <thead className="bg-card text-xs text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-2 text-left">등록 시각</th>
-                  <th className="px-4 py-2 text-left">코인</th>
-                  <th className="px-4 py-2 text-left">방향</th>
-                  <th className="px-4 py-2 text-left">유형</th>
-                  <th className="px-4 py-2 text-right">트리거가</th>
-                  <th className="px-4 py-2 text-right">손절</th>
-                  <th className="px-4 py-2 text-right">목표</th>
-                  <th className="px-4 py-2 text-right">현재가</th>
-                  <th className="px-4 py-2 text-right">진입까지</th>
+                  <th className="px-4 py-2 text-left">{t("journal.page.colRegisteredAt")}</th>
+                  <th className="px-4 py-2 text-left">{t("journal.page.colCoin")}</th>
+                  <th className="px-4 py-2 text-left">{t("journal.page.colDirection")}</th>
+                  <th className="px-4 py-2 text-left">{t("journal.page.colType")}</th>
+                  <th className="px-4 py-2 text-right">{t("journal.page.colTrigger")}</th>
+                  <th className="px-4 py-2 text-right">{t("journal.page.colStop")}</th>
+                  <th className="px-4 py-2 text-right">{t("journal.page.colTarget")}</th>
+                  <th className="px-4 py-2 text-right">{t("journal.page.colCurrent")}</th>
+                  <th className="px-4 py-2 text-right">{t("journal.page.colToEntry")}</th>
                   <th className="px-4 py-2"></th>
                 </tr>
               </thead>
@@ -374,11 +384,11 @@ export default async function JournalListPage({
                             t.direction === "long" ? "bg-grade-a/15 text-grade-a" : "bg-grade-d/15 text-grade-d",
                           )}
                         >
-                          {t.direction === "long" ? "롱" : "숏"}
+                          {t.direction === "long" ? tr("common.long") : tr("common.short")}
                         </span>
                       </td>
                       <td className="px-4 py-2 text-[11px] text-muted-foreground">
-                        {t.order_type === "stop" ? "역지정가" : "지정가"}
+                        {t.order_type === "stop" ? tr("journal.page.stopOrder") : tr("journal.page.limitOrder")}
                       </td>
                       <td className="px-4 py-2 text-right font-mono">{formatNumber(limit)}</td>
                       <td className="px-4 py-2 text-right font-mono text-grade-d">{formatNumber(Number(t.stop))}</td>
@@ -406,7 +416,7 @@ export default async function JournalListPage({
             </table>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            5분마다 가격 확인 후 자동 체결됩니다. 24시간 안에 도달하지 않으면 만료됩니다.
+            {t("journal.page.pendingFootnote")}
           </p>
         </section>
       ) : null}
@@ -416,11 +426,11 @@ export default async function JournalListPage({
         <section className="space-y-2.5">
           <h2 className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-grade-a" />
-            진행 중 포지션 ({positions.length})
+            {t("journal.page.openSectionTitle", { n: positions.length })}
           </h2>
           <div className="grid gap-3 lg:grid-cols-2">
             {positions.map((p) => (
-              <OpenPositionCard key={p.trade.id} p={p} />
+              <OpenPositionCard key={p.trade.id} p={p} t={t} />
             ))}
           </div>
         </section>
@@ -429,11 +439,11 @@ export default async function JournalListPage({
       {/* Closed trades table */}
       <section className="space-y-2.5">
         <h2 className="text-[13px] font-semibold text-muted-foreground">
-          종료된 거래 ({closed.length})
+          {t("journal.page.closedSectionTitle", { n: closed.length })}
         </h2>
         {closed.length === 0 ? (
           <div className="rounded-2xl border border-border bg-popover p-10 text-center text-sm text-muted-foreground">
-            아직 종료된 거래가 없습니다.
+            {t("journal.page.noClosed")}
           </div>
         ) : (
           <ClosedTradesTable rows={closedRows} />
@@ -491,7 +501,7 @@ type Position = {
   targetProgress: number;
 };
 
-function OpenPositionCard({ p }: { p: Position }) {
+function OpenPositionCard({ p, t: tr }: { p: Position; t: TFunction }) {
   const t = p.trade;
   const isLong = t.direction === "long";
   const inProfit = p.netR > 0;
@@ -528,7 +538,7 @@ function OpenPositionCard({ p }: { p: Position }) {
                     : "border-grade-d/40 bg-grade-d/10 text-grade-d",
                 )}
               >
-                {isLong ? "롱" : "숏"}
+                {isLong ? tr("common.long") : tr("common.short")}
               </Badge>
               <Badge className="border border-border bg-background/40 text-[10px]">{t.timeframe}</Badge>
             </div>
@@ -545,7 +555,7 @@ function OpenPositionCard({ p }: { p: Position }) {
       {/* PnL block */}
       <div className="mt-4">
         {noPrice ? (
-          <div className="text-sm text-muted-foreground">가격 가져오기 실패 — 새로고침으로 재시도</div>
+          <div className="text-sm text-muted-foreground">{tr("journal.page.priceFetchFailed")}</div>
         ) : (
           <>
             <div className="flex flex-wrap items-baseline gap-3">
@@ -583,9 +593,9 @@ function OpenPositionCard({ p }: { p: Position }) {
 
       {/* Price/qty row */}
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-        <PriceCell label="진입 체결" value={`$${formatNumber(p.entryActual)}`} />
+        <PriceCell label={tr("journal.page.cellEntryFill")} value={`$${formatNumber(p.entryActual)}`} />
         <PriceCell
-          label="현재가"
+          label={tr("journal.page.cellCurrent")}
           value={p.last != null ? `$${formatNumber(p.last)}` : "—"}
           tone={
             p.last == null
@@ -596,9 +606,9 @@ function OpenPositionCard({ p }: { p: Position }) {
           }
         />
         <PriceCell
-          label="수량"
+          label={tr("journal.page.cellQty")}
           value={`${formatNumber(p.qty, { maximumFractionDigits: 4 })} ${baseSymbol}`}
-          sub={`노출 ${p.exposurePct.toFixed(1)}%`}
+          sub={tr("journal.page.cellExposure", { pct: p.exposurePct.toFixed(1) })}
         />
       </div>
 
@@ -609,7 +619,7 @@ function OpenPositionCard({ p }: { p: Position }) {
             <div className="flex items-center justify-between text-[10px] uppercase text-muted-foreground">
               <span className="flex items-center gap-1 text-grade-d">
                 <TrendingDown className="h-3 w-3" />
-                손절까지
+                {tr("journal.page.toStop")}
               </span>
               <span className="font-mono tabular-nums">
                 {p.distToStopPct.toFixed(2)}% · ${formatNumber(p.stop)}
@@ -626,7 +636,7 @@ function OpenPositionCard({ p }: { p: Position }) {
             <div className="flex items-center justify-between text-[10px] uppercase text-muted-foreground">
               <span className="flex items-center gap-1 text-grade-a">
                 <TrendingUp className="h-3 w-3" />
-                목표까지
+                {tr("journal.page.toTarget")}
               </span>
               <span className="font-mono tabular-nums">
                 {p.distToTargetPct.toFixed(2)}% · ${formatNumber(p.target)}
@@ -643,7 +653,7 @@ function OpenPositionCard({ p }: { p: Position }) {
       ) : null}
 
       <div className="mt-3 flex items-center justify-end text-[11px] text-primary">
-        상세 보기 <ArrowRight className="ml-1 h-3 w-3" />
+        {tr("journal.page.viewDetail")} <ArrowRight className="ml-1 h-3 w-3" />
       </div>
     </Link>
   );

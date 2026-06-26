@@ -4,9 +4,11 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/lib/i18n/context";
 import { changePasswordAction } from "./_actions";
 
 export function PasswordForm() {
+  const t = useT();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [pending, startTransition] = useTransition();
@@ -18,18 +20,18 @@ export function PasswordForm() {
     e.preventDefault();
     setMsg(null);
     if (pw.length < 8) {
-      setMsg({ tone: "err", text: "비밀번호는 8자 이상이어야 합니다." });
+      setMsg({ tone: "err", text: t("acct.pw.errTooShort") });
       return;
     }
     if (pw !== pw2) {
-      setMsg({ tone: "err", text: "비밀번호가 일치하지 않습니다." });
+      setMsg({ tone: "err", text: t("acct.pw.errMismatch") });
       return;
     }
     startTransition(async () => {
       const res = await changePasswordAction(pw);
       if (res.error) setMsg({ tone: "err", text: res.error });
       else {
-        setMsg({ tone: "ok", text: "비밀번호가 변경됐습니다." });
+        setMsg({ tone: "ok", text: t("acct.pw.changed") });
         setPw("");
         setPw2("");
       }
@@ -43,27 +45,27 @@ export function PasswordForm() {
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="new_pw">새 비밀번호</Label>
+          <Label htmlFor="new_pw">{t("acct.pw.newLabel")}</Label>
           <Input
             id="new_pw"
             type="password"
             autoComplete="new-password"
             value={pw}
             onChange={(e) => setPw(e.target.value)}
-            placeholder="8자 이상"
+            placeholder={t("acct.pw.newPlaceholder")}
             minLength={8}
             maxLength={128}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="new_pw2">새 비밀번호 확인</Label>
+          <Label htmlFor="new_pw2">{t("acct.pw.confirmLabel")}</Label>
           <Input
             id="new_pw2"
             type="password"
             autoComplete="new-password"
             value={pw2}
             onChange={(e) => setPw2(e.target.value)}
-            placeholder="다시 입력"
+            placeholder={t("acct.pw.confirmPlaceholder")}
             minLength={8}
             maxLength={128}
           />
@@ -83,11 +85,11 @@ export function PasswordForm() {
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">
-            현재 비밀번호 입력 없이 즉시 변경됩니다 (로그인된 세션 기준).
+            {t("acct.pw.note")}
           </span>
         )}
         <Button type="submit" disabled={pending || !pw || !pw2}>
-          {pending ? "변경 중…" : "비밀번호 변경"}
+          {pending ? t("acct.pw.changing") : t("acct.pw.changeButton")}
         </Button>
       </div>
     </form>

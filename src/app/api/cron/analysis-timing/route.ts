@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { dispatch } from "@/lib/notify-dispatch";
-import { ANALYSIS_ALERT_OPTIONS } from "@/lib/analysis/sessions";
+import { getAnalysisAlertOptions } from "@/lib/analysis/sessions";
+import { createTranslator, getCatalog } from "@/lib/i18n/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,17 @@ export async function GET(req: NextRequest) {
   if (!secret || auth !== `Bearer ${secret}`)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+  // 백그라운드 cron — 사용자 로케일이 없으므로 알림은 한국어 고정.
+  const t = createTranslator(getCatalog("ko"));
+  const alertOptions = getAnalysisAlertOptions(t);
+
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 3600_000);
   const nowMin = kst.getUTCHours() * 60 + kst.getUTCMinutes();
 
   // 현재 시각과 매칭되는 알림 슬롯 (발화 후 10분 이내)
   const matchedMins = new Set(
-    ANALYSIS_ALERT_OPTIONS.filter((o) => {
+    alertOptions.filter((o) => {
       const diff = (nowMin - o.min + 1440) % 1440;
       return diff <= 9;
     }).map((o) => o.min),
@@ -42,7 +47,7 @@ export async function GET(req: NextRequest) {
   let sent = 0;
   for (const u of users) {
     const times: number[] = (u.analysis_alert_times as number[] | null) ?? [];
-    const hit = times.find((t) => matchedMins.has(t));
+    const hit = times.find((m) => matchedMins.has(m));
     if (hit === undefined) continue;
     if (!u.telegram_chat_id && !u.discord_webhook_url) continue;
 
@@ -56,7 +61,7 @@ export async function GET(req: NextRequest) {
       .gte("sent_at", sinceIso);
     if (count && count > 0) continue;
 
-    const opt = ANALYSIS_ALERT_OPTIONS.find((o) => o.min === hit)!;
+    const opt = alertOptions.find((o) => o.min === hit)!;
     await dispatch(u.user_id, "analysis_timing", {
       title: "🎯 지금이 분석하기 좋은 시간",
       body: `${opt.time} KST · ${opt.label}\n\n관심 코인을 점검해 보세요.`,

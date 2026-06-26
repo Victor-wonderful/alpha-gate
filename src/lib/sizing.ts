@@ -18,6 +18,7 @@ export function sizePosition(args: {
       positionSize: 0,
       valid: false,
       reason: "계좌 크기와 허용 손실률을 0보다 크게 입력하세요.",
+      reasonCode: "account_invalid",
     };
   if (riskPerUnit === 0 || !Number.isFinite(riskPerUnit))
     return {
@@ -27,6 +28,7 @@ export function sizePosition(args: {
       positionSize: 0,
       valid: false,
       reason: "진입가와 손절가가 같습니다.",
+      reasonCode: "entry_equals_stop",
     };
 
   const rawQty = maxLoss / riskPerUnit;

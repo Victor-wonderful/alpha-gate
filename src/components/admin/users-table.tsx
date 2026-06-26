@@ -6,21 +6,23 @@ import { Search, ArrowUp, ArrowDown } from "lucide-react";
 import type { AdminUserRow } from "@/lib/admin/data";
 import { Input } from "@/components/ui/input";
 import { cn, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 type SortKey = "createdAt" | "usdtBalance" | "aiCredits" | "analysesCount" | "tradesCount";
 type StatusFilter = "all" | "active" | "disabled";
 
-const STATUS_TABS: { key: StatusFilter; label: string }[] = [
-  { key: "all", label: "전체" },
-  { key: "active", label: "활성" },
-  { key: "disabled", label: "비활성" },
-];
-
 export function UsersTable({ users }: { users: AdminUserRow[] }) {
+  const t = useT();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const STATUS_TABS: { key: StatusFilter; label: string }[] = [
+    { key: "all", label: t("admin.tabAll") },
+    { key: "active", label: t("admin.statusActive") },
+    { key: "disabled", label: t("admin.statusDisabled") },
+  ];
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -90,7 +92,7 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="이메일 / 표시명 검색"
+            placeholder={t("admin.searchPlaceholder")}
             className="pl-9"
           />
         </div>
@@ -117,30 +119,30 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
         <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <th className="px-3 py-2.5 font-medium">회원</th>
+              <th className="px-3 py-2.5 font-medium">{t("admin.colUser")}</th>
               <th className="px-3 py-2.5 text-right font-medium">
                 <SortHeader label="vUSDT" k="usdtBalance" />
               </th>
               <th className="px-3 py-2.5 text-right font-medium">
-                <SortHeader label="AI 크레딧" k="aiCredits" />
+                <SortHeader label={t("admin.colCredits")} k="aiCredits" />
               </th>
               <th className="px-3 py-2.5 text-right font-medium">
-                <SortHeader label="분석" k="analysesCount" />
+                <SortHeader label={t("admin.colAnalyses")} k="analysesCount" />
               </th>
               <th className="px-3 py-2.5 text-right font-medium">
-                <SortHeader label="거래" k="tradesCount" />
+                <SortHeader label={t("admin.colTrades")} k="tradesCount" />
               </th>
               <th className="px-3 py-2.5 font-medium">
-                <SortHeader label="가입일" k="createdAt" />
+                <SortHeader label={t("admin.colJoined")} k="createdAt" />
               </th>
-              <th className="px-3 py-2.5 font-medium">상태</th>
+              <th className="px-3 py-2.5 font-medium">{t("admin.colStatus")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
-                  일치하는 회원이 없습니다.
+                  {t("admin.noMatchingUsers")}
                 </td>
               </tr>
             ) : (
@@ -168,10 +170,10 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
                   <td className="px-3 py-2.5">
                     {u.disabled ? (
                       <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
-                        비활성
+                        {t("admin.disabled")}
                       </span>
                     ) : (
-                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">활성</span>
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{t("admin.active")}</span>
                     )}
                   </td>
                 </tr>
@@ -182,7 +184,7 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
       </div>
 
       <div className="text-xs text-muted-foreground">
-        {filtered.length} / {users.length}명
+        {t("admin.userCount", { shown: filtered.length, total: users.length })}
       </div>
     </div>
   );

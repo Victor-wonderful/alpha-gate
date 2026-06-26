@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 type Props = {
   symbol: string;
@@ -27,6 +28,7 @@ export function UnrealizedPnl({
   feesPct,
   currency = "USD",
 }: Props) {
+  const t = useT();
   const [price, setPrice] = useState<number | null>(null);
   const [stale, setStale] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export function UnrealizedPnl({
   if (price == null) {
     return (
       <div className="rounded-lg border border-border bg-card/50 px-4 py-3 text-xs text-muted-foreground">
-        현재가 가져오는 중...
+        {t("journal.cmp.loadingPrice")}
         {error ? <span className="ml-2 text-grade-d">({error})</span> : null}
       </div>
     );
@@ -102,8 +104,8 @@ export function UnrealizedPnl({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             <span className={cn("inline-block h-1.5 w-1.5 rounded-full", stale ? "bg-grade-c" : "bg-grade-a animate-pulse")} />
-            진행 중 · 미실현 손익
-            {stale ? <span className="text-grade-c">(연결 지연)</span> : null}
+            {t("journal.cmp.pnlLabel")}
+            {stale ? <span className="text-grade-c">{t("journal.cmp.connDelay")}</span> : null}
           </div>
           <div className="mt-1.5 flex flex-wrap items-baseline gap-3">
             <span className={cn("font-mono text-2xl font-bold tabular-nums", inProfit ? "text-grade-a" : "text-grade-d")}>
@@ -118,7 +120,7 @@ export function UnrealizedPnl({
           </div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] uppercase text-muted-foreground">현재가</div>
+          <div className="text-[10px] uppercase text-muted-foreground">{t("journal.cmp.currentPrice")}</div>
           <div className="font-mono text-sm font-semibold tabular-nums">${formatNumber(price)}</div>
         </div>
       </div>
@@ -128,7 +130,7 @@ export function UnrealizedPnl({
           <div className="flex items-center justify-between text-[10px] uppercase text-muted-foreground">
             <span className="flex items-center gap-1 text-grade-d">
               <TrendingDown className="h-3 w-3" />
-              손절까지
+              {t("journal.cmp.toStop")}
             </span>
             <span className="font-mono tabular-nums">{distToStopPct.toFixed(2)}%</span>
           </div>
@@ -143,7 +145,7 @@ export function UnrealizedPnl({
           <div className="flex items-center justify-between text-[10px] uppercase text-muted-foreground">
             <span className="flex items-center gap-1 text-grade-a">
               <TrendingUp className="h-3 w-3" />
-              목표까지
+              {t("journal.cmp.toTarget")}
             </span>
             <span className="font-mono tabular-nums">{distToTargetPct.toFixed(2)}%</span>
           </div>
@@ -157,7 +159,7 @@ export function UnrealizedPnl({
       </div>
 
       <div className="mt-2 text-[10px] text-muted-foreground">
-        새로고침으로 갱신 · 수수료 {feesPct.toFixed(2)}% 차감 반영 · Binance 마크 가격
+        {t("journal.cmp.pnlFootnote", { fees: feesPct.toFixed(2) })}
       </div>
     </div>
   );

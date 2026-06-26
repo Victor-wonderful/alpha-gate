@@ -19,6 +19,7 @@ import {
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { Logo } from "@/components/app/logo";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 export default function LoginPage() {
   return (
@@ -31,6 +32,7 @@ export default function LoginPage() {
 type Mode = "signin" | "signup";
 
 function LoginInner() {
+  const t = useT();
   const supabase = getSupabaseBrowser();
   const router = useRouter();
   const params = useSearchParams();
@@ -53,15 +55,15 @@ function LoginInner() {
 
     if (mode === "signup") {
       if (password !== passwordConfirm) {
-        toast.error("비밀번호 확인이 일치하지 않습니다.");
+        toast.error(t("login.passwordMismatch"));
         return;
       }
       if (strength.score < 2) {
-        toast.error("비밀번호를 더 강하게 설정해주세요. (8자 이상 + 영문/숫자 혼합)");
+        toast.error(t("login.passwordTooWeak"));
         return;
       }
       if (!agreeTerms) {
-        toast.error("이용약관과 개인정보처리방침에 동의해주세요.");
+        toast.error(t("login.agreeRequired"));
         return;
       }
     }
@@ -80,11 +82,11 @@ function LoginInner() {
       // 이메일 확인이 꺼져 있으면 가입 즉시 세션이 생긴다 → 바로 앱으로.
       // 이메일 확인이 켜져 있으면 session 이 없다 → 확인 메일 안내.
       if (data.session) {
-        toast.success("가입이 완료됐습니다. 환영합니다!");
+        toast.success(t("login.signupDoneWelcome"));
         router.replace(next);
         router.refresh();
       } else {
-        toast.success("가입 확인 이메일을 보냈습니다. 메일함을 확인해주세요.");
+        toast.success(t("login.signupConfirmEmail"));
       }
     } else {
       router.replace(next);
@@ -131,28 +133,28 @@ function LoginInner() {
           <div className="max-w-md">
             <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
               <span className="inline-block h-px w-8 bg-cyan-400" />
-              {mode === "signup" ? "회원가입" : "로그인"}
+              {mode === "signup" ? t("login.tagSignup") : t("login.tagSignin")}
             </div>
             <h1 className="mt-5 text-4xl font-bold leading-[1.15] xl:text-5xl">
-              매매 전 의사결정을{" "}
+              {t("login.heroTitlePre")}{" "}
               <span className="bg-gradient-to-r from-sky-300 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                AI가 검증
+                {t("login.heroTitleHighlight")}
               </span>
-              합니다
+              {t("login.heroTitlePost")}
             </h1>
             <p className="mt-6 text-base leading-relaxed text-white/55">
-              한 번의 D급 거래가 한 달 수익을 지웁니다. Alpha Gate가 진입 전 5분에 점검합니다.
+              {t("login.heroDesc")}
             </p>
 
             <ul className="mt-10 space-y-4">
-              <Bullet icon={Brain} label="실시간 12+ 데이터로 AI 시나리오 자동 생성" />
-              <Bullet icon={ClipboardCheck} label="A·B·C·D 등급 + 추격/미확정/노출 자동 감지" />
-              <Bullet icon={ShieldCheck} label="진입 시 평가 영구 저장 + AI 한국어 복기 코멘트" />
+              <Bullet icon={Brain} label={t("login.bulletAi")} />
+              <Bullet icon={ClipboardCheck} label={t("login.bulletGrade")} />
+              <Bullet icon={ShieldCheck} label={t("login.bulletPersist")} />
             </ul>
           </div>
 
           <div className="text-[11px] text-white/30">
-            © {new Date().getFullYear()} Alpha Gate · 본 서비스는 투자 자문이 아닙니다
+            © {new Date().getFullYear()} Alpha Gate · {t("login.footerDisclaimer")}
           </div>
         </aside>
 
@@ -170,10 +172,10 @@ function LoginInner() {
             {/* Mode tabs */}
             <div className="flex rounded-full border border-cyan-500/20 bg-white/[0.03] p-1 backdrop-blur">
               <TabButton active={mode === "signin"} onClick={() => setMode("signin")}>
-                로그인
+                {t("login.tabSignin")}
               </TabButton>
               <TabButton active={mode === "signup"} onClick={() => setMode("signup")}>
-                회원가입
+                {t("login.tabSignup")}
               </TabButton>
             </div>
 
@@ -185,19 +187,19 @@ function LoginInner() {
 
               <div className="relative">
                 <h2 className="text-2xl font-bold tracking-tight">
-                  {mode === "signup" ? "계정 만들기" : "다시 오신 걸 환영합니다"}
+                  {mode === "signup" ? t("login.headingSignup") : t("login.headingSignin")}
                 </h2>
                 <p className="mt-2 text-sm text-white/55">
                   {mode === "signup"
-                    ? "이메일과 비밀번호만으로 30초면 가입됩니다."
-                    : "이메일과 비밀번호를 입력해 계속하세요."}
+                    ? t("login.subSignup")
+                    : t("login.subSignin")}
                 </p>
 
                 <form className="mt-8 space-y-5" onSubmit={submit}>
                   {/* Email */}
                   <FormField
                     id="email"
-                    label="이메일"
+                    label={t("login.labelEmail")}
                     icon={Mail}
                     type="email"
                     autoComplete="email"
@@ -210,13 +212,13 @@ function LoginInner() {
                   {/* Password */}
                   <FormField
                     id="password"
-                    label={mode === "signup" ? "비밀번호 만들기" : "비밀번호"}
+                    label={mode === "signup" ? t("login.labelPasswordCreate") : t("login.labelPassword")}
                     icon={Lock}
                     type={showPassword ? "text" : "password"}
                     autoComplete={mode === "signin" ? "current-password" : "new-password"}
                     value={password}
                     onChange={setPassword}
-                    placeholder={mode === "signup" ? "8자 이상 + 영문/숫자 혼합" : "비밀번호"}
+                    placeholder={mode === "signup" ? t("login.phPasswordCreate") : t("login.phPassword")}
                     required
                     minLength={mode === "signup" ? 8 : 6}
                     suffix={
@@ -224,7 +226,7 @@ function LoginInner() {
                         type="button"
                         onClick={() => setShowPassword((v) => !v)}
                         className="text-white/40 transition-colors hover:text-white/70"
-                        aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                        aria-label={showPassword ? t("login.ariaHidePassword") : t("login.ariaShowPassword")}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -233,24 +235,24 @@ function LoginInner() {
 
                   {/* Password strength (signup only) */}
                   {mode === "signup" && password.length > 0 && (
-                    <PasswordStrength score={strength.score} label={strength.label} />
+                    <PasswordStrength score={strength.score} labelKey={strength.labelKey} />
                   )}
 
                   {/* Confirm password (signup) */}
                   {mode === "signup" && (
                     <FormField
                       id="password-confirm"
-                      label="비밀번호 확인"
+                      label={t("login.labelPasswordConfirm")}
                       icon={Lock}
                       type={showPassword ? "text" : "password"}
                       autoComplete="new-password"
                       value={passwordConfirm}
                       onChange={setPasswordConfirm}
-                      placeholder="위와 동일하게 입력"
+                      placeholder={t("login.phPasswordConfirm")}
                       required
                       hint={
                         passwordConfirm.length > 0 && passwordConfirm !== password
-                          ? "비밀번호가 일치하지 않습니다"
+                          ? t("login.hintPasswordMismatch")
                           : undefined
                       }
                       hintTone="bad"
@@ -262,14 +264,14 @@ function LoginInner() {
                     <div className="flex items-center justify-between">
                       <label className="flex cursor-pointer items-center gap-2 text-xs text-white/55 hover:text-white/80">
                         <input type="checkbox" className="h-3.5 w-3.5 accent-cyan-400" />
-                        로그인 유지
+                        {t("login.keepSignedIn")}
                       </label>
                       <button
                         type="button"
                         className="text-xs text-cyan-300 transition-colors hover:text-cyan-200"
-                        onClick={() => toast.info("비밀번호 재설정은 곧 지원될 예정입니다.")}
+                        onClick={() => toast.info(t("login.forgotPasswordToast"))}
                       >
-                        비밀번호 찾기
+                        {t("login.forgotPassword")}
                       </button>
                     </div>
                   )}
@@ -284,23 +286,24 @@ function LoginInner() {
                         required
                       >
                         <span className="text-white/70">
+                          {t("login.agreePrefix")}
                           <Link href="/terms" target="_blank" className="text-cyan-300 hover:underline">
-                            이용약관
+                            {t("login.linkTerms")}
                           </Link>{" "}
                           ·{" "}
                           <Link href="/privacy" target="_blank" className="text-cyan-300 hover:underline">
-                            개인정보처리방침
+                            {t("login.linkPrivacy")}
                           </Link>{" "}
                           ·{" "}
                           <Link href="/disclaimer" target="_blank" className="text-cyan-300 hover:underline">
-                            투자 면책 고지
+                            {t("login.linkDisclaimer")}
                           </Link>
-                          에 동의합니다 <span className="text-rose-300">*</span>
+                          {t("login.agreeSuffix")} <span className="text-rose-300">*</span>
                         </span>
                       </Checkbox>
                       <Checkbox id="marketing" checked={marketing} onChange={setMarketing}>
                         <span className="text-white/55">
-                          기능 업데이트 및 시장 분석 이메일 받기 (선택)
+                          {t("login.marketingOptIn")}
                         </span>
                       </Checkbox>
                     </div>
@@ -313,10 +316,10 @@ function LoginInner() {
                     className="group relative mt-6 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-6 py-3.5 text-sm font-semibold text-[#02060f] shadow-[0_0_28px_rgba(56,189,248,0.45)] transition-all hover:gap-3 hover:shadow-[0_0_42px_rgba(56,189,248,0.65)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {loading ? (
-                      "처리 중..."
+                      t("login.processing")
                     ) : (
                       <>
-                        {mode === "signin" ? "로그인" : "무료로 가입"}
+                        {mode === "signin" ? t("login.submitSignin") : t("login.submitSignup")}
                         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                       </>
                     )}
@@ -324,13 +327,13 @@ function LoginInner() {
 
                   {/* Mode swap link */}
                   <p className="pt-2 text-center text-sm text-white/55">
-                    {mode === "signin" ? "계정이 아직 없으신가요? " : "이미 계정이 있나요? "}
+                    {mode === "signin" ? t("login.swapToSignup") : t("login.swapToSignin")}
                     <button
                       type="button"
                       onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
                       className="font-semibold text-cyan-300 transition-colors hover:text-cyan-200"
                     >
-                      {mode === "signin" ? "회원가입" : "로그인"}
+                      {mode === "signin" ? t("login.swapLinkSignup") : t("login.swapLinkSignin")}
                     </button>
                   </p>
                 </form>
@@ -341,13 +344,13 @@ function LoginInner() {
             {mode === "signup" && (
               <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-white/40">
                 <span className="inline-flex items-center gap-1.5">
-                  <Sparkles className="h-3 w-3 text-cyan-400" /> 신용카드 불필요
+                  <Sparkles className="h-3 w-3 text-cyan-400" /> {t("login.badgeNoCard")}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Sparkles className="h-3 w-3 text-cyan-400" /> Free 영구 무료
+                  <Sparkles className="h-3 w-3 text-cyan-400" /> {t("login.badgeFree")}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Sparkles className="h-3 w-3 text-cyan-400" /> 7일 환불 보장
+                  <Sparkles className="h-3 w-3 text-cyan-400" /> {t("login.badgeRefund")}
                 </span>
               </div>
             )}
@@ -472,7 +475,8 @@ function FormField({
   );
 }
 
-function PasswordStrength({ score, label }: { score: number; label: string }) {
+function PasswordStrength({ score, labelKey }: { score: number; labelKey: string }) {
+  const t = useT();
   return (
     <div>
       <div className="flex gap-1.5">
@@ -493,14 +497,14 @@ function PasswordStrength({ score, label }: { score: number; label: string }) {
         ))}
       </div>
       <p className="mt-1.5 text-[11px] text-white/45">
-        강도 ·{" "}
+        {t("login.strengthLabel")} ·{" "}
         <span
           className={cn(
             "font-semibold",
             score >= 3 ? "text-cyan-300" : score >= 2 ? "text-amber-300" : "text-rose-300",
           )}
         >
-          {label}
+          {labelKey === "—" ? "—" : t(labelKey)}
         </span>
       </p>
     </div>
@@ -548,14 +552,20 @@ function Checkbox({
   );
 }
 
-function passwordStrength(pw: string): { score: 0 | 1 | 2 | 3 | 4; label: string } {
-  if (pw.length === 0) return { score: 0, label: "—" };
+function passwordStrength(pw: string): { score: 0 | 1 | 2 | 3 | 4; labelKey: string } {
+  if (pw.length === 0) return { score: 0, labelKey: "—" };
   let s = 0;
   if (pw.length >= 8) s++;
   if (pw.length >= 12) s++;
   if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++;
   if (/\d/.test(pw) && /[^\w]/.test(pw)) s++;
   if (s > 4) s = 4;
-  const labels = ["너무 짧음", "약함", "보통", "강함", "매우 강함"];
-  return { score: s as 0 | 1 | 2 | 3 | 4, label: labels[s] };
+  const labelKeys = [
+    "login.strengthVeryShort",
+    "login.strengthWeak",
+    "login.strengthNormal",
+    "login.strengthStrong",
+    "login.strengthVeryStrong",
+  ];
+  return { score: s as 0 | 1 | 2 | 3 | 4, labelKey: labelKeys[s] };
 }

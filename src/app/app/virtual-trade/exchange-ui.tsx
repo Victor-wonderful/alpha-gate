@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 import {
   cancelLimitOrderAction,
   closeVirtualPositionAction,
@@ -100,6 +101,7 @@ export function ExchangeUI({
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAMES)[number]>("1h");
   const [tab, setTab] = useState<"positions" | "orders" | "history">("positions");
   const [marketType, setMarketType] = useState<"futures" | "spot">("futures");
+  const t = useT();
 
   return (
     <div className="space-y-3">
@@ -116,9 +118,9 @@ export function ExchangeUI({
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
           )}
-          title="USDT-M 무기한 선물 (롱·숏·레버리지)"
+          title={t("paper.exchange.futuresTabTitle")}
         >
-          🌐 선물
+          🌐 {t("paper.exchange.futuresTab")}
         </button>
         <button
           type="button"
@@ -129,9 +131,9 @@ export function ExchangeUI({
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
           )}
-          title="현물 (매수만 · 1x · 청산 없음 · 펀딩 없음 · 수수료 0.2%)"
+          title={t("paper.exchange.spotTabTitle")}
         >
-          💎 현물
+          💎 {t("paper.exchange.spotTab")}
         </button>
       </div>
 
@@ -170,6 +172,7 @@ function ExchangeHeader({
   wallet: Wallet;
   positions: Position[];
 }) {
+  const t = useT();
   const [ticker, setTicker] = useState<{ last: number; change: number; high: number; low: number; volume: number } | null>(null);
 
   useEffect(() => {
@@ -241,17 +244,17 @@ function ExchangeHeader({
 
           {ticker ? (
             <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground">
-              <HeaderStat label="24h 고가" value={`$${formatNumber(ticker.high)}`} />
-              <HeaderStat label="24h 저가" value={`$${formatNumber(ticker.low)}`} />
-              <HeaderStat label="24h 거래량" value={`$${formatNumber(ticker.volume / 1_000_000, { maximumFractionDigits: 1 })}M`} />
+              <HeaderStat label={t("paper.exchange.high24h")} value={`$${formatNumber(ticker.high)}`} />
+              <HeaderStat label={t("paper.exchange.low24h")} value={`$${formatNumber(ticker.low)}`} />
+              <HeaderStat label={t("paper.exchange.volume24h")} value={`$${formatNumber(ticker.volume / 1_000_000, { maximumFractionDigits: 1 })}M`} />
             </div>
           ) : null}
 
           <div className="ml-auto flex flex-wrap gap-3 text-[11px]">
-            <HeaderStat label="자산 (Equity)" value={formatCurrency(equity, "USD")} accent="primary" />
-            <HeaderStat label="잔액" value={formatCurrency(wallet.usdtBalance, "USD")} />
-            <HeaderStat label="사용 가능" value={formatCurrency(wallet.available, "USD")} />
-            <HeaderStat label="마진" value={formatCurrency(wallet.usedMargin, "USD")} />
+            <HeaderStat label={t("paper.exchange.equity")} value={formatCurrency(equity, "USD")} accent="primary" />
+            <HeaderStat label={t("paper.exchange.balance")} value={formatCurrency(wallet.usdtBalance, "USD")} />
+            <HeaderStat label={t("paper.exchange.available")} value={formatCurrency(wallet.available, "USD")} />
+            <HeaderStat label={t("paper.exchange.margin")} value={formatCurrency(wallet.usedMargin, "USD")} />
           </div>
         </div>
       </CardContent>
@@ -322,6 +325,7 @@ function ChartArea({
   timeframe: (typeof TIMEFRAMES)[number];
   onTimeframeChange: (tf: (typeof TIMEFRAMES)[number]) => void;
 }) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [loading, setLoading] = useState(true);
@@ -555,23 +559,23 @@ function ChartArea({
               })}
             </span>
             <span className="text-muted-foreground/40">|</span>
-            <HeaderCell label="시" value={header.open} />
-            <HeaderCell label="고" value={header.high} tone="up" />
-            <HeaderCell label="저" value={header.low} tone="down" />
-            <HeaderCell label="종" value={header.close} />
+            <HeaderCell label={t("paper.exchange.ohlcOpen")} value={header.open} />
+            <HeaderCell label={t("paper.exchange.ohlcHigh")} value={header.high} tone="up" />
+            <HeaderCell label={t("paper.exchange.ohlcLow")} value={header.low} tone="down" />
+            <HeaderCell label={t("paper.exchange.ohlcClose")} value={header.close} />
             <HeaderCell
-              label="변동"
+              label={t("paper.exchange.ohlcChange")}
               value={`${header.changePct >= 0 ? "+" : ""}${header.changePct.toFixed(2)}%`}
               tone={header.changePct >= 0 ? "up" : "down"}
               raw
             />
             <HeaderCell
-              label="범위"
+              label={t("paper.exchange.ohlcRange")}
               value={`${header.rangePct.toFixed(2)}%`}
               raw
             />
             <HeaderCell
-              label="거래량"
+              label={t("paper.exchange.ohlcVolume")}
               value={formatNumber(header.volume, { maximumFractionDigits: 0 })}
               raw
             />
@@ -601,7 +605,7 @@ function ChartArea({
         <div ref={containerRef} className="relative min-h-0 w-full flex-1">
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-              차트 로딩 중...
+              {t("paper.exchange.chartLoading")}
             </div>
           ) : null}
         </div>
@@ -643,6 +647,7 @@ type DepthView = "both" | "bid" | "ask";
 const GROUP_OPTIONS = [0.01, 0.1, 1, 10] as const;
 
 function OrderbookPanel({ symbol }: { symbol: string }) {
+  const t = useT();
   const [tab, setTab] = useState<"book" | "trades">("book");
   const [depthView, setDepthView] = useState<DepthView>("both");
   const [groupSize, setGroupSize] = useState<number>(0.1);
@@ -660,7 +665,7 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
               tab === "book" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            호가창
+            {t("paper.exchange.orderbookTab")}
           </button>
           <div className="mx-3 h-3 w-px bg-border/60" />
           <button
@@ -671,7 +676,7 @@ function OrderbookPanel({ symbol }: { symbol: string }) {
               tab === "trades" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            최근 체결
+            {t("paper.exchange.recentTradesTab")}
           </button>
 
           {tab === "book" ? (
@@ -717,6 +722,7 @@ function DepthIcon({
   onClick: () => void;
   kind: "both" | "bid" | "ask";
 }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -725,7 +731,7 @@ function DepthIcon({
         "flex h-5 w-6 items-center justify-center rounded transition-colors",
         active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
-      title={kind === "both" ? "양쪽" : kind === "bid" ? "매수만" : "매도만"}
+      title={kind === "both" ? t("paper.exchange.depthBoth") : kind === "bid" ? t("paper.exchange.depthBidOnly") : t("paper.exchange.depthAskOnly")}
     >
       <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
         {(kind === "both" || kind === "ask") && (
@@ -754,6 +760,7 @@ function OrderbookContent({
   depthView: DepthView;
   groupSize: number;
 }) {
+  const t = useT();
   const [book, setBook] = useState<{
     bids: [number, number][];
     asks: [number, number][];
@@ -870,16 +877,16 @@ function OrderbookContent({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Column header */}
       <div className="shrink-0 grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
-        <span>가격 (vUSDT)</span>
-        <span className="text-right">수량</span>
-        <span className="text-right">누적</span>
+        <span>{t("paper.exchange.colPriceVusdt")}</span>
+        <span className="text-right">{t("paper.exchange.colQty")}</span>
+        <span className="text-right">{t("paper.exchange.colCumulative")}</span>
       </div>
 
       {/* Asks */}
       {showAsks ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
           {askRows.length === 0 ? (
-            <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
+            <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">{t("paper.exchange.loadingShort")}</div>
           ) : (
             [...askRows].reverse().map((a, i) => {
               const cumIdx = askRows.length - 1 - i;
@@ -916,7 +923,7 @@ function OrderbookContent({
             {book.last != null ? formatNumber(book.last) : "—"}
           </span>
           <span className="text-right">
-            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">스프레드</div>
+            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{t("paper.exchange.spread")}</div>
             <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
               {spread > 0 ? formatNumber(spread, { maximumFractionDigits: 2 }) : "—"}
               {spreadPct > 0 ? <span className="ml-1">({spreadPct.toFixed(3)}%)</span> : null}
@@ -929,7 +936,7 @@ function OrderbookContent({
       {showBids ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
           {bidRows.length === 0 ? (
-            <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
+            <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">{t("paper.exchange.loadingShort")}</div>
           ) : (
             bidRows.map((b, i) => (
               <OrderbookRow key={`b${i}`} price={b[0]} qty={b[1]} cum={bidCum[i]} maxCum={maxCum} side="bid" />
@@ -997,6 +1004,7 @@ function OrderbookRow({
 }
 
 function MarketTradesContent({ symbol }: { symbol: string }) {
+  const t = useT();
   const [trades, setTrades] = useState<Array<{ time: number; price: number; qty: number; isBuy: boolean }>>([]);
 
   useEffect(() => {
@@ -1041,13 +1049,13 @@ function MarketTradesContent({ symbol }: { symbol: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 grid grid-cols-[1fr_1fr_1fr] border-b border-border/30 px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
-        <span>가격</span>
-        <span className="text-right">수량</span>
-        <span className="text-right">시간</span>
+        <span>{t("paper.exchange.colPrice")}</span>
+        <span className="text-right">{t("paper.exchange.colQty")}</span>
+        <span className="text-right">{t("paper.exchange.colTime")}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
         {trades.length === 0 ? (
-          <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">로딩...</div>
+          <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">{t("paper.exchange.loadingShort")}</div>
         ) : (
           trades.map((t, i) => {
             const d = new Date(t.time);
@@ -1087,6 +1095,7 @@ function OrderPanel({
   wallet: Wallet;
   marketType: "futures" | "spot";
 }) {
+  const t = useT();
   const isSpot = marketType === "spot";
   const [direction, setDirection] = useState<"long" | "short">("long");
   const [orderType, setOrderType] = useState<"limit" | "market" | "stop" | "tpsl">("market");
@@ -1149,29 +1158,29 @@ function OrderPanel({
 
   function submit() {
     if (qtyNum <= 0) {
-      toast.error("수량을 입력하세요.");
+      toast.error(t("paper.exchange.errEnterQty"));
       return;
     }
     if (orderType === "limit" && (!price || Number(price) <= 0)) {
-      toast.error("지정가를 입력하세요.");
+      toast.error(t("paper.exchange.errEnterLimitPrice"));
       return;
     }
     if (orderType === "stop") {
       if (!price || Number(price) <= 0) {
-        toast.error("트리거가를 입력하세요.");
+        toast.error(t("paper.exchange.errEnterTriggerPrice"));
         return;
       }
       if (lastPrice && direction === "long" && Number(price) <= lastPrice) {
-        toast.error("역지정가 롱은 트리거가가 현재가보다 높아야 합니다.");
+        toast.error(t("paper.exchange.errStopLongTrigger"));
         return;
       }
       if (lastPrice && direction === "short" && Number(price) >= lastPrice) {
-        toast.error("역지정가 숏은 트리거가가 현재가보다 낮아야 합니다.");
+        toast.error(t("paper.exchange.errStopShortTrigger"));
         return;
       }
     }
     if (orderType === "market" && margin > wallet.available) {
-      toast.error(`가상 잔액 부족 — 필요 $${margin.toFixed(2)}, 가능 $${wallet.available.toFixed(2)}`);
+      toast.error(t("paper.exchange.errInsufficientBalance", { need: margin.toFixed(2), avail: wallet.available.toFixed(2) }));
       return;
     }
     startTransition(async () => {
@@ -1187,19 +1196,22 @@ function OrderPanel({
         marketType,
       });
       if (!r.ok) {
-        toast.error(r.error ?? "주문 실패");
+        toast.error(r.error ?? t("paper.exchange.errOrderFailed"));
         return;
       }
+      const dir = direction === "long" ? t("common.long") : t("common.short");
       if (r.orderType === "limit") {
         toast.success(
-          `지정가 주문 등록 · ${direction === "long" ? "롱" : "숏"} ${symbol} @ $${formatNumber(r.limitPrice ?? 0)} · 24시간 내 미체결 시 만료`,
+          t("paper.exchange.toastLimitPlaced", { dir, sym: symbol, price: formatNumber(r.limitPrice ?? 0) }),
         );
       } else if (r.orderType === "stop") {
         toast.success(
-          `역지정가 주문 등록 · ${direction === "long" ? "롱" : "숏"} ${symbol} @ 트리거 $${formatNumber(r.limitPrice ?? 0)} · 도달 시 추격 진입`,
+          t("paper.exchange.toastStopPlaced", { dir, sym: symbol, price: formatNumber(r.limitPrice ?? 0) }),
         );
       } else {
-        toast.success(`${direction === "long" ? "롱" : "숏"} 진입 완료 · 체결가 $${formatNumber(r.fillPrice ?? 0)} · 마진 $${formatNumber(r.margin ?? 0)}`);
+        toast.success(
+          t("paper.exchange.toastEntryFilled", { dir, fill: formatNumber(r.fillPrice ?? 0), margin: formatNumber(r.margin ?? 0) }),
+        );
       }
       setQty("");
       setStop("");
@@ -1233,12 +1245,14 @@ function OrderPanel({
 
   const buttonTone = direction === "long" ? "long" : "short";
   const buttonLabel = pending
-    ? "주문 처리 중..."
+    ? t("paper.exchange.btnProcessing")
     : _margin > wallet.available && _margin > 0
-      ? "잔액 부족"
+      ? t("paper.exchange.btnInsufficientBalance")
       : _qtyNum <= 0
-        ? "수량 입력"
-        : `${baseSym} ${direction === "long" ? "매수" : "매도"}`;
+        ? t("paper.exchange.btnEnterQty")
+        : direction === "long"
+          ? t("paper.exchange.btnBuySym", { sym: baseSym })
+          : t("paper.exchange.btnSellSym", { sym: baseSym });
 
   return (
     <Card className="h-full overflow-hidden">
@@ -1251,7 +1265,7 @@ function OrderPanel({
             className="w-full rounded-md bg-grade-a py-2.5 text-sm font-bold text-white"
             disabled
           >
-            매수 (현물)
+            {t("paper.exchange.spotBuyButton")}
           </button>
         ) : (
           <div className="grid grid-cols-2 overflow-hidden rounded-md">
@@ -1265,7 +1279,7 @@ function OrderPanel({
                   : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
               )}
             >
-              매수
+              {t("paper.exchange.buy")}
             </button>
             <button
               type="button"
@@ -1277,37 +1291,37 @@ function OrderPanel({
                   : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
               )}
             >
-              매도
+              {t("paper.exchange.sell")}
             </button>
           </div>
         )}
 
         {/* 주문 유형 sub-tab */}
         <div className="flex items-center gap-4 border-b border-border/40 pb-1.5">
-          {(["limit", "market", "stop", "tpsl"] as const).map((t) => (
+          {(["limit", "market", "stop", "tpsl"] as const).map((ot) => (
             <button
-              key={t}
+              key={ot}
               type="button"
               onClick={() => {
-                if (t === "tpsl") {
+                if (ot === "tpsl") {
                   setTpslEnabled(!tpslEnabled);
                   return;
                 }
-                setOrderType(t);
+                setOrderType(ot);
               }}
               className={cn(
                 "relative pb-1.5 text-xs font-medium transition-colors",
-                t === "tpsl"
+                ot === "tpsl"
                   ? tpslEnabled
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground"
-                  : orderType === t
+                  : orderType === ot
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {t === "limit" ? "지정가" : t === "market" ? "시장가" : t === "stop" ? "역지정가" : "TP/SL"}
-              {(t === "tpsl" ? tpslEnabled : orderType === t) ? (
+              {ot === "limit" ? t("paper.exchange.orderTypeLimit") : ot === "market" ? t("paper.exchange.orderTypeMarket") : ot === "stop" ? t("paper.exchange.orderTypeStop") : "TP/SL"}
+              {(ot === "tpsl" ? tpslEnabled : orderType === ot) ? (
                 <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-primary" />
               ) : null}
             </button>
@@ -1316,7 +1330,7 @@ function OrderPanel({
 
         {/* 잔액 표시 */}
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">사용 가능</span>
+          <span className="text-muted-foreground">{t("paper.exchange.available")}</span>
           <span className="font-mono font-semibold tabular-nums">
             {formatNumber(wallet.available, { maximumFractionDigits: 2 })} vUSDT
           </span>
@@ -1326,7 +1340,7 @@ function OrderPanel({
         {orderType === "limit" ? (
           <div>
             <div className="mb-1 flex items-center justify-between text-[10px]">
-              <span className="text-muted-foreground">가격 (vUSDT)</span>
+              <span className="text-muted-foreground">{t("paper.exchange.colPriceVusdt")}</span>
             </div>
             <Input
               type="number"
@@ -1340,9 +1354,9 @@ function OrderPanel({
         ) : orderType === "stop" ? (
           <div>
             <div className="mb-1 flex items-center justify-between text-[10px]">
-              <span className="text-muted-foreground">트리거가 (vUSDT)</span>
+              <span className="text-muted-foreground">{t("paper.exchange.triggerPriceVusdt")}</span>
               <span className="text-muted-foreground/60">
-                {direction === "long" ? "현재가 위로 돌파 시 진입" : "현재가 아래로 이탈 시 진입"}
+                {direction === "long" ? t("paper.exchange.triggerHintLong") : t("paper.exchange.triggerHintShort")}
               </span>
             </div>
             <Input
@@ -1354,15 +1368,14 @@ function OrderPanel({
               className="font-mono"
             />
             <p className="mt-1 text-[9px] text-muted-foreground/70">
-              역지정가 {direction === "long" ? "롱" : "숏"} — 트리거가는 현재가보다{" "}
-              {direction === "long" ? "높아야" : "낮아야"} 합니다 (돌파 추격).
+              {direction === "long" ? t("paper.exchange.stopHintLong") : t("paper.exchange.stopHintShort")}
             </p>
           </div>
         ) : (
           <div>
             <div className="mb-1 flex items-center justify-between text-[10px]">
-              <span className="text-muted-foreground">가격</span>
-              <span className="text-muted-foreground/60">시장가 — 현재가 즉시 체결</span>
+              <span className="text-muted-foreground">{t("paper.exchange.colPrice")}</span>
+              <span className="text-muted-foreground/60">{t("paper.exchange.marketHint")}</span>
             </div>
             <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-sm tabular-nums">
               {lastPrice ? `${formatNumber(lastPrice)} vUSDT` : "—"}
@@ -1373,7 +1386,7 @@ function OrderPanel({
         {/* Amount */}
         <div>
           <div className="mb-1 flex items-center justify-between text-[10px]">
-            <span className="text-muted-foreground">수량 ({baseSym})</span>
+            <span className="text-muted-foreground">{t("paper.exchange.qtyWithSym", { sym: baseSym })}</span>
           </div>
           <Input
             type="number"
@@ -1415,7 +1428,7 @@ function OrderPanel({
         {/* Total (vUSDT) */}
         <div>
           <div className="mb-1 flex items-center justify-between text-[10px]">
-            <span className="text-muted-foreground">총액 (vUSDT)</span>
+            <span className="text-muted-foreground">{t("paper.exchange.totalVusdt")}</span>
           </div>
           <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-sm tabular-nums text-muted-foreground">
             {totalUsdt > 0 ? formatNumber(totalUsdt, { maximumFractionDigits: 2 }) : "—"}
@@ -1426,7 +1439,7 @@ function OrderPanel({
         {!isSpot ? (
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">레버리지</span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("paper.exchange.leverage")}</span>
               <span
                 className={cn(
                   "rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums",
@@ -1468,7 +1481,7 @@ function OrderPanel({
           </div>
         ) : (
           <div className="rounded-md border border-border/40 bg-background/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-            💎 현물 거래 — 레버리지 1× · 청산 없음 · 펀딩 없음 · 수수료 0.2%
+            💎 {t("paper.exchange.spotNote")}
           </div>
         )}
 
@@ -1482,13 +1495,13 @@ function OrderPanel({
                 onClick={() => setTpslEnabled(false)}
                 className="text-[10px] text-muted-foreground hover:text-foreground"
               >
-                닫기
+                {t("paper.exchange.close")}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[10px] text-grade-d">손절가</span>
+                  <span className="text-[10px] text-grade-d">{t("paper.exchange.stopPrice")}</span>
                   {stopMovePct > 0 ? (
                     <span className="text-[9px] font-mono text-muted-foreground">{stopMovePct.toFixed(2)}%</span>
                   ) : null}
@@ -1508,7 +1521,7 @@ function OrderPanel({
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[10px] text-grade-a">목표가</span>
+                  <span className="text-[10px] text-grade-a">{t("paper.exchange.targetPrice")}</span>
                   {rr > 0 ? (
                     <span className="text-[9px] font-mono text-muted-foreground">{rr.toFixed(2)}R</span>
                   ) : null}
@@ -1549,31 +1562,31 @@ function OrderPanel({
         {/* 주문 요약 정보 */}
         <div className="space-y-1 rounded-md border border-border/30 bg-background/20 p-2.5 text-[10px]">
           <Row
-            label="예상 체결가"
+            label={t("paper.exchange.estFillPrice")}
             value={lastPrice ? `${formatNumber(lastPrice)} vUSDT` : "—"}
             mono
           />
           <Row
-            label="노출 금액"
+            label={t("paper.exchange.exposure")}
             value={_notional > 0 ? `${formatNumber(_notional, { maximumFractionDigits: 2 })} vUSDT` : "—"}
             mono
           />
           <Row
-            label="필요 마진"
+            label={t("paper.exchange.requiredMargin")}
             value={_margin > 0 ? `${formatNumber(_margin, { maximumFractionDigits: 2 })} vUSDT` : "—"}
             tone={_margin > wallet.available && _margin > 0 ? "bad" : "default"}
             mono
           />
           <div className="my-1.5 border-t border-border/30" />
-          <Row label="수수료 (Taker)" value="0.05%" mono />
+          <Row label={t("paper.exchange.feeTaker")} value="0.05%" mono />
         </div>
 
         {/* 지갑 영역 */}
         <div className="rounded-md border border-border/30 bg-background/20 p-2.5">
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">지갑</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("paper.exchange.wallet")}</span>
             <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
-              잔액 ${formatNumber(wallet.usdtBalance, { maximumFractionDigits: 2 })}
+              {t("paper.exchange.balance")} ${formatNumber(wallet.usdtBalance, { maximumFractionDigits: 2 })}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
@@ -1581,13 +1594,13 @@ function OrderPanel({
               href="/app/virtual-trade/wallet"
               className="rounded-md border border-border bg-background/40 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground"
             >
-              자금 추가
+              {t("paper.exchange.addFunds")}
             </Link>
             <Link
               href="/app/virtual-trade/wallet"
               className="rounded-md border border-border bg-background/40 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground"
             >
-              지갑 관리
+              {t("paper.exchange.manageWallet")}
             </Link>
           </div>
         </div>
@@ -1625,38 +1638,39 @@ function PositionsTabs({
   positions: Position[];
   pendingOrders: PendingOrder[];
 }) {
+  const t = useT();
   return (
     <Card>
       <CardContent className="p-3">
         <div className="mb-3 flex gap-3 border-b border-border/40">
           <TabButton active={tab === "positions"} onClick={() => onTabChange("positions")}>
-            진행 중 포지션 ({positions.length})
+            {t("paper.exchange.openPositionsTab", { n: positions.length })}
           </TabButton>
           <TabButton active={tab === "orders"} onClick={() => onTabChange("orders")}>
-            미체결 주문 ({pendingOrders.length})
+            {t("paper.exchange.pendingOrdersTab", { n: pendingOrders.length })}
           </TabButton>
           <TabButton active={tab === "history"} onClick={() => onTabChange("history")}>
-            거래 내역
+            {t("paper.exchange.historyTab")}
           </TabButton>
         </div>
         {tab === "positions" ? (
           positions.length === 0 ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">진행 중 포지션이 없습니다.</div>
+            <div className="py-6 text-center text-xs text-muted-foreground">{t("paper.exchange.noOpenPositions")}</div>
           ) : (
             <PositionsTable positions={positions} />
           )
         ) : tab === "orders" ? (
           pendingOrders.length === 0 ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">미체결 주문이 없습니다.</div>
+            <div className="py-6 text-center text-xs text-muted-foreground">{t("paper.exchange.noPendingOrders")}</div>
           ) : (
             <PendingOrdersTable orders={pendingOrders} />
           )
         ) : (
           <div className="py-6 text-center text-xs text-muted-foreground">
             <Link href="/app/journal" className="text-primary underline-offset-2 hover:underline">
-              거래 일지 페이지
+              {t("paper.exchange.journalPageLink")}
             </Link>
-            에서 전체 종료 거래를 확인하세요.
+            {t("paper.exchange.historyHintSuffix")}
           </div>
         )}
       </CardContent>
@@ -1666,17 +1680,18 @@ function PositionsTabs({
 
 // ─── Pending Orders Table ─────────────────────────────────────────────────
 function PendingOrdersTable({ orders }: { orders: PendingOrder[] }) {
+  const t = useT();
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[700px] text-xs">
         <thead className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
           <tr className="border-b border-border/40">
-            <th className="px-2 py-2 text-left font-medium">심볼</th>
-            <th className="px-2 py-2 text-left font-medium">방향</th>
-            <th className="px-2 py-2 text-right font-medium">주문가</th>
-            <th className="px-2 py-2 text-right font-medium">수량</th>
-            <th className="px-2 py-2 text-right font-medium">손절 / 목표</th>
-            <th className="px-2 py-2 text-right font-medium">만료</th>
+            <th className="px-2 py-2 text-left font-medium">{t("paper.exchange.thSymbol")}</th>
+            <th className="px-2 py-2 text-left font-medium">{t("paper.exchange.thDirection")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thOrderPrice")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thQty")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thStopTarget")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thExpiry")}</th>
             <th className="px-2 py-2 text-right font-medium"></th>
           </tr>
         </thead>
@@ -1691,6 +1706,7 @@ function PendingOrdersTable({ orders }: { orders: PendingOrder[] }) {
 }
 
 function PendingOrderRow({ order }: { order: PendingOrder }) {
+  const t = useT();
   const [canceling, startCancelTransition] = useTransition();
   const isLong = order.direction === "long";
   const expiresIn = Math.max(0, new Date(order.expiresAt).getTime() - Date.now());
@@ -1698,15 +1714,16 @@ function PendingOrderRow({ order }: { order: PendingOrder }) {
   const expiresMinutes = Math.floor((expiresIn % 3_600_000) / 60_000);
 
   function cancel() {
-    const kindLabel = order.kind === "stop" ? "역지정가" : "지정가";
-    if (!confirm(`${order.symbol} ${kindLabel} ${isLong ? "매수" : "매도"} 주문을 취소하시겠습니까?`)) return;
+    const kindLabel = order.kind === "stop" ? t("paper.exchange.orderTypeStop") : t("paper.exchange.orderTypeLimit");
+    const sideLabel = isLong ? t("paper.exchange.buy") : t("paper.exchange.sell");
+    if (!confirm(t("paper.exchange.confirmCancelOrder", { sym: order.symbol, kind: kindLabel, side: sideLabel }))) return;
     startCancelTransition(async () => {
       const r = await cancelLimitOrderAction(order.id);
       if (!r.ok) {
-        toast.error(r.error ?? "취소 실패");
+        toast.error(r.error ?? t("paper.exchange.errCancelFailed"));
         return;
       }
-      toast.success("주문이 취소되었습니다.");
+      toast.success(t("paper.exchange.toastOrderCanceled"));
     });
   }
 
@@ -1724,7 +1741,7 @@ function PendingOrderRow({ order }: { order: PendingOrder }) {
                 : "bg-muted/50 text-muted-foreground",
             )}
           >
-            {order.kind === "stop" ? "역지정" : "지정"}
+            {order.kind === "stop" ? t("paper.exchange.kindStopShort") : t("paper.exchange.kindLimitShort")}
           </span>
         </div>
       </td>
@@ -1735,7 +1752,7 @@ function PendingOrderRow({ order }: { order: PendingOrder }) {
             isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d",
           )}
         >
-          {isLong ? "롱" : "숏"}
+          {isLong ? t("common.long") : t("common.short")}
         </Badge>
       </td>
       <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">
@@ -1760,7 +1777,7 @@ function PendingOrderRow({ order }: { order: PendingOrder }) {
         </div>
       </td>
       <td className="px-2 py-2.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-        {expiresHours > 0 ? `${expiresHours}시간 ${expiresMinutes}분` : `${expiresMinutes}분`}
+        {expiresHours > 0 ? t("paper.exchange.durationHm", { h: expiresHours, m: expiresMinutes }) : t("paper.exchange.durationM", { m: expiresMinutes })}
       </td>
       <td className="px-2 py-2.5 text-right">
         <button
@@ -1770,7 +1787,7 @@ function PendingOrderRow({ order }: { order: PendingOrder }) {
           className="inline-flex items-center gap-1 rounded-md border border-border bg-background/40 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-grade-d/40 hover:text-grade-d disabled:opacity-50"
         >
           <X className="h-3 w-3" />
-          {canceling ? "..." : "취소"}
+          {canceling ? "..." : t("common.cancel")}
         </button>
       </td>
     </tr>
@@ -1793,21 +1810,22 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 }
 
 function PositionsTable({ positions }: { positions: Position[] }) {
+  const t = useT();
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1100px] text-xs">
         <thead className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
           <tr className="border-b border-border/40">
-            <th className="px-2 py-2 text-left font-medium">심볼</th>
-            <th className="px-2 py-2 text-left font-medium">방향 / 레버리지</th>
-            <th className="px-2 py-2 text-right font-medium">수량 / 노출</th>
-            <th className="px-2 py-2 text-right font-medium">진입 / 청산가</th>
-            <th className="px-2 py-2 text-right font-medium">현재가</th>
-            <th className="px-2 py-2 text-right font-medium">손절 / 목표</th>
-            <th className="px-2 py-2 text-right font-medium">마진</th>
-            <th className="px-2 py-2 text-right font-medium">수수료</th>
-            <th className="px-2 py-2 text-right font-medium">미실현 PnL / ROE / R</th>
-            <th className="px-2 py-2 text-right font-medium">보유 / 만료</th>
+            <th className="px-2 py-2 text-left font-medium">{t("paper.exchange.thSymbol")}</th>
+            <th className="px-2 py-2 text-left font-medium">{t("paper.exchange.thDirectionLeverage")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thQtyExposure")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thEntryLiq")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thCurrentPrice")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thStopTarget")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thMargin")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thFees")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thPnlRoeR")}</th>
+            <th className="px-2 py-2 text-right font-medium">{t("paper.exchange.thHoldExpiry")}</th>
             <th className="px-2 py-2 text-right font-medium"></th>
           </tr>
         </thead>
@@ -1821,16 +1839,17 @@ function PositionsTable({ positions }: { positions: Position[] }) {
   );
 }
 
-function formatDuration(ms: number): string {
+function formatDuration(ms: number, t: ReturnType<typeof useT>): string {
   const minutes = Math.floor(ms / 60_000);
-  if (minutes < 60) return `${minutes}분`;
+  if (minutes < 60) return t("paper.exchange.durationM", { m: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}시간 ${minutes % 60}분`;
+  if (hours < 24) return t("paper.exchange.durationHm", { h: hours, m: minutes % 60 });
   const days = Math.floor(hours / 24);
-  return `${days}일 ${hours % 24}시간`;
+  return t("paper.exchange.durationDh", { d: days, h: hours % 24 });
 }
 
 function PositionRow({ pos }: { pos: Position }) {
+  const t = useT();
   const [last, setLast] = useState<number | null>(null);
   const [closing, startCloseTransition] = useTransition();
 
@@ -1902,14 +1921,15 @@ function PositionRow({ pos }: { pos: Position }) {
   const baseSym = pos.symbol.replace("USDT", "");
 
   function close() {
-    if (!confirm(`${pos.symbol} ${isLong ? "롱" : "숏"} 포지션을 즉시 청산하시겠습니까?`)) return;
+    const dir = isLong ? t("common.long") : t("common.short");
+    if (!confirm(t("paper.exchange.confirmClosePosition", { sym: pos.symbol, dir }))) return;
     startCloseTransition(async () => {
       const r = await closeVirtualPositionAction(pos.id);
       if (!r.ok) {
-        toast.error(r.error ?? "청산 실패");
+        toast.error(r.error ?? t("paper.exchange.errCloseFailed"));
         return;
       }
-      toast.success(`청산 완료 · PnL ${r.pnl && r.pnl >= 0 ? "+" : ""}${formatCurrency(r.pnl ?? 0, "USD")}`);
+      toast.success(t("paper.exchange.toastClosed", { pnl: `${r.pnl && r.pnl >= 0 ? "+" : ""}${formatCurrency(r.pnl ?? 0, "USD")}` }));
     });
   }
 
@@ -1923,7 +1943,7 @@ function PositionRow({ pos }: { pos: Position }) {
             <span className="font-mono text-xs font-semibold">{pos.symbol}</span>
             {pos.marketType === "spot" ? (
               <span className="ml-1.5 rounded bg-sky-500/15 px-1 py-0.5 text-[9px] font-semibold text-sky-400">
-                현물
+                {t("paper.exchange.spotBadge")}
               </span>
             ) : null}
           </div>
@@ -1938,7 +1958,7 @@ function PositionRow({ pos }: { pos: Position }) {
               isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d",
             )}
           >
-            {isLong ? "롱" : "숏"}
+            {isLong ? t("common.long") : t("common.short")}
           </Badge>
           {pos.marketType === "spot" ? (
             <span className="rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums bg-muted/40 text-muted-foreground">
@@ -1975,8 +1995,8 @@ function PositionRow({ pos }: { pos: Position }) {
         <div className="font-mono text-xs font-medium tabular-nums">
           ${formatNumber(pos.entryActual)}
         </div>
-        <div className="text-[10px] text-muted-foreground tabular-nums" title="청산가 (단순 계산 — 1/레버리지)">
-          청산 ${formatNumber(liqPrice, { maximumFractionDigits: 2 })}
+        <div className="text-[10px] text-muted-foreground tabular-nums" title={t("paper.exchange.liqPriceTitle")}>
+          {t("paper.exchange.liqLabel")} ${formatNumber(liqPrice, { maximumFractionDigits: 2 })}
         </div>
       </td>
       {/* 현재가 */}
@@ -2010,7 +2030,7 @@ function PositionRow({ pos }: { pos: Position }) {
         <div className="font-mono text-xs tabular-nums text-muted-foreground">
           ${formatNumber(totalFees, { maximumFractionDigits: 2 })}
         </div>
-        <div className="text-[10px] text-muted-foreground/60">왕복 {pos.feesPct.toFixed(2)}%</div>
+        <div className="text-[10px] text-muted-foreground/60">{t("paper.exchange.roundTrip", { pct: pos.feesPct.toFixed(2) })}</div>
       </td>
       {/* 미실현 PnL / ROE / R */}
       <td className="px-2 py-2.5 text-right">
@@ -2028,11 +2048,11 @@ function PositionRow({ pos }: { pos: Position }) {
             >
               <span>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%</span>
               <span className="text-muted-foreground/60">·</span>
-              <span title="마진 대비 수익률 (레버리지 반영)">
+              <span title={t("paper.exchange.roeTitle")}>
                 ROE {roe >= 0 ? "+" : ""}{roe.toFixed(1)}%
               </span>
               <span className="text-muted-foreground/60">·</span>
-              <span title="손절폭 기준 R 단위 손익">
+              <span title={t("paper.exchange.rPnlTitle")}>
                 {rPnl >= 0 ? "+" : ""}{rPnl.toFixed(2)}R
               </span>
             </div>
@@ -2043,15 +2063,15 @@ function PositionRow({ pos }: { pos: Position }) {
       </td>
       {/* 보유 시간 + 만료까지 (현물은 만료 없음) */}
       <td className="px-2 py-2.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-        <div>{formatDuration(ageMs)}</div>
+        <div>{formatDuration(ageMs, t)}</div>
         {pos.marketType === "spot" ? (
-          <div className="text-[10px] text-muted-foreground/60">현물 (영구)</div>
+          <div className="text-[10px] text-muted-foreground/60">{t("paper.exchange.spotPerpetual")}</div>
         ) : (
           <div
             className={expiryTone}
-            title={`만료까지 ${formatDuration(msToExpiry)} 후 자동 청산`}
+            title={t("paper.exchange.expiryTitle", { dur: formatDuration(msToExpiry, t) })}
           >
-            만료 {formatDuration(msToExpiry)}
+            {t("paper.exchange.expiryLabel", { dur: formatDuration(msToExpiry, t) })}
           </div>
         )}
       </td>
@@ -2064,7 +2084,7 @@ function PositionRow({ pos }: { pos: Position }) {
           className="inline-flex items-center gap-1 rounded-md border border-grade-d/30 bg-grade-d/10 px-2.5 py-1 text-[11px] font-semibold text-grade-d transition-colors hover:border-grade-d/60 hover:bg-grade-d/20 disabled:opacity-50"
         >
           <X className="h-3 w-3" />
-          {closing ? "..." : "청산"}
+          {closing ? "..." : t("paper.exchange.closePosition")}
         </button>
       </td>
     </tr>

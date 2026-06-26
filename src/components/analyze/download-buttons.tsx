@@ -12,6 +12,7 @@ import {
 import type { AnalysisSnapshot } from "@/lib/analysis/analyze";
 import type { AnalysisReport } from "@/lib/analysis/synthesize";
 import type { StrategyResult } from "@/lib/analysis/strategy";
+import { useT } from "@/lib/i18n/context";
 
 interface Props {
   snapshot: AnalysisSnapshot;
@@ -22,11 +23,12 @@ interface Props {
 }
 
 export function DownloadButtons({ snapshot, strategy, report, captureRef }: Props) {
+  const t = useT();
   const [busyPng, setBusyPng] = useState(false);
 
   async function downloadPng() {
     if (!captureRef.current) {
-      toast.error("캡처할 영역을 찾지 못했습니다.");
+      toast.error(t("analyze.cmpA.captureNotFound"));
       return;
     }
     setBusyPng(true);
@@ -47,10 +49,10 @@ export function DownloadButtons({ snapshot, strategy, report, captureRef }: Prop
       document.body.appendChild(a);
       a.click();
       a.remove();
-      toast.success("PNG로 저장됨");
+      toast.success(t("analyze.cmpA.pngSaved"));
     } catch (e) {
       console.error(e);
-      toast.error("PNG 캡처 실패");
+      toast.error(t("analyze.cmpA.pngFailed"));
     } finally {
       setBusyPng(false);
     }
@@ -60,9 +62,9 @@ export function DownloadButtons({ snapshot, strategy, report, captureRef }: Prop
     try {
       const md = buildAnalysisMarkdown({ snapshot, strategy, report });
       downloadFile(exportFilename(snapshot.symbol, "md"), "text/markdown;charset=utf-8", md);
-      toast.success("Markdown으로 저장됨");
+      toast.success(t("analyze.cmpA.mdSaved"));
     } catch {
-      toast.error("Markdown 생성 실패");
+      toast.error(t("analyze.cmpA.mdFailed"));
     }
   }
 
@@ -74,9 +76,9 @@ export function DownloadButtons({ snapshot, strategy, report, captureRef }: Prop
         "application/json;charset=utf-8",
         JSON.stringify(data, null, 2),
       );
-      toast.success("JSON으로 저장됨");
+      toast.success(t("analyze.cmpA.jsonSaved"));
     } catch {
-      toast.error("JSON 생성 실패");
+      toast.error(t("analyze.cmpA.jsonFailed"));
     }
   }
 
@@ -87,9 +89,9 @@ export function DownloadButtons({ snapshot, strategy, report, captureRef }: Prop
     >
       <div className="flex items-center gap-2 text-sm">
         <Download className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium">결과 저장</span>
+        <span className="font-medium">{t("analyze.cmpA.saveResult")}</span>
         <span className="text-xs text-muted-foreground">
-          공유 · 노션 · 저널에 첨부
+          {t("analyze.cmpA.saveResultHint")}
         </span>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -104,7 +106,7 @@ export function DownloadButtons({ snapshot, strategy, report, captureRef }: Prop
           ) : (
             <FileImage className="h-3.5 w-3.5" />
           )}
-          PNG (전체 페이지)
+          {t("analyze.cmpA.pngFull")}
         </button>
         <button
           type="button"

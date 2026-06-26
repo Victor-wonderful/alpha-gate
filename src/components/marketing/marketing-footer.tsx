@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { Logo } from "@/components/app/logo";
+import { getT } from "@/lib/i18n/server";
 
-export function MarketingFooter() {
+export async function MarketingFooter() {
+  const t = await getT();
   return (
     <footer className="bg-black">
       <div className="mx-auto max-w-6xl px-6 py-16 sm:px-10">
@@ -20,7 +22,7 @@ export function MarketingFooter() {
               </div>
             </div>
             <p className="mt-6 max-w-xs text-xs leading-relaxed text-white/50">
-              매매 전 의사결정 체크. 진입 버튼 누르기 전 5분으로 D급 거래를 막습니다.
+              {t("mktc.footer.tagline")}
             </p>
             <div className="mt-5">
               <a
@@ -29,48 +31,48 @@ export function MarketingFooter() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-white/60 hover:text-white"
               >
-                Victor Alpha 블로그
+                {t("nav.blog")}
                 <ExternalLink className="h-3 w-3" />
               </a>
             </div>
           </div>
           <FooterCol
-            title="제품"
+            title={t("mktc.footer.colProduct")}
             links={[
-              { href: "/features", label: "기능" },
-              { href: "/how-it-works", label: "작동 방식" },
-              { href: "/pricing", label: "가격" },
+              { href: "/features", label: t("mktc.nav.features") },
+              { href: "/how-it-works", label: t("mktc.nav.howItWorks") },
+              { href: "/pricing", label: t("mktc.nav.pricing") },
             ]}
           />
           <FooterCol
-            title="지원"
+            title={t("mktc.footer.colSupport")}
             links={[
-              { href: "/faq", label: "FAQ" },
-              { href: "/contact", label: "문의" },
-              { href: "/login?mode=signup", label: "회원가입" },
-              { href: "/login", label: "로그인" },
+              { href: "/faq", label: t("mktc.nav.faq") },
+              { href: "/contact", label: t("mktc.nav.contact") },
+              { href: "/login?mode=signup", label: t("mktc.signup") },
+              { href: "/login", label: t("mktc.login") },
             ]}
           />
           <FooterCol
-            title="법적 고지"
+            title={t("mktc.footer.colLegal")}
             links={[
-              { href: "/terms", label: "이용약관" },
-              { href: "/privacy", label: "개인정보처리방침" },
-              { href: "/refund", label: "환불정책" },
-              { href: "/disclaimer", label: "투자 면책" },
+              { href: "/terms", label: t("mktc.legal.terms") },
+              { href: "/privacy", label: t("mktc.legal.privacy") },
+              { href: "/refund", label: t("mktc.legal.refund") },
+              { href: "/disclaimer", label: t("mktc.legal.disclaimerShort") },
             ]}
           />
         </div>
 
         <div className="mt-14 border-t border-white/10 pt-6">
           <p className="text-[11px] leading-relaxed text-white/40">
-            Alpha Gate는{" "}
-            <strong className="text-white/70">투자 자문이 아닙니다</strong>. 본 서비스는 매매 의사결정 점검 도구이며, 모든
-            매매 결정과 결과는 사용자 본인의 책임입니다. 자세한 내용은{" "}
+            {t("mktc.footer.disclaimerPre")}{" "}
+            <strong className="text-white/70">{t("mktc.footer.disclaimerStrong")}</strong>
+            {t("mktc.footer.disclaimerMid")}{" "}
             <Link href="/disclaimer" className="text-cyan-400/80 hover:text-cyan-300">
-              투자 면책 고지
+              {t("mktc.legal.disclaimer")}
             </Link>
-            를 확인해주세요.
+            {t("mktc.footer.disclaimerPost")}
           </p>
           <div className="mt-4 text-center text-[10px] uppercase tracking-[0.2em] text-white/30">
             © {new Date().getFullYear()} Alpha Gate · All rights reserved

@@ -1,145 +1,109 @@
 import type { Metadata } from "next";
 import { LegalLayout } from "@/components/marketing/legal-layout";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "이용약관 — Alpha Gate",
-  description: "Alpha Gate 서비스 이용약관. 서비스 이용 시 반드시 확인해주세요.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("legal.terms.metaTitle"),
+    description: t("legal.terms.metaDesc"),
+  };
+}
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  const t = await getT();
   return (
     <LegalLayout
-      title="이용약관"
-      eyebrow="Terms of Service"
-      effectiveDate="2026년 5월 20일"
+      title={t("legal.terms.title")}
+      eyebrow={t("legal.terms.eyebrow")}
+      effectiveDate={t("legal.terms.effectiveDate")}
       currentHref="/terms"
     >
-      <h2>제1조 (목적)</h2>
+      <h2>{t("legal.terms.h1")}</h2>
+      <p>{t("legal.terms.p1")}</p>
+
+      <h2>{t("legal.terms.h2")}</h2>
+      <ol>
+        <li>{t("legal.terms.p2li1")}</li>
+        <li>{t("legal.terms.p2li2")}</li>
+        <li>{t("legal.terms.p2li3")}</li>
+      </ol>
+
+      <h2>{t("legal.terms.h3")}</h2>
+      <p>{t("legal.terms.p3")}</p>
+
+      <h2>{t("legal.terms.h4")}</h2>
       <p>
-        본 약관은 Alpha Gate(이하 &ldquo;서비스&rdquo;)가 제공하는 매매 의사결정 점검 도구 및 부수 서비스의 이용과 관련하여
-        서비스와 회원 사이의 권리·의무 및 책임 사항을 규정함을 목적으로 합니다.
+        <strong>{t("legal.terms.p4a")}</strong>
       </p>
+      <p>{t("legal.terms.p4b")}</p>
 
-      <h2>제2조 (정의)</h2>
+      <h2>{t("legal.terms.h5")}</h2>
       <ol>
-        <li>&ldquo;회원&rdquo;이란 본 약관에 동의하고 서비스에 가입하여 이용하는 자를 말합니다.</li>
-        <li>&ldquo;콘텐츠&rdquo;란 AI 분석 결과, 시나리오, 등급, 코칭 코멘트 등 서비스가 생성·제공하는 모든 정보를 말합니다.</li>
-        <li>&ldquo;유료 플랜&rdquo;이란 Standard·Pro 등 회원이 비용을 지불하고 이용하는 플랜을 말합니다.</li>
+        <li>{t("legal.terms.p5li1")}</li>
+        <li>{t("legal.terms.p5li2")}</li>
+        <li>{t("legal.terms.p5li3")}</li>
       </ol>
 
-      <h2>제3조 (약관의 효력 및 변경)</h2>
-      <p>
-        본 약관은 서비스 화면에 게시함으로써 효력을 발생합니다. 서비스는 합리적인 사유가 있을 경우 약관을 변경할 수 있으며,
-        변경 시 시행일 7일 전(회원에게 불리한 변경은 30일 전)부터 공지합니다. 변경된 약관에 동의하지 않는 회원은 이용계약을
-        해지할 수 있습니다.
-      </p>
-
-      <h2>제4조 (서비스의 성격 — 투자 자문 아님)</h2>
-      <p>
-        <strong>Alpha Gate는 투자 자문업·금융투자업·유사 투자 자문업 어디에도 해당하지 않습니다.</strong> 본 서비스는 회원이
-        스스로 내린 매매 의사결정을 객관 데이터로 점검하도록 돕는 도구이며, 특정 종목의 매수·매도를 권유하지 않습니다.
-      </p>
-      <p>
-        AI가 제시하는 시나리오·등급·코멘트는 회원의 참고용 정보이며 수익을 보장하지 않습니다. 모든 매매 결정과 결과는 회원
-        본인의 판단과 책임에 있습니다.
-      </p>
-
-      <h2>제5조 (서비스의 제공 및 변경)</h2>
+      <h2>{t("legal.terms.h6")}</h2>
       <ol>
-        <li>서비스는 연중무휴 24시간 제공하는 것을 원칙으로 합니다.</li>
-        <li>다만 시스템 점검·교체·고장, 통신 두절, 천재지변 등 불가항력 사유 발생 시 일시 중단될 수 있습니다.</li>
-        <li>서비스는 운영상·기술상 필요에 따라 제공 기능을 변경·추가·삭제할 수 있으며, 중요한 변경은 사전 공지합니다.</li>
+        <li>{t("legal.terms.p6li1")}</li>
+        <li>{t("legal.terms.p6li2")}</li>
       </ol>
 
-      <h2>제6조 (회원가입)</h2>
+      <h2>{t("legal.terms.h7")}</h2>
       <ol>
-        <li>회원가입은 이용 신청자가 본 약관 및 개인정보처리방침에 동의한 후 서비스가 승낙함으로써 완결됩니다.</li>
-        <li>타인의 명의를 도용하거나 허위 정보를 기재한 경우 가입을 거부하거나 사후 직권으로 해지할 수 있습니다.</li>
+        <li>{t("legal.terms.p7li1")}</li>
+        <li>{t("legal.terms.p7li2")}</li>
+        <li>{t("legal.terms.p7li3")}</li>
       </ol>
 
-      <h2>제7조 (회원의 의무)</h2>
+      <h2>{t("legal.terms.h8")}</h2>
       <ol>
-        <li>회원은 본 약관과 관련 법령을 준수해야 합니다.</li>
-        <li>회원은 자신의 계정 및 비밀번호를 직접 관리할 책임이 있으며, 제3자에게 양도·대여할 수 없습니다.</li>
-        <li>회원은 서비스의 콘텐츠를 무단으로 복제·전송·배포·상업적으로 이용할 수 없습니다.</li>
+        <li>{t("legal.terms.p8li1")}</li>
+        <li>{t("legal.terms.p8li2")}</li>
       </ol>
 
-      <h2>제8조 (유료 플랜의 결제 및 해지)</h2>
+      <h2>{t("legal.terms.h9")}</h2>
       <ol>
-        <li>유료 플랜의 결제·해지·환불은 별도의 환불정책에 따릅니다.</li>
-        <li>회원은 언제든지 유료 플랜을 해지할 수 있으며, 해지 후 다음 결제 주기부터 과금이 중단됩니다.</li>
+        <li>{t("legal.terms.p9li1")}</li>
+        <li>{t("legal.terms.p9li2")}</li>
       </ol>
 
-      <h2>제9조 (이용계약의 해지)</h2>
+      <h2>{t("legal.terms.h10")}</h2>
       <ol>
-        <li>회원은 언제든지 설정 화면에서 계정을 탈퇴할 수 있습니다.</li>
+        <li>{t("legal.terms.p10li1")}</li>
         <li>
-          서비스는 회원이 본 약관을 중대하게 위반한 경우(예: 타인 명의 도용, 콘텐츠 무단 배포, 시스템 공격) 사전 통지 후
-          이용계약을 해지할 수 있습니다.
-        </li>
-      </ol>
-
-      <h2>제10조 (실거래 연동 — Live Trading)</h2>
-      <ol>
-        <li>
-          서비스는 회원이 자발적으로 등록한 거래소 API 키를 사용해 회원 본인의 주문을 거래소에 전송하는 보조 기능
-          (이하 &ldquo;실거래 연동&rdquo;)을 제공할 수 있습니다. 실거래 연동은 회원이 화면에서 직접 확인 절차를 거친 경우에만 실행됩니다.
-        </li>
-        <li>
-          회원은 API 키 발급 시 다음을 준수해야 합니다.
+          {t("legal.terms.p10li2")}
           <ul>
-            <li>출금 권한(Enable Withdrawals)을 절대 활성화하지 않습니다. 서비스는 출금 권한이 있는 키의 등록을 차단합니다.</li>
-            <li>가능한 경우 IP 화이트리스트 등 거래소 측 보안 옵션을 활용합니다.</li>
-            <li>API 키는 회원의 자산이며, 그 관리 및 정기 로테이션 책임은 회원에게 있습니다.</li>
+            <li>{t("legal.terms.p10li2sub1")}</li>
+            <li>{t("legal.terms.p10li2sub2")}</li>
+            <li>{t("legal.terms.p10li2sub3")}</li>
           </ul>
         </li>
-        <li>
-          서비스는 등록된 API 키를 AES-256-GCM으로 암호화해 저장하며, 회원의 명시적 주문 요청 외에는 거래소에 어떤
-          주문도 전송하지 않습니다. 단, 회원이 진입한 포지션의 손절·익절 자동 청산 동기화(주문 상태 조회 및 미체결 반대측 주문 취소)는
-          회원이 실거래 모드를 사용함으로써 동의한 것으로 봅니다.
-        </li>
-        <li>
-          서비스는 실거래 안전장치(일일 누적 -2R 도달 시 차단, 거래당 노출 한도, 동일 코인 중복 진입 차단 등)를 제공하나,
-          이는 보조 수단일 뿐이며 모든 손실을 막을 수 없습니다. 회원은 본인의 위험 부담 하에 실거래를 사용합니다.
-        </li>
-        <li>
-          거래소의 장애, 슬리피지, 부분 체결, 강제 청산, API 한도 초과, 키 권한 변경 등으로 인한 결과는 서비스가 책임지지 않습니다.
-        </li>
-        <li>
-          가상자산이용자보호법(2024.07.19 시행) 및 관련 규제의 변경에 따라 본 실거래 연동 기능이 사전 통보 없이 제한·중단될 수 있습니다.
-        </li>
+        <li>{t("legal.terms.p10li3")}</li>
+        <li>{t("legal.terms.p10li4")}</li>
+        <li>{t("legal.terms.p10li5")}</li>
+        <li>{t("legal.terms.p10li6")}</li>
       </ol>
 
-      <h2>제11조 (책임의 제한)</h2>
+      <h2>{t("legal.terms.h11")}</h2>
       <ol>
-        <li>
-          서비스가 제공하는 AI 분석·등급·코멘트는 학습 및 의사결정 지원 목적이며, <strong>정확성·완전성·시의성을 보장하지
-          않습니다.</strong> 회원이 본 서비스를 신뢰하여 거래한 결과로 발생한 손실에 대해 서비스는 책임지지 않습니다.
-        </li>
-        <li>
-          서비스는 천재지변, 외부 API(거래소·LLM 등) 장애, 회원 본인의 귀책 사유로 발생한 손해에 대해 책임지지 않습니다.
-        </li>
-        <li>
-          관련 법령에 의해 책임을 면제할 수 없는 경우에도, 서비스의 손해배상 책임은 회원이 직전 12개월간 서비스에 지불한 금액을
-          초과하지 않습니다.
-        </li>
+        <li>{t("legal.terms.p11li1")}</li>
+        <li>{t("legal.terms.p11li2")}</li>
+        <li>{t("legal.terms.p11li3")}</li>
       </ol>
 
-      <h2>제12조 (지식재산권)</h2>
-      <p>
-        서비스 화면·로고·코드·콘텐츠 등의 지식재산권은 서비스에 귀속됩니다. 회원이 서비스에 입력한 거래 기록·메모 등의
-        소유권은 회원에게 있으며, 서비스는 이를 분석 결과 생성 외 다른 목적에 사용하지 않습니다.
-      </p>
+      <h2>{t("legal.terms.h12")}</h2>
+      <p>{t("legal.terms.p12")}</p>
 
-      <h2>제13조 (분쟁 해결 및 관할)</h2>
-      <p>
-        본 약관에 관한 분쟁은 대한민국 법률에 따르며, 관할 법원은 서울중앙지방법원으로 합니다.
-      </p>
+      <h2>{t("legal.terms.h13")}</h2>
+      <p>{t("legal.terms.p13")}</p>
 
       <hr />
 
       <p>
-        본 약관에 대한 문의는 <a href="/contact">문의 페이지</a> 또는 hello@alphagate.app으로 보내주세요.
+        {t("legal.terms.contactPre")}<a href="/contact">{t("legal.terms.contactLink")}</a>{t("legal.terms.contactPost")}
       </p>
     </LegalLayout>
   );

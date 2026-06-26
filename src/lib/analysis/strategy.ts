@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AnalysisSnapshot } from "./analyze";
 import { STYLE_PRESETS } from "./style";
 import { parseJsonLoose } from "./json-extract";
+import type { Locale } from "@/lib/i18n/config";
 
 export type StrategyId =
   | "trend_pullback"
@@ -166,7 +167,17 @@ rejected는 1~3개. wait이면 direction은 null.
 올바른 응답 예시:
 {"primary":"range_fade","direction":"short","confidence":0.7,"reasoning":"4H 박스($43100~$43500) 안에서 상단 시험 중, 펀딩 +0.04% 롱 편향","rejected":[{"strategy":"breakout","reason":"거래량 동반 돌파 신호 부족"}]}`;
 
-export async function classifyStrategy(snapshot: AnalysisSnapshot): Promise<StrategyResult> {
+// 영어 응답 강제 — system 프롬프트(캐시됨)는 한국어로 두고, user 메시지 끝에 덧붙여
+// 캐시를 깨지 않으면서 언어만 오버라이드한다. (en일 때만 추가)
+const EN_LANG_OVERRIDE = `
+
+=== LANGUAGE OVERRIDE (highest priority) ===
+Ignore any instruction above to answer in Korean. Write every natural-language string value (e.g. "reasoning") in clear, plain English for a general audience — no jargon. Keep all JSON keys and enum values (primary, direction, etc.) exactly as specified. Output only the JSON object, nothing else.`;
+
+export async function classifyStrategy(
+  snapshot: AnalysisSnapshot,
+  locale: Locale = "ko",
+): Promise<StrategyResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
   const styleHint = STYLE_PRESETS[snapshot.style]?.promptHint ?? "";
@@ -177,7 +188,7 @@ export async function classifyStrategy(snapshot: AnalysisSnapshot): Promise<Stra
     mtfChart: { tf: snapshot.mtfChart.tf, candleCount: snapshot.mtfChart.candles.length },
   };
 
-  const userContent = `[트레이딩 스타일: ${snapshot.styleLabel}]\n${styleHint}\n\n분석할 스냅샷:\n${JSON.stringify(compact, null, 2)}`;
+  const userContent = `[트레이딩 스타일: ${snapshot.styleLabel}]\n${styleHint}\n\n분석할 스냅샷:\n${JSON.stringify(compact, null, 2)}${locale === "en" ? EN_LANG_OVERRIDE : ""}`;
 
   // LLM이 가끔 산문/잘린 JSON을 반환 → 파싱 실패 시 최대 2회까지 재시도.
   let result: { data: StrategyResult } | { error: string; raw: string } | null = null;

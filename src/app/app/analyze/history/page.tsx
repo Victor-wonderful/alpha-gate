@@ -4,9 +4,10 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { STRATEGY_LABELS, type StrategyId } from "@/lib/analysis/strategy";
+import { type StrategyId } from "@/lib/analysis/strategy";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { DeleteAnalysisButton } from "./delete-analysis-button";
+import { getT } from "@/lib/i18n/server";
 
 interface AnalysisRow {
   id: string;
@@ -20,13 +21,6 @@ interface AnalysisRow {
   created_at: string;
 }
 
-const STYLE_LABEL_SHORT: Record<string, string> = {
-  scalp: "스캘핑",
-  day: "데이",
-  swing: "스윙",
-  position: "포지션",
-};
-
 const PAGE_SIZE = 50;
 
 export default async function AnalysisHistoryPage({
@@ -39,6 +33,7 @@ export default async function AnalysisHistoryPage({
     page?: string;
   }>;
 }) {
+  const t = await getT();
   const sp = await searchParams;
   const filterSymbol = (sp.symbol || "").toUpperCase().trim();
   const filterStyle = sp.style || "";
@@ -91,16 +86,16 @@ export default async function AnalysisHistoryPage({
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3 w-3" />
-              AI 분석으로
+              {t("analyze.pageh.backToAnalyze")}
             </Link>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">AI 분석 기록</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("analyze.pageh.historyTitle")}</h1>
           <p className="text-sm text-muted-foreground">
-            지금까지 실행한 분석 전체. 클릭하면 분석 페이지에서 결과를 복원합니다.
+            {t("analyze.pageh.historyDesc")}
           </p>
         </div>
         <div className="text-right text-xs text-muted-foreground">
-          총 {total}건
+          {t("analyze.pageh.totalCount", { n: total })}
         </div>
       </div>
 
@@ -109,7 +104,7 @@ export default async function AnalysisHistoryPage({
         <CardContent className="p-3">
           <form className="flex flex-wrap items-center gap-2 text-xs" action="/app/analyze/history">
             <label className="flex items-center gap-1.5">
-              <span className="text-muted-foreground">코인</span>
+              <span className="text-muted-foreground">{t("analyze.pageh.filterSymbol")}</span>
               <input
                 name="symbol"
                 defaultValue={filterSymbol}
@@ -118,49 +113,49 @@ export default async function AnalysisHistoryPage({
               />
             </label>
             <label className="flex items-center gap-1.5">
-              <span className="text-muted-foreground">스타일</span>
+              <span className="text-muted-foreground">{t("analyze.pageh.filterStyle")}</span>
               <select
                 name="style"
                 defaultValue={filterStyle}
                 className="h-8 rounded-md border border-border bg-background px-2"
               >
-                <option value="">전체</option>
-                <option value="scalp">스캘핑</option>
-                <option value="day">데이</option>
-                <option value="swing">스윙</option>
-                <option value="position">포지션</option>
+                <option value="">{t("analyze.pageh.filterAll")}</option>
+                <option value="scalp">{t("analyze.pageh.style.scalp")}</option>
+                <option value="day">{t("analyze.pageh.style.day")}</option>
+                <option value="swing">{t("analyze.pageh.style.swing")}</option>
+                <option value="position">{t("analyze.pageh.style.position")}</option>
               </select>
             </label>
             <label className="flex items-center gap-1.5">
-              <span className="text-muted-foreground">전략</span>
+              <span className="text-muted-foreground">{t("analyze.pageh.filterStrategy")}</span>
               <select
                 name="strategy"
                 defaultValue={filterStrategy}
                 className="h-8 rounded-md border border-border bg-background px-2"
               >
-                <option value="">전체</option>
-                <option value="trend_pullback">추세 눌림</option>
-                <option value="breakout">돌파</option>
-                <option value="range_fade">박스 반전</option>
-                <option value="reversal">반전</option>
-                <option value="liquidity_grab">유동성 사냥</option>
-                <option value="funding_squeeze">펀딩 압착</option>
-                <option value="session_open_drive">세션 개장</option>
-                <option value="wait">대기</option>
+                <option value="">{t("analyze.pageh.filterAll")}</option>
+                <option value="trend_pullback">{t("analyze.pageh.strategy.trend_pullback")}</option>
+                <option value="breakout">{t("analyze.pageh.strategy.breakout")}</option>
+                <option value="range_fade">{t("analyze.pageh.strategy.range_fade")}</option>
+                <option value="reversal">{t("analyze.pageh.strategy.reversal")}</option>
+                <option value="liquidity_grab">{t("analyze.pageh.strategy.liquidity_grab")}</option>
+                <option value="funding_squeeze">{t("analyze.pageh.strategy.funding_squeeze")}</option>
+                <option value="session_open_drive">{t("analyze.pageh.strategy.session_open_drive")}</option>
+                <option value="wait">{t("analyze.pageh.strategy.wait")}</option>
               </select>
             </label>
             <button
               type="submit"
               className="h-8 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
             >
-              필터 적용
+              {t("analyze.pageh.applyFilter")}
             </button>
             {(filterSymbol || filterStyle || filterStrategy) ? (
               <Link
                 href="/app/analyze/history"
                 className="h-8 inline-flex items-center rounded-md border border-border px-3 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               >
-                초기화
+                {t("analyze.pageh.reset")}
               </Link>
             ) : null}
           </form>
@@ -172,9 +167,9 @@ export default async function AnalysisHistoryPage({
         <CardContent className="p-0">
           {rows.length === 0 ? (
             <div className="p-10 text-center text-sm text-muted-foreground">
-              조건에 맞는 분석이 없습니다.{" "}
+              {t("analyze.pageh.empty")}{" "}
               <Link href="/app/analyze" className="text-primary underline-offset-2 hover:underline">
-                새 분석 실행
+                {t("analyze.pageh.runNew")}
               </Link>
             </div>
           ) : (
@@ -182,7 +177,13 @@ export default async function AnalysisHistoryPage({
               {rows.map((a) => {
                 const isWait = a.primary_strategy === "wait";
                 const dirLabel =
-                  a.strategy_direction === "long" ? "롱" : a.strategy_direction === "short" ? "숏" : null;
+                  a.strategy_direction === "long"
+                    ? t("common.long")
+                    : a.strategy_direction === "short"
+                      ? t("common.short")
+                      : null;
+                const styleLabel = t(`analyze.pageh.style.${a.style}`);
+                const strategyLabel = t(`analyze.pageh.strategy.${a.primary_strategy}`);
                 return (
                   <li key={a.id} className="group">
                     <div className="flex items-center gap-2 px-5 py-3 transition-colors hover:bg-muted/30">
@@ -192,7 +193,7 @@ export default async function AnalysisHistoryPage({
                       >
                         <span className="font-mono font-medium">{a.symbol}</span>
                         <span className="text-xs text-muted-foreground">
-                          {STYLE_LABEL_SHORT[a.style] ?? a.style}
+                          {styleLabel}
                         </span>
                         <Badge
                           className={cn(
@@ -204,14 +205,14 @@ export default async function AnalysisHistoryPage({
                                 : "border-primary/40 bg-primary/10 text-primary",
                           )}
                         >
-                          {STRATEGY_LABELS[a.primary_strategy]}
+                          {strategyLabel}
                           {dirLabel ? ` · ${dirLabel}` : ""}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          시나리오 {a.scenarios_count}개
+                          {t("analyze.pageh.scenarioCount", { n: a.scenarios_count })}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          자신감 {Math.round(a.strategy_confidence * 100)}%
+                          {t("analyze.pageh.confidence", { pct: Math.round(a.strategy_confidence * 100) })}
                         </span>
                         {a.current_price ? (
                           <span className="text-xs text-muted-foreground">
@@ -242,7 +243,7 @@ export default async function AnalysisHistoryPage({
       {totalPages > 1 ? (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <div>
-            페이지 {page} / {totalPages}
+            {t("analyze.pageh.pageOf", { page, total: totalPages })}
           </div>
           <div className="flex gap-2">
             {page > 1 ? (
@@ -250,7 +251,7 @@ export default async function AnalysisHistoryPage({
                 href={`/app/analyze/history${buildQS({ page: page - 1 })}`}
                 className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 hover:bg-muted/40 hover:text-foreground"
               >
-                <ArrowLeft className="h-3 w-3" /> 이전
+                <ArrowLeft className="h-3 w-3" /> {t("analyze.pageh.prev")}
               </Link>
             ) : null}
             {page < totalPages ? (
@@ -258,7 +259,7 @@ export default async function AnalysisHistoryPage({
                 href={`/app/analyze/history${buildQS({ page: page + 1 })}`}
                 className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 hover:bg-muted/40 hover:text-foreground"
               >
-                다음 <ArrowRight className="h-3 w-3" />
+                {t("analyze.pageh.next")} <ArrowRight className="h-3 w-3" />
               </Link>
             ) : null}
           </div>
@@ -272,7 +273,7 @@ export default async function AnalysisHistoryPage({
           className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           <Sparkles className="h-4 w-4" />
-          새 분석 실행
+          {t("analyze.pageh.runNew")}
         </Link>
       </div>
     </div>

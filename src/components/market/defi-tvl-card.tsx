@@ -1,6 +1,9 @@
 import { ChevronDown } from "lucide-react";
 import { fetchDefiTvl } from "@/lib/market-widgets/defi-tvl";
+import { getT } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
+
+type TFunc = (key: string, vars?: Record<string, string | number>) => string;
 
 function fmtBig(n: number): string {
   if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
@@ -20,56 +23,59 @@ function fmtDelta(v: number, digits = 2) {
   return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
 }
 
-function tvlInsight(delta7d: number): { title: string; body: React.ReactNode } {
+function tvlInsight(
+  delta7d: number,
+  t: TFunc,
+): { title: string; body: React.ReactNode } {
   if (delta7d >= 5)
     return {
-      title: "강한 risk-on · 알트 우호",
+      title: t("market.defi.insight.strongRiskOn.title"),
       body: (
         <>
-          <p>· DeFi로 자금 회귀 강함. 위험 자산 매수 우호 환경.</p>
-          <p>· 메이저 알트(ETH/SOL/AVAX) 추세 추종 유리.</p>
-          <p>· 특정 체인 TVL 급증 시 그 체인 토큰 강세 신호 (예: SOL 생태계).</p>
+          <p>{t("market.defi.insight.strongRiskOn.line1")}</p>
+          <p>{t("market.defi.insight.strongRiskOn.line2")}</p>
+          <p>{t("market.defi.insight.strongRiskOn.line3")}</p>
         </>
       ),
     };
   if (delta7d >= 1)
     return {
-      title: "온화한 자금 유입",
+      title: t("market.defi.insight.mildInflow.title"),
       body: (
         <>
-          <p>· 안정적 risk-on. 추세 추종 가능.</p>
-          <p>· 알트 비중 일부 ↑ 가능, 사이즈는 평상.</p>
+          <p>{t("market.defi.insight.mildInflow.line1")}</p>
+          <p>{t("market.defi.insight.mildInflow.line2")}</p>
         </>
       ),
     };
   if (delta7d > -1)
     return {
-      title: "보합 · 신호 없음",
+      title: t("market.defi.insight.neutral.title"),
       body: (
         <>
-          <p>· 큰 자금 이동 없음. 다른 지표(심리·도미넌스) 우선.</p>
-          <p>· 방향성 매매보다 레인지 매매 유리.</p>
+          <p>{t("market.defi.insight.neutral.line1")}</p>
+          <p>{t("market.defi.insight.neutral.line2")}</p>
         </>
       ),
     };
   if (delta7d > -5)
     return {
-      title: "디레버리징 시작",
+      title: t("market.defi.insight.deleveraging.title"),
       body: (
         <>
-          <p>· 자금 이탈 초입. 변동성 ↑ 가능.</p>
-          <p>· 알트 사이즈 ↓, 신규는 보수적.</p>
-          <p>· 손절 좁히고 추가 하락 대비.</p>
+          <p>{t("market.defi.insight.deleveraging.line1")}</p>
+          <p>{t("market.defi.insight.deleveraging.line2")}</p>
+          <p>{t("market.defi.insight.deleveraging.line3")}</p>
         </>
       ),
     };
   return {
-    title: "강한 risk-off · 변동성 ↑",
+    title: t("market.defi.insight.strongRiskOff.title"),
     body: (
       <>
-        <p>· 위험 자산 회피 모드. 디파이 자금 이탈 진행.</p>
-        <p>· 보유 포지션 축소 검토. 신규 진입 보류.</p>
-        <p>· 단기 바운스가 있어도 신뢰도 낮음.</p>
+        <p>{t("market.defi.insight.strongRiskOff.line1")}</p>
+        <p>{t("market.defi.insight.strongRiskOff.line2")}</p>
+        <p>{t("market.defi.insight.strongRiskOff.line3")}</p>
       </>
     ),
   };
@@ -114,8 +120,9 @@ function Sparkline({ data }: { data: { date: number; tvl: number }[] }) {
 }
 
 export async function DefiTvlCard() {
+  const t = await getT();
   const d = await fetchDefiTvl();
-  const ins = tvlInsight(d.delta7dPct);
+  const ins = tvlInsight(d.delta7dPct, t);
 
   return (
     <section>
@@ -165,7 +172,7 @@ export async function DefiTvlCard() {
         {/* Sparkline */}
         <div>
           <p className="mb-1 text-[9px] uppercase tracking-wider text-muted-foreground">
-            최근 30일
+            {t("market.defi.last30d")}
           </p>
           <Sparkline data={d.series} />
         </div>
@@ -173,11 +180,13 @@ export async function DefiTvlCard() {
         {/* Top chains */}
         <div>
           <p className="mb-1.5 text-[9px] uppercase tracking-wider text-muted-foreground">
-            체인별 TOP 5
+            {t("market.defi.topChains")}
           </p>
           <ul className="space-y-1.5">
             {d.topChains.length === 0 ? (
-              <li className="text-xs text-muted-foreground">데이터 없음</li>
+              <li className="text-xs text-muted-foreground">
+                {t("market.defi.noData")}
+              </li>
             ) : (
               d.topChains.map((c) => {
                 const pct = d.total > 0 ? (c.tvl / d.total) * 100 : 0;
@@ -206,7 +215,9 @@ export async function DefiTvlCard() {
         <details className="group border-t border-border/40 pt-2">
           <summary className="flex cursor-pointer items-center justify-between gap-2 text-xs font-medium text-foreground hover:text-primary [&::-webkit-details-marker]:hidden">
             <span className="flex items-center gap-1.5">
-              <span className="text-muted-foreground">방향 해석 ·</span>
+              <span className="text-muted-foreground">
+                {t("market.defi.interpretation")}
+              </span>
               <span>{ins.title}</span>
             </span>
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
@@ -217,7 +228,7 @@ export async function DefiTvlCard() {
         </details>
 
         <p className="mt-auto pt-2 text-[9px] uppercase tracking-[0.14em] text-muted-foreground/60">
-          via DeFiLlama · 30일 추이 · 증가 = risk-on · 감소 = risk-off
+          {t("market.defi.footer")}
         </p>
       </article>
     </section>

@@ -14,17 +14,20 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/app/logo";
 import { cn } from "@/lib/utils";
-
-const NAV = [
-  { href: "/features", label: "기능" },
-  { href: "/how-it-works", label: "작동 방식" },
-  { href: "/pricing", label: "가격" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/contact", label: "문의" },
-];
+import { useT } from "@/lib/i18n/context";
+import type { TFunction } from "@/lib/i18n/messages";
 
 export function HeroDashboard() {
   const pathname = usePathname();
+  const t = useT();
+
+  const NAV = [
+    { href: "/features", label: t("landing.nav.features") },
+    { href: "/how-it-works", label: t("landing.nav.howItWorks") },
+    { href: "/pricing", label: t("landing.nav.pricing") },
+    { href: "/faq", label: t("landing.nav.faq") },
+    { href: "/contact", label: t("landing.nav.contact") },
+  ];
 
   return (
     <section className="relative isolate bg-[#02060f] px-3 pb-8 pt-6 sm:px-6 sm:pt-8">
@@ -86,13 +89,13 @@ export function HeroDashboard() {
               href="/login"
               className="hidden rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:text-white sm:inline-block"
             >
-              로그인
+              {t("landing.nav.login")}
             </Link>
             <Link
               href="/login?mode=signup"
               className="rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-4 py-1.5 text-xs font-semibold text-[#02060f] shadow-[0_0_20px_rgba(56,189,248,0.45)] transition-all hover:shadow-[0_0_28px_rgba(56,189,248,0.65)]"
             >
-              회원가입
+              {t("landing.nav.signup")}
             </Link>
           </div>
         </header>
@@ -101,56 +104,56 @@ export function HeroDashboard() {
         <div className="relative z-10 grid grid-cols-12 gap-4 px-4 pb-10 pt-6 sm:px-10 sm:pt-10 lg:gap-6 lg:pb-16">
           {/* LEFT — 3 cards */}
           <div className="col-span-12 flex flex-col gap-5 lg:col-span-3">
-            <CardMarketData />
-            <CardAnalytics />
-            <CardRSI />
+            <CardMarketData t={t} />
+            <CardAnalytics t={t} />
+            <CardRSI t={t} />
           </div>
 
           {/* CENTER — headline + CTAs + Strategy Decision card */}
           <div className="col-span-12 flex flex-col items-center lg:col-span-6">
             <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
-              Pre-trade Decision Engine
+              {t("landing.hero.eyebrow")}
             </div>
             <h1 className="mt-5 max-w-2xl text-center text-4xl font-bold leading-[1.15] text-white sm:text-5xl lg:text-[3.4rem]">
-              <span className="text-white">매매 전</span>{" "}
+              <span className="text-white">{t("landing.hero.headlinePre")}</span>{" "}
               <span className="bg-gradient-to-br from-sky-300 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                AI가 결정을 검증
+                {t("landing.hero.headlineHighlight")}
               </span>
               <br />
-              합니다
+              {t("landing.hero.headlinePost")}
             </h1>
             <p className="mx-auto mt-6 max-w-md text-center text-[15px] leading-relaxed text-white/55">
-              실시간 시장 데이터·구조·심리를 종합해{" "}
-              <span className="text-white/75">A·B·C·D 등급</span>으로 답합니다.
-              추격·미확정 캔들·BTC 충돌을 자동 감지합니다.
+              {t("landing.hero.bodyPre")}{" "}
+              <span className="text-white/75">{t("landing.hero.bodyGrades")}</span>
+              {t("landing.hero.bodyPost")}
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
                 href="/login?mode=signup"
                 className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-6 py-3 text-sm font-semibold text-[#02060f] shadow-[0_0_30px_rgba(56,189,248,0.5)] transition-all hover:gap-3 hover:shadow-[0_0_42px_rgba(56,189,248,0.7)]"
               >
-                무료로 시작
+                {t("landing.cta.startFree")}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/how-it-works"
                 className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-6 py-3 text-sm font-semibold text-white/80 backdrop-blur transition-colors hover:bg-white/[0.08] hover:text-white"
               >
-                작동 방식
+                {t("landing.nav.howItWorks")}
               </Link>
             </div>
 
             {/* Center decision card */}
             <div className="mt-10 w-full max-w-[400px]">
-              <CardDecision />
+              <CardDecision t={t} />
             </div>
           </div>
 
           {/* RIGHT — 3 cards */}
           <div className="col-span-12 flex flex-col gap-5 lg:col-span-3">
-            <CardRisk />
-            <CardOrder />
-            <CardContext />
+            <CardRisk t={t} />
+            <CardOrder t={t} />
+            <CardContext t={t} />
           </div>
         </div>
 
@@ -308,9 +311,9 @@ function Sparkline({ trend = "up" }: { trend?: "up" | "down" }) {
 }
 
 /* ──────────────────────────── 6 side cards ──────────────────────────── */
-function CardMarketData() {
+function CardMarketData({ t }: { t: TFunction }) {
   return (
-    <Panel icon={<BarChart3 className="h-3.5 w-3.5" />} title="시장 데이터">
+    <Panel icon={<BarChart3 className="h-3.5 w-3.5" />} title={t("landing.cards.marketData")}>
       <div className="flex items-end justify-between">
         <div>
           <div className="text-[10px] text-white/40">Binance · BTC/USDT</div>
@@ -325,20 +328,20 @@ function CardMarketData() {
   );
 }
 
-function CardAnalytics() {
+function CardAnalytics({ t }: { t: TFunction }) {
   return (
-    <Panel icon={<Activity className="h-3.5 w-3.5" />} title="구조 점검">
-      <Row label="HTF 정렬" value="통과" badge="good" />
-      <Row label="FVG 존재" value="1H 78.3K" badge="good" />
-      <Row label="박스 회피" value="가운데" badge="warn" />
-      <Row label="거래량" value="평균 +18%" badge="good" />
+    <Panel icon={<Activity className="h-3.5 w-3.5" />} title={t("landing.cards.structure")}>
+      <Row label={t("landing.cards.htfAlign")} value={t("landing.cards.pass")} badge="good" />
+      <Row label={t("landing.cards.fvg")} value="1H 78.3K" badge="good" />
+      <Row label={t("landing.cards.boxAvoid")} value={t("landing.cards.middle")} badge="warn" />
+      <Row label={t("landing.cards.volume")} value={t("landing.cards.avgPlus18")} badge="good" />
     </Panel>
   );
 }
 
-function CardRSI() {
+function CardRSI({ t }: { t: TFunction }) {
   return (
-    <Panel icon={<TrendingUp className="h-3.5 w-3.5" />} title="RSI · 패턴">
+    <Panel icon={<TrendingUp className="h-3.5 w-3.5" />} title={t("landing.cards.rsiPattern")}>
       <div className="flex items-end justify-between">
         <div>
           <div className="text-[10px] text-white/40">1H · 14 Period</div>
@@ -346,49 +349,49 @@ function CardRSI() {
             62.45
           </div>
         </div>
-        <div className="font-mono text-[10px] text-cyan-300">중립↗</div>
+        <div className="font-mono text-[10px] text-cyan-300">{t("landing.cards.neutralUp")}</div>
       </div>
       <Sparkline trend="up" />
     </Panel>
   );
 }
 
-function CardRisk() {
+function CardRisk({ t }: { t: TFunction }) {
   return (
-    <Panel icon={<ShieldCheck className="h-3.5 w-3.5" />} title="리스크 필터">
-      <Row label="상태" value="통과" badge="good" />
-      <Row label="일일 누적" value="-0.4R" />
-      <Row label="포지션 노출" value="22.5%" />
-      <Row label="거래당 리스크" value="0.8%" />
+    <Panel icon={<ShieldCheck className="h-3.5 w-3.5" />} title={t("landing.cards.riskFilter")}>
+      <Row label={t("landing.cards.status")} value={t("landing.cards.pass")} badge="good" />
+      <Row label={t("landing.cards.dailyCum")} value="-0.4R" />
+      <Row label={t("landing.cards.posExposure")} value="22.5%" />
+      <Row label={t("landing.cards.riskPerTrade")} value="0.8%" />
     </Panel>
   );
 }
 
-function CardOrder() {
+function CardOrder({ t }: { t: TFunction }) {
   return (
-    <Panel icon={<Gauge className="h-3.5 w-3.5" />} title="등급 점수">
-      <Row label="상태" value="A 등급" badge="good" valueClass="text-cyan-300" />
-      <Row label="최종 점수" value="+8" valueClass="text-cyan-300" />
-      <Row label="추격 진입" value="아님" badge="good" />
-      <Row label="캔들 종가" value="확정" badge="good" />
-      <Row label="트리거 검증" value="3/3" badge="good" />
+    <Panel icon={<Gauge className="h-3.5 w-3.5" />} title={t("landing.cards.gradeScore")}>
+      <Row label={t("landing.cards.status")} value={t("landing.cards.gradeA")} badge="good" valueClass="text-cyan-300" />
+      <Row label={t("landing.cards.finalScore")} value="+8" valueClass="text-cyan-300" />
+      <Row label={t("landing.cards.chase")} value={t("landing.cards.no")} badge="good" />
+      <Row label={t("landing.cards.candleClose")} value={t("landing.cards.confirmed")} badge="good" />
+      <Row label={t("landing.cards.triggerCheck")} value="3/3" badge="good" />
     </Panel>
   );
 }
 
-function CardContext() {
+function CardContext({ t }: { t: TFunction }) {
   return (
-    <Panel icon={<Brain className="h-3.5 w-3.5" />} title="시장 컨텍스트">
-      <Row label="펀딩비" value="+0.012%" />
+    <Panel icon={<Brain className="h-3.5 w-3.5" />} title={t("landing.cards.marketContext")}>
+      <Row label={t("landing.cards.funding")} value="+0.012%" />
       <Row label="OI 24h" value="+2.4%" badge="good" />
-      <Row label="F&G 지수" value="58 · 탐욕" />
-      <Row label="다음 정산" value="6h 12m" />
+      <Row label={t("landing.cards.fgIndex")} value={t("landing.cards.fgGreed")} />
+      <Row label={t("landing.cards.nextSettle")} value="6h 12m" />
     </Panel>
   );
 }
 
 /* ──────────────────────────── Center decision card ──────────────────────────── */
-function CardDecision() {
+function CardDecision({ t }: { t: TFunction }) {
   return (
     <div className="relative">
       {/* Outer glow */}
@@ -408,7 +411,7 @@ function CardDecision() {
         <div className="relative flex items-center justify-between text-white/90">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-cyan-300" />
-            <span className="text-sm font-semibold">Alpha Gate · 진입 판단</span>
+            <span className="text-sm font-semibold">{t("landing.decision.title")}</span>
           </div>
           <span className="font-mono text-[10px] text-white/30">···</span>
         </div>
@@ -417,7 +420,7 @@ function CardDecision() {
 
         {/* Subtitle + speed */}
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-white/50">AI + 객관 데이터</span>
+          <span className="text-white/50">{t("landing.decision.subtitle")}</span>
           <span className="font-mono text-cyan-300">52.9ms ●</span>
         </div>
 
@@ -427,15 +430,15 @@ function CardDecision() {
             A
           </span>
           <div className="mb-2 flex flex-col">
-            <span className="text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">등급</span>
-            <span className="text-sm font-semibold text-white">진입 권장</span>
+            <span className="text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">{t("landing.decision.gradeLabel")}</span>
+            <span className="text-sm font-semibold text-white">{t("landing.decision.recommend")}</span>
           </div>
         </div>
 
         {/* Confidence */}
         <div className="mt-5">
           <div className="flex items-center justify-between text-[11px]">
-            <span className="text-white/55">신뢰도</span>
+            <span className="text-white/55">{t("landing.decision.confidence")}</span>
             <span className="font-mono font-semibold text-white">87 / 100</span>
           </div>
           <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
@@ -445,9 +448,9 @@ function CardDecision() {
 
         {/* Reason */}
         <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">근거</div>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">{t("landing.decision.reasonLabel")}</div>
           <p className="mt-1.5 text-[12px] leading-relaxed text-white/80">
-            BTC 정렬 · 78,500 sweep 후 1H 종가 회복 · 손익비 2.4R
+            {t("landing.decision.reasonText")}
           </p>
         </div>
       </div>

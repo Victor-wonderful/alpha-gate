@@ -7,38 +7,45 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { depositFundsAction, resetWalletAction } from "./_actions";
+import { useT } from "@/lib/i18n/context";
 
 const QUICK_DEPOSITS = [1000, 5000, 10000];
 
 export function VirtualTradeClient({ currentBalance }: { currentBalance: number }) {
+  const t = useT();
   const [amount, setAmount] = useState("");
   const [pending, startTransition] = useTransition();
 
   function deposit(value: number) {
     if (value <= 0) {
-      toast.error("0보다 큰 금액을 입력하세요.");
+      toast.error(t("paper.vt.errPositiveAmount"));
       return;
     }
     startTransition(async () => {
       const r = await depositFundsAction(value);
       if (!r.ok) {
-        toast.error(r.error ?? "입금 실패");
+        toast.error(r.error ?? t("paper.vt.errDepositFailed"));
         return;
       }
-      toast.success(`가상 잔액 +$${value.toLocaleString()} (총 $${r.balance?.toLocaleString()})`);
+      toast.success(
+        t("paper.vt.depositSuccess", {
+          amount: value.toLocaleString(),
+          total: r.balance?.toLocaleString() ?? "",
+        }),
+      );
       setAmount("");
     });
   }
 
   function reset() {
-    if (!confirm("가상 잔액을 $10,000으로 리셋하시겠습니까?\n진행 중인 포지션이 있다면 마진은 회수되지 않습니다. 진행 포지션이 모두 종료된 뒤 리셋을 권장합니다.")) return;
+    if (!confirm(t("paper.vt.resetConfirm"))) return;
     startTransition(async () => {
       const r = await resetWalletAction(10000);
       if (!r.ok) {
-        toast.error(r.error ?? "리셋 실패");
+        toast.error(r.error ?? t("paper.vt.errResetFailed"));
         return;
       }
-      toast.success("가상 잔액을 $10,000으로 리셋했습니다.");
+      toast.success(t("paper.vt.resetSuccess"));
     });
   }
 
@@ -46,7 +53,7 @@ export function VirtualTradeClient({ currentBalance }: { currentBalance: number 
     <div className="grid gap-4 sm:grid-cols-2">
       <div>
         <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          가상 자금 추가 (vUSDT)
+          {t("paper.vt.addFunds")}
         </Label>
         <div className="mt-2 flex gap-2">
           <Input
@@ -54,7 +61,7 @@ export function VirtualTradeClient({ currentBalance }: { currentBalance: number 
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="금액 입력"
+            placeholder={t("paper.vt.amountPlaceholder")}
             className="font-mono"
           />
           <Button
@@ -62,7 +69,7 @@ export function VirtualTradeClient({ currentBalance }: { currentBalance: number 
             onClick={() => deposit(Number(amount))}
           >
             <Plus className="mr-1 h-4 w-4" />
-            입금
+            {t("paper.vt.deposit")}
           </Button>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -82,10 +89,10 @@ export function VirtualTradeClient({ currentBalance }: { currentBalance: number 
 
       <div>
         <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          전체 리셋 (초기화)
+          {t("paper.vt.fullReset")}
         </Label>
         <p className="mt-2 text-xs text-muted-foreground">
-          현재 잔액 ${currentBalance.toLocaleString()} → $10,000으로 초기화. 통계와 거래 이력은 유지됩니다.
+          {t("paper.vt.resetDesc", { balance: currentBalance.toLocaleString() })}
         </p>
         <Button
           variant="outline"
@@ -94,7 +101,7 @@ export function VirtualTradeClient({ currentBalance }: { currentBalance: number 
           disabled={pending}
         >
           <RotateCcw className="mr-1 h-4 w-4" />
-          $10,000으로 리셋
+          {t("paper.vt.resetButton")}
         </Button>
       </div>
     </div>

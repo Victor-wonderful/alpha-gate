@@ -16,8 +16,15 @@ import {
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { HeroDashboard } from "@/components/marketing/hero-dashboard";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/messages";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const t = await getT();
+  const PAINS = getPains(t);
+  const STEPS = getSteps(t);
+  const FEATURES = getFeatures(t);
+  const WHY = getWhy(t);
   return (
     <main className="flex min-h-screen flex-col bg-[#02060f] text-white">
       <HeroDashboard />
@@ -25,17 +32,17 @@ export default function LandingPage() {
       {/* ───── Pain ───── */}
       <SectionShell glowPosition="top-left">
         <SectionHeader
-          eyebrow="문제"
+          eyebrow={t("landing.pain.eyebrow")}
           title={
             <>
-              분석은 잘합니다.
+              {t("landing.pain.titlePre")}
               <br />
               <span className="bg-gradient-to-r from-sky-300 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                결정에서 무너집니다.
+                {t("landing.pain.titleHighlight")}
               </span>
             </>
           }
-          body="차트는 잘 봅니다. 그런데 진입 버튼 앞에서 흔들립니다. FOMO, 추격, 손절 미준수, 사이즈 오버. 트레이더가 잃는 이유는 분석 부족이 아니라 결정의 일관성이 무너지기 때문입니다."
+          body={t("landing.pain.body")}
         />
         <div className="mt-16 grid gap-5 md:grid-cols-3">
           {PAINS.map((p) => (
@@ -47,18 +54,18 @@ export default function LandingPage() {
       {/* ───── How It Works ───── */}
       <SectionShell glowPosition="top">
         <SectionHeader
-          eyebrow="작동 방식"
+          eyebrow={t("landing.steps.eyebrow")}
           title={
             <>
-              4단계로
+              {t("landing.steps.titlePre")}
               <br />
               <span className="bg-gradient-to-r from-sky-300 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                결정을 시스템화
+                {t("landing.steps.titleHighlight")}
               </span>
-              합니다
+              {t("landing.steps.titlePost")}
             </>
           }
-          body="매번 같은 흐름으로 거래하면 감정이 끼어들 자리가 없습니다."
+          body={t("landing.steps.body")}
         />
         <div className="mt-16 grid gap-5 sm:grid-cols-2">
           {STEPS.map((s, i) => (
@@ -70,7 +77,7 @@ export default function LandingPage() {
             href="/how-it-works"
             className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/5 px-6 py-3 text-sm font-semibold text-cyan-300 transition-all hover:gap-3 hover:border-cyan-400/60 hover:bg-cyan-500/10 hover:text-cyan-200"
           >
-            자세히 보기
+            {t("landing.steps.learnMore")}
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -79,16 +86,16 @@ export default function LandingPage() {
       {/* ───── Features ───── */}
       <SectionShell glowPosition="right">
         <SectionHeader
-          eyebrow="기능"
+          eyebrow={t("landing.features.eyebrow")}
           title={
             <>
-              차트가 아니라{" "}
+              {t("landing.features.titlePre")}{" "}
               <span className="bg-gradient-to-r from-sky-300 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                결정을 다룹니다
+                {t("landing.features.titleHighlight")}
               </span>
             </>
           }
-          body="진입 전부터 청산 후까지, 의사결정의 모든 지점을 객관 데이터로 잇습니다."
+          body={t("landing.features.body")}
         />
         <div className="mt-20 space-y-20">
           {FEATURES.map((f, i) => (
@@ -100,7 +107,7 @@ export default function LandingPage() {
               )}
             >
               <FeatureText feature={f} />
-              <FeaturePreview kind={f.id} />
+              <FeaturePreview kind={f.id} t={t} />
             </div>
           ))}
         </div>
@@ -109,13 +116,13 @@ export default function LandingPage() {
       {/* ───── Why ───── */}
       <SectionShell glowPosition="bottom-left">
         <SectionHeader
-          eyebrow="차별점"
+          eyebrow={t("landing.why.eyebrow")}
           title={
             <>
-              데이터로 결정합니다.
+              {t("landing.why.titlePre")}
               <br />
               <span className="bg-gradient-to-r from-sky-300 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                감이 아니라.
+                {t("landing.why.titleHighlight")}
               </span>
             </>
           }
@@ -142,42 +149,42 @@ export default function LandingPage() {
             <div className="relative">
               <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
                 <Sparkles className="h-3 w-3" />
-                지금 시작
+                {t("landing.finalCta.eyebrow")}
               </div>
               <h2 className="mt-5 text-3xl font-bold leading-[1.15] sm:text-5xl">
-                다음 거래 전,
+                {t("landing.finalCta.titlePre")}
                 <br />
                 <span className="bg-gradient-to-r from-sky-200 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                  5분이면 충분합니다
+                  {t("landing.finalCta.titleHighlight")}
                 </span>
               </h2>
               <p className="mx-auto mt-6 max-w-md text-base text-white/60">
-                한 번의 D급 거래가 한 달 수익을 지웁니다.
+                {t("landing.finalCta.body")}
               </p>
               <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
                 <Link
                   href="/login?mode=signup"
                   className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-7 py-3.5 text-sm font-semibold text-[#02060f] shadow-[0_0_32px_rgba(56,189,248,0.55)] transition-all hover:gap-3 hover:shadow-[0_0_44px_rgba(56,189,248,0.75)]"
                 >
-                  무료로 시작
+                  {t("landing.cta.startFree")}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/pricing"
                   className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white/80 backdrop-blur transition-colors hover:bg-white/10 hover:text-white"
                 >
-                  가격 보기
+                  {t("landing.cta.viewPricing")}
                 </Link>
               </div>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-white/40">
                 <span className="flex items-center gap-1.5">
-                  <span className="h-1 w-1 rounded-full bg-cyan-400" /> 신용카드 불필요
+                  <span className="h-1 w-1 rounded-full bg-cyan-400" /> {t("landing.finalCta.noCard")}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-1 w-1 rounded-full bg-cyan-400" /> Free 영구 무료
+                  <span className="h-1 w-1 rounded-full bg-cyan-400" /> {t("landing.finalCta.foreverFree")}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-1 w-1 rounded-full bg-cyan-400" /> 7일 환불 보장
+                  <span className="h-1 w-1 rounded-full bg-cyan-400" /> {t("landing.finalCta.refund")}
                 </span>
               </div>
             </div>
@@ -256,29 +263,31 @@ function SectionHeader({
 
 /* ──────────────────────────── Pain cards ──────────────────────────── */
 
-const PAINS = [
-  {
-    title: "추격 진입",
-    loss: "−1.2R",
-    sub: "거래당 평균 손실",
-    body: "가격이 이미 움직인 후 따라 들어갑니다. 손절폭은 넓어지고 손익비는 무너집니다.",
-    icon: Flame,
-  },
-  {
-    title: "손절 미준수",
-    loss: "−2.5R",
-    sub: "사고당 평균 손실",
-    body: "계획한 손절가에서 한 번만 버티면 됩니다. 그 한 번이 한 달 성과를 지웁니다.",
-    icon: AlertTriangle,
-  },
-  {
-    title: "사이즈 오버",
-    loss: "−50%",
-    sub: "최대 계좌 손실",
-    body: "확신이 강할수록 베팅이 커집니다. 한 번 틀리면 회복이 어려워집니다.",
-    icon: TrendingDown,
-  },
-] as const;
+function getPains(t: TFunction) {
+  return [
+    {
+      title: t("landing.pains.chase.title"),
+      loss: "−1.2R",
+      sub: t("landing.pains.chase.sub"),
+      body: t("landing.pains.chase.body"),
+      icon: Flame,
+    },
+    {
+      title: t("landing.pains.noStop.title"),
+      loss: "−2.5R",
+      sub: t("landing.pains.noStop.sub"),
+      body: t("landing.pains.noStop.body"),
+      icon: AlertTriangle,
+    },
+    {
+      title: t("landing.pains.oversize.title"),
+      loss: "−50%",
+      sub: t("landing.pains.oversize.sub"),
+      body: t("landing.pains.oversize.body"),
+      icon: TrendingDown,
+    },
+  ];
+}
 
 function PainCard({
   title,
@@ -316,32 +325,34 @@ function PainCard({
 
 /* ──────────────────────────── Step cards ──────────────────────────── */
 
-const STEPS = [
-  {
-    title: "AI 분석",
-    icon: Brain,
-    tag: "진입 전",
-    body: "Binance 실시간 데이터로 시장 구조·수급·심리를 분석합니다. 시나리오 1~3개와 무효화 조건을 제시합니다.",
-  },
-  {
-    title: "거래 실행",
-    icon: ClipboardCheck,
-    tag: "진입 전",
-    body: "진입가·손절·목표를 입력하면 A·B·C·D 등급으로 답합니다. 추격·미확정 캔들·BTC 충돌을 자동 감지합니다.",
-  },
-  {
-    title: "거래 일지",
-    icon: BookOpen,
-    tag: "진입 후",
-    body: "진입한 거래를 기록하고 청산 결과를 입력합니다. 결과 입력 후 AI가 한국어 복기 코멘트를 생성합니다.",
-  },
-  {
-    title: "성과 분석",
-    icon: BarChart3,
-    tag: "진입 후",
-    body: "등급별 평균 R·승률·실수 태그 통계로 매매 패턴을 객관적으로 파악합니다.",
-  },
-];
+function getSteps(t: TFunction) {
+  return [
+    {
+      title: t("landing.stepCards.analyze.title"),
+      icon: Brain,
+      tag: t("landing.stepCards.beforeEntry"),
+      body: t("landing.stepCards.analyze.body"),
+    },
+    {
+      title: t("landing.stepCards.trade.title"),
+      icon: ClipboardCheck,
+      tag: t("landing.stepCards.beforeEntry"),
+      body: t("landing.stepCards.trade.body"),
+    },
+    {
+      title: t("landing.stepCards.journal.title"),
+      icon: BookOpen,
+      tag: t("landing.stepCards.afterEntry"),
+      body: t("landing.stepCards.journal.body"),
+    },
+    {
+      title: t("landing.stepCards.dashboard.title"),
+      icon: BarChart3,
+      tag: t("landing.stepCards.afterEntry"),
+      body: t("landing.stepCards.dashboard.body"),
+    },
+  ];
+}
 
 function StepCard({
   index,
@@ -399,52 +410,54 @@ interface FeatureItem {
   bullets: string[];
 }
 
-const FEATURES: FeatureItem[] = [
-  {
-    id: "analyze",
-    tag: "AI 분석",
-    title: "객관 데이터를 해석합니다",
-    body: "Binance 공개 API에서 12개 이상의 데이터를 종합해 1~3개의 시나리오를 제시합니다. AI가 가격을 만들어내지 않습니다.",
-    bullets: [
-      "멀티 타임프레임 캔들·호가·체결·펀딩",
-      "ATR, VWAP, 상위 트레이더 비율, F&G 지수",
-      "시나리오별 트리거·무효화 조건 명시",
-    ],
-  },
-  {
-    id: "trade",
-    tag: "거래 실행",
-    title: "거래소처럼 입력합니다",
-    body: "진입가·손절·목표·계좌·리스크·레버리지를 거래소 주문 화면처럼 입력합니다. 손익비, 시장 구조, 트리거 검증을 종합해 A·B·C·D 등급과 행동 권고를 제시합니다.",
-    bullets: [
-      "추격 진입·미확정 캔들 자동 감지",
-      "포지션 사이징 + 권장 레버리지 자동 계산",
-      "수수료 차감 후 실효 R 표시",
-    ],
-  },
-  {
-    id: "journal",
-    tag: "거래 일지",
-    title: "결정과 결과를 잇습니다",
-    body: "진입 시 평가가 영구 보존됩니다. 청산 후 실제 R과 실수 태그를 입력하면 AI가 결정 과정과 실행을 평가해 한국어 코칭 코멘트를 자동 생성합니다.",
-    bullets: [
-      "진입 평가 + 청산 결과 한 화면에 결합",
-      "실수 태그(추격·과도한 사이즈 등) 자동 집계",
-      "AI 한국어 복기 코멘트 자동 생성",
-    ],
-  },
-  {
-    id: "dashboard",
-    tag: "성과 분석",
-    title: "패턴을 발견합니다",
-    body: "등급별 평균 R, 실수 태그별 누적 손익, 월별 누적 R 그래프. 감정적 회고가 아닌 객관 데이터로 매매 패턴을 학습합니다.",
-    bullets: [
-      "등급(A/B/C/D)별 승률·평균 R 비교",
-      "실수 태그별 누적 손익 랭킹",
-      "월별 R 추이 + 드로다운 추적",
-    ],
-  },
-];
+function getFeatures(t: TFunction): FeatureItem[] {
+  return [
+    {
+      id: "analyze",
+      tag: t("landing.featureItems.analyze.tag"),
+      title: t("landing.featureItems.analyze.title"),
+      body: t("landing.featureItems.analyze.body"),
+      bullets: [
+        t("landing.featureItems.analyze.bullet1"),
+        t("landing.featureItems.analyze.bullet2"),
+        t("landing.featureItems.analyze.bullet3"),
+      ],
+    },
+    {
+      id: "trade",
+      tag: t("landing.featureItems.trade.tag"),
+      title: t("landing.featureItems.trade.title"),
+      body: t("landing.featureItems.trade.body"),
+      bullets: [
+        t("landing.featureItems.trade.bullet1"),
+        t("landing.featureItems.trade.bullet2"),
+        t("landing.featureItems.trade.bullet3"),
+      ],
+    },
+    {
+      id: "journal",
+      tag: t("landing.featureItems.journal.tag"),
+      title: t("landing.featureItems.journal.title"),
+      body: t("landing.featureItems.journal.body"),
+      bullets: [
+        t("landing.featureItems.journal.bullet1"),
+        t("landing.featureItems.journal.bullet2"),
+        t("landing.featureItems.journal.bullet3"),
+      ],
+    },
+    {
+      id: "dashboard",
+      tag: t("landing.featureItems.dashboard.tag"),
+      title: t("landing.featureItems.dashboard.title"),
+      body: t("landing.featureItems.dashboard.body"),
+      bullets: [
+        t("landing.featureItems.dashboard.bullet1"),
+        t("landing.featureItems.dashboard.bullet2"),
+        t("landing.featureItems.dashboard.bullet3"),
+      ],
+    },
+  ];
+}
 
 function FeatureText({ feature }: { feature: FeatureItem }) {
   return (
@@ -470,15 +483,15 @@ function FeatureText({ feature }: { feature: FeatureItem }) {
   );
 }
 
-function FeaturePreview({ kind }: { kind: FeatureItem["id"] }) {
+function FeaturePreview({ kind, t }: { kind: FeatureItem["id"]; t: TFunction }) {
   if (kind === "analyze") {
     return (
-      <PreviewCard caption="분석 결과 — 시나리오 카드">
+      <PreviewCard caption={t("landing.preview.analyze.caption")}>
         <div className="space-y-2">
           {[
-            { letter: "A", dir: "롱", trigger: "78,500 sweep 후 1H 종가 회복", rr: "2.4R" },
-            { letter: "B", dir: "숏", trigger: "79,200 거부 + 거래량 동반 하락", rr: "2.1R" },
-            { letter: "C", dir: "관망", trigger: "박스 중간 · 트리거 없음", rr: "—" },
+            { letter: "A", dir: t("common.long"), trigger: t("landing.preview.analyze.trigger1"), rr: "2.4R" },
+            { letter: "B", dir: t("common.short"), trigger: t("landing.preview.analyze.trigger2"), rr: "2.1R" },
+            { letter: "C", dir: t("landing.preview.analyze.wait"), trigger: t("landing.preview.analyze.trigger3"), rr: "—" },
           ].map((s) => (
             <div
               key={s.letter}
@@ -498,38 +511,38 @@ function FeaturePreview({ kind }: { kind: FeatureItem["id"] }) {
   }
   if (kind === "trade") {
     return (
-      <PreviewCard caption="거래 실행 — 등급 결과">
+      <PreviewCard caption={t("landing.preview.trade.caption")}>
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-rose-400/40 bg-gradient-to-br from-rose-500/25 to-rose-700/10 text-2xl font-black text-rose-300 shadow-[0_0_24px_rgba(244,63,94,0.4)]">
             D
           </div>
           <div>
-            <div className="text-sm font-semibold">매매 금지</div>
-            <div className="font-mono text-[11px] text-white/40">최종 점수 0점</div>
+            <div className="text-sm font-semibold">{t("landing.preview.trade.banned")}</div>
+            <div className="font-mono text-[11px] text-white/40">{t("landing.preview.trade.score0")}</div>
           </div>
         </div>
         <div className="mt-5 space-y-1 text-[11px]">
-          <ScoreLine label="손절 기준 구조적 타당" value="+2" tone="good" />
-          <ScoreLine label="BTC 정렬" value="+1" tone="good" />
-          <ScoreLine label="계획 진입 구간 벗어남" value="−2" tone="bad" />
-          <ScoreLine label="미확정 캔들에서 진입" value="−1" tone="bad" />
+          <ScoreLine label={t("landing.preview.trade.line1")} value="+2" tone="good" />
+          <ScoreLine label={t("landing.preview.trade.line2")} value="+1" tone="good" />
+          <ScoreLine label={t("landing.preview.trade.line3")} value="−2" tone="bad" />
+          <ScoreLine label={t("landing.preview.trade.line4")} value="−1" tone="bad" />
         </div>
       </PreviewCard>
     );
   }
   if (kind === "journal") {
     return (
-      <PreviewCard caption="AI 복기 코멘트">
+      <PreviewCard caption={t("landing.preview.journal.caption")}>
         <div className="flex items-start gap-3">
           <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="flex-1 space-y-3">
             <p className="text-xs leading-relaxed text-white/75">
-              진입 시 B등급(점수 6)으로 합리적이었습니다. 목표 도달 80% 지점에서 익절은 좋은 결정입니다.
+              {t("landing.preview.journal.comment1")}
             </p>
             <p className="text-xs leading-relaxed text-white/75">
-              다음에는 트리거 캔들 종가 확정 후 진입을 엄격히 적용하시면 평균 R이 한 단계 올라갈 것입니다.
+              {t("landing.preview.journal.comment2")}
             </p>
           </div>
         </div>
@@ -537,7 +550,7 @@ function FeaturePreview({ kind }: { kind: FeatureItem["id"] }) {
     );
   }
   return (
-    <PreviewCard caption="등급별 평균 R">
+    <PreviewCard caption={t("landing.preview.dashboard.caption")}>
       <div className="grid grid-cols-4 gap-3">
         {[
           { g: "A", avg: 1.4, n: 12, tone: "good" as const },
@@ -560,7 +573,7 @@ function FeaturePreview({ kind }: { kind: FeatureItem["id"] }) {
               {r.avg}
               <span className="text-xs text-white/40">R</span>
             </div>
-            <div className="mt-1 text-[10px] text-white/30">{r.n}건</div>
+            <div className="mt-1 text-[10px] text-white/30">{t("landing.preview.dashboard.count", { n: r.n })}</div>
           </div>
         ))}
       </div>
@@ -614,23 +627,25 @@ function ScoreLine({
 
 /* ──────────────────────────── Why cards ──────────────────────────── */
 
-const WHY = [
-  {
-    title: "분석이 아니라 결정",
-    body: "TradingView는 차트를 보여줍니다. Alpha Gate는 그 차트에서 진입할지 말지를 점수로 답합니다.",
-    icon: Layers,
-  },
-  {
-    title: "객관 데이터 기반",
-    body: "LLM에 직접 가격을 묻지 않습니다. Binance 실데이터를 가져온 다음 해석만 AI에 맡깁니다.",
-    icon: Database,
-  },
-  {
-    title: "자동 등급과 복기",
-    body: "저널 앱은 기록만 합니다. Alpha Gate는 진입 등급과 청산 후 코칭 코멘트까지 자동 생성합니다.",
-    icon: ShieldCheck,
-  },
-] as const;
+function getWhy(t: TFunction) {
+  return [
+    {
+      title: t("landing.whyCards.decision.title"),
+      body: t("landing.whyCards.decision.body"),
+      icon: Layers,
+    },
+    {
+      title: t("landing.whyCards.data.title"),
+      body: t("landing.whyCards.data.body"),
+      icon: Database,
+    },
+    {
+      title: t("landing.whyCards.auto.title"),
+      body: t("landing.whyCards.auto.body"),
+      icon: ShieldCheck,
+    },
+  ];
+}
 
 function WhyCard({
   title,

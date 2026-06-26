@@ -4,6 +4,8 @@ import { Target, TrendingUp, TrendingDown, Zap, Clock, Layers } from "lucide-rea
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatNumber } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
+import type { TFunction } from "@/lib/i18n/messages";
 import type { AnalysisSnapshot } from "@/lib/analysis/analyze";
 import type { StrategyResult } from "@/lib/analysis/strategy";
 import { STRATEGY_LABELS } from "@/lib/analysis/strategy";
@@ -58,6 +60,7 @@ function CardShell({
   tone: "primary" | "grade-a" | "grade-d" | "amber";
   children: React.ReactNode;
 }) {
+  const t = useT();
   const toneClass: Record<typeof tone, string> = {
     primary: "border-primary/30 bg-primary/5",
     "grade-a": "border-grade-a/30 bg-grade-a/5",
@@ -79,7 +82,7 @@ function CardShell({
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              특수 전략 신호
+              {t("analyze.cmpB.specialSignal")}
             </span>
             <Badge className={cn("border text-[10px]", toneClass[tone])}>
               {title}
@@ -121,6 +124,7 @@ function Stat({
 
 // ─── liquidity_grab ─────────────────────────────────────────────────────────
 function LiquidityGrabCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
+  const t = useT();
   const sweeps = snapshot.liquiditySweeps ?? [];
   const freshest = sweeps[0];
   if (!freshest) {
@@ -128,10 +132,10 @@ function LiquidityGrabCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
       <CardShell
         icon={<Target className="h-4 w-4" />}
         title={STRATEGY_LABELS.liquidity_grab}
-        subtitle="LLM이 이 전략을 골랐으나, 감지 모듈은 최근 스윕을 찾지 못했습니다. 시나리오의 근거를 카드의 트리거로 확인하세요."
+        subtitle={t("analyze.cmpB.grabNoSweepSubtitle")}
         tone="amber"
       >
-        <div className="text-xs text-muted-foreground">감지된 sweep 이벤트 없음</div>
+        <div className="text-xs text-muted-foreground">{t("analyze.cmpB.grabNoSweep")}</div>
       </CardShell>
     );
   }
@@ -143,37 +147,37 @@ function LiquidityGrabCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
       title={STRATEGY_LABELS.liquidity_grab}
       subtitle={
         isBullish
-          ? "직전 저점을 잠깐 깬 뒤 회복 — 큰손이 매도 스톱을 청산시킨 자리. 롱 우위 신호."
-          : "직전 고점을 잠깐 뚫은 뒤 회복 — 큰손이 매수 스톱을 청산시킨 자리. 숏 우위 신호."
+          ? t("analyze.cmpB.grabBullishSubtitle")
+          : t("analyze.cmpB.grabBearishSubtitle")
       }
       tone={isBullish ? "grade-a" : "grade-d"}
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat
-          label="Sweep된 가격"
+          label={t("analyze.cmpB.grabSweptLabel")}
           value={`$${formatNumber(freshest.sweptLevel)}`}
-          hint={isBullish ? "직전 저점" : "직전 고점"}
+          hint={isBullish ? t("analyze.cmpB.grabPrevLow") : t("analyze.cmpB.grabPrevHigh")}
         />
         <Stat
-          label={isBullish ? "최저 wick" : "최고 wick"}
+          label={isBullish ? t("analyze.cmpB.grabLowWick") : t("analyze.cmpB.grabHighWick")}
           value={`$${formatNumber(freshest.wickExtreme)}`}
-          hint={`±${piercePct.toFixed(2)}% 침투`}
+          hint={t("analyze.cmpB.grabPierce", { p: piercePct.toFixed(2) })}
         />
         <Stat
-          label="회복 종가"
+          label={t("analyze.cmpB.grabRecoveryClose")}
           value={`$${formatNumber(freshest.recoveryClose)}`}
-          hint={`${freshest.recoveredWithinBars}봉 내 회복`}
+          hint={t("analyze.cmpB.grabRecoveredWithin", { n: freshest.recoveredWithinBars })}
         />
         <Stat
-          label="신선도"
-          value={`${freshest.ageBars}봉 전`}
-          hint="낮을수록 신선"
+          label={t("analyze.cmpB.grabFreshness")}
+          value={t("analyze.cmpB.grabAgeBars", { n: freshest.ageBars })}
+          hint={t("analyze.cmpB.grabFreshnessHint")}
           tone={freshest.ageBars <= 2 ? "good" : "warn"}
         />
       </div>
       {sweeps.length > 1 ? (
         <div className="mt-2 text-[10px] text-muted-foreground">
-          + 다른 sweep {sweeps.length - 1}건 더 감지됨
+          {t("analyze.cmpB.grabMoreSweeps", { n: sweeps.length - 1 })}
         </div>
       ) : null}
     </CardShell>
@@ -182,38 +186,43 @@ function LiquidityGrabCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
 
 // ─── funding_squeeze ────────────────────────────────────────────────────────
 function FundingSqueezeCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
+  const t = useT();
   const sq = snapshot.fundingSqueeze;
   if (!sq) return null;
   const c = sq.components;
   const fundingPct = (c.fundingRate * 100).toFixed(4);
   const avgPct = (c.avg24h * 100).toFixed(4);
-  const crowded = sq.direction === "long" ? "롱" : "숏";
-  const reverseSide = sq.direction === "long" ? "숏" : "롱";
+  const crowded = sq.direction === "long" ? t("common.long") : t("common.short");
+  const reverseSide = sq.direction === "long" ? t("common.short") : t("common.long");
   return (
     <CardShell
       icon={<Zap className="h-4 w-4" />}
       title={STRATEGY_LABELS.funding_squeeze}
-      subtitle={`${crowded} 포지션 군집 형성 — 강제 청산 캐스케이드 노려 ${reverseSide} 진입 후보. 시간 한도 12~24시간.`}
+      subtitle={t("analyze.cmpB.squeezeSubtitle", { crowded, reverse: reverseSide })}
       tone="amber"
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat
-          label="현재 펀딩"
+          label={t("analyze.cmpB.squeezeCurFunding")}
           value={`${c.fundingRate >= 0 ? "+" : ""}${fundingPct}%`}
-          hint="8시간 기준"
+          hint={t("analyze.cmpB.squeeze8h")}
           tone={Math.abs(c.fundingRate) >= 0.0008 ? "warn" : "default"}
         />
-        <Stat label="24h 평균 펀딩" value={`${c.avg24h >= 0 ? "+" : ""}${avgPct}%`} hint={`추세 ${c.fundingTrend ?? "—"}`} />
         <Stat
-          label="OI 4h 변화"
+          label={t("analyze.cmpB.squeezeAvgFunding")}
+          value={`${c.avg24h >= 0 ? "+" : ""}${avgPct}%`}
+          hint={t("analyze.cmpB.squeezeTrend", { trend: c.fundingTrend ?? "—" })}
+        />
+        <Stat
+          label={t("analyze.cmpB.squeezeOi4h")}
           value={c.oi4hChangePct !== null ? `${c.oi4hChangePct >= 0 ? "+" : ""}${c.oi4hChangePct.toFixed(1)}%` : "—"}
-          hint="±15% 이상 군집 신호"
+          hint={t("analyze.cmpB.squeezeOiHint")}
           tone={c.oi4hChangePct !== null && Math.abs(c.oi4hChangePct) >= 15 ? "warn" : "default"}
         />
         <Stat
-          label="신호 강도"
+          label={t("analyze.cmpB.signalIntensity")}
           value={`${Math.round(sq.intensity * 100)}%`}
-          hint="60% 이상 액션 후보"
+          hint={t("analyze.cmpB.squeezeIntensityHint")}
           tone={sq.intensity >= 0.6 ? "good" : "warn"}
         />
       </div>
@@ -224,45 +233,50 @@ function FundingSqueezeCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
 
 // ─── session_open_drive ────────────────────────────────────────────────────
 function SessionDriveCard({ snapshot }: { snapshot: AnalysisSnapshot }) {
+  const t = useT();
   const sd = snapshot.sessionOpenDrive;
   if (!sd) return null;
   const c = sd.components;
   const isLong = sd.direction === "long";
-  const sessionLabel = c.sessionLabel || "세션";
+  const sessionLabel = c.sessionLabel || t("analyze.cmpB.sessionFallback");
   const threshold = c.moveThresholdPct ?? 0.4;
   return (
     <CardShell
       icon={<Clock className="h-4 w-4" />}
       title={`${STRATEGY_LABELS.session_open_drive} (${sessionLabel})`}
-      subtitle={`${sessionLabel} 개장 첫 30~60분 강한 방향성 — 그 방향 추종. 세션 마감 전 청산 권장.`}
+      subtitle={t("analyze.cmpB.driveSubtitle", { session: sessionLabel })}
       tone={isLong ? "grade-a" : "grade-d"}
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat
-          label="개장 시가"
+          label={t("analyze.cmpB.driveOpenPrice")}
           value={c.openPrice !== null ? `$${formatNumber(c.openPrice)}` : "—"}
-          hint="자연 손절선"
+          hint={t("analyze.cmpB.driveNaturalStop")}
         />
         <Stat
-          label="현재가"
+          label={t("analyze.cmpB.driveCurrentPrice")}
           value={c.currentPrice !== null ? `$${formatNumber(c.currentPrice)}` : "—"}
         />
         <Stat
-          label="이동 폭"
+          label={t("analyze.cmpB.driveMove")}
           value={c.movePct !== null ? `${c.movePct >= 0 ? "+" : ""}${c.movePct.toFixed(2)}%` : "—"}
-          hint={`${threshold}% 이상 발동`}
+          hint={t("analyze.cmpB.driveMoveHint", { threshold })}
           tone={c.movePct !== null && Math.abs(c.movePct) >= threshold ? "good" : "default"}
         />
         <Stat
-          label="거래량 배율"
+          label={t("analyze.cmpB.driveVolRatio")}
           value={c.volumeRatio !== null ? `${c.volumeRatio.toFixed(2)}×` : "—"}
-          hint="1.5× 이상 발동"
+          hint={t("analyze.cmpB.driveVolHint")}
           tone={c.volumeRatio !== null && c.volumeRatio >= 1.5 ? "good" : "default"}
         />
       </div>
       <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
         <Layers className="h-3 w-3" />
-        {sessionLabel} 개장 후 {c.minutesIntoSession}분 경과 · 신호 강도 {Math.round(sd.intensity * 100)}%
+        {t("analyze.cmpB.driveFooter", {
+          session: sessionLabel,
+          mins: c.minutesIntoSession,
+          intensity: Math.round(sd.intensity * 100),
+        })}
       </div>
     </CardShell>
   );

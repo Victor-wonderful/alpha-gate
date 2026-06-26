@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useT } from "@/lib/i18n/context";
 
 interface EquityPoint {
   date: string; // ISO date
@@ -22,10 +23,11 @@ interface EquityPoint {
  * green when above 0, red below — gradient masks transitions for polish.
  */
 export function EquityCurve({ data }: { data: EquityPoint[] }) {
+  const t = useT();
   if (data.length === 0)
     return (
       <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-        결과가 입력된 거래가 없습니다.
+        {t("dashboard.equity.noData")}
       </div>
     );
 
@@ -77,7 +79,7 @@ export function EquityCurve({ data }: { data: EquityPoint[] }) {
             }
             formatter={(value) => {
               const n = Number(value);
-              return [`${n >= 0 ? "+" : ""}${n.toFixed(2)}R`, "누적"];
+              return [`${n >= 0 ? "+" : ""}${n.toFixed(2)}R`, t("dashboard.equity.tooltipLabel")];
             }}
           />
           <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.5} />

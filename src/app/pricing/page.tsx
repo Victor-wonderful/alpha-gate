@@ -4,12 +4,16 @@ import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { SectionShell, SectionHeader, GradientText } from "@/components/marketing/section";
 import { cn } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/messages";
 
-export const metadata = {
-  title: "가격 · Alpha Gate",
-  description:
-    "Free / Standard / Pro 3개 플랜. 무료로 시작해서 필요할 때만 업그레이드하세요.",
-};
+export async function generateMetadata() {
+  const t = await getT();
+  return {
+    title: t("pub.pricing.metaTitle"),
+    description: t("pub.pricing.metaDescription"),
+  };
+}
 
 interface Plan {
   id: string;
@@ -24,55 +28,72 @@ interface Plan {
   featured?: boolean;
 }
 
-const PLANS: Plan[] = [
-  {
-    id: "free",
-    name: "Free",
-    price: "₩0",
-    priceNote: "영구 무료",
-    tagline: "맛보기로 충분",
-    quota: "월 5회",
-    quotaNote: "AI 분석",
-    cta: "무료로 시작",
-    ctaHref: "/login?mode=signup",
-  },
-  {
-    id: "standard",
-    name: "Standard",
-    price: "₩15,000",
-    priceNote: "/ 월",
-    tagline: "활성 트레이더용",
-    quota: "월 100회",
-    quotaNote: "AI 분석",
-    cta: "Standard 시작",
-    ctaHref: "/login?mode=signup",
-    featured: true,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "₩95,000",
-    priceNote: "/ 월",
-    tagline: "프로 트레이더용",
-    quota: "월 500회",
-    quotaNote: "AI 분석",
-    cta: "Pro 시작",
-    ctaHref: "/login?mode=signup",
-  },
-  {
-    id: "premium",
-    name: "Premium",
-    price: "₩295,000",
-    priceNote: "/ 월",
-    tagline: "팀·헤비유저용",
-    quota: "무제한",
-    quotaNote: "AI 분석",
-    cta: "Premium 시작",
-    ctaHref: "/login?mode=signup",
-  },
-];
+function buildPlans(t: TFunction): Plan[] {
+  return [
+    {
+      id: "free",
+      name: "Free",
+      price: "₩0",
+      priceNote: t("pub.pricing.plans.free.priceNote"),
+      tagline: t("pub.pricing.plans.free.tagline"),
+      quota: t("pub.pricing.plans.free.quota"),
+      quotaNote: t("pub.pricing.quotaNote"),
+      cta: t("pub.pricing.plans.free.cta"),
+      ctaHref: "/login?mode=signup",
+    },
+    {
+      id: "standard",
+      name: "Standard",
+      price: "₩15,000",
+      priceNote: t("pub.pricing.perMonth"),
+      tagline: t("pub.pricing.plans.standard.tagline"),
+      quota: t("pub.pricing.plans.standard.quota"),
+      quotaNote: t("pub.pricing.quotaNote"),
+      cta: t("pub.pricing.plans.standard.cta"),
+      ctaHref: "/login?mode=signup",
+      featured: true,
+    },
+    {
+      id: "pro",
+      name: "Pro",
+      price: "₩95,000",
+      priceNote: t("pub.pricing.perMonth"),
+      tagline: t("pub.pricing.plans.pro.tagline"),
+      quota: t("pub.pricing.plans.pro.quota"),
+      quotaNote: t("pub.pricing.quotaNote"),
+      cta: t("pub.pricing.plans.pro.cta"),
+      ctaHref: "/login?mode=signup",
+    },
+    {
+      id: "premium",
+      name: "Premium",
+      price: "₩295,000",
+      priceNote: t("pub.pricing.perMonth"),
+      tagline: t("pub.pricing.plans.premium.tagline"),
+      quota: t("pub.pricing.plans.premium.quota"),
+      quotaNote: t("pub.pricing.quotaNote"),
+      cta: t("pub.pricing.plans.premium.cta"),
+      ctaHref: "/login?mode=signup",
+    },
+  ];
+}
 
-export default function PricingPage() {
+function buildFaqs(t: TFunction) {
+  return [
+    { q: t("pub.pricing.faqs.q1.q"), a: t("pub.pricing.faqs.q1.a") },
+    { q: t("pub.pricing.faqs.q2.q"), a: t("pub.pricing.faqs.q2.a") },
+    { q: t("pub.pricing.faqs.q3.q"), a: t("pub.pricing.faqs.q3.a") },
+    { q: t("pub.pricing.faqs.q4.q"), a: t("pub.pricing.faqs.q4.a") },
+    { q: t("pub.pricing.faqs.q5.q"), a: t("pub.pricing.faqs.q5.a") },
+    { q: t("pub.pricing.faqs.q6.q"), a: t("pub.pricing.faqs.q6.a") },
+    { q: t("pub.pricing.faqs.q7.q"), a: t("pub.pricing.faqs.q7.a") },
+  ];
+}
+
+export default async function PricingPage() {
+  const t = await getT();
+  const PLANS = buildPlans(t);
+  const FAQS = buildFaqs(t);
   return (
     <main className="flex min-h-screen flex-col bg-[#02060f] text-white">
       <MarketingHeader />
@@ -82,13 +103,13 @@ export default function PricingPage() {
           eyebrow="Pricing"
           title={
             <>
-              필요할 때만{" "}
-              <GradientText>업그레이드</GradientText>
+              {t("pub.pricing.heroTitleBefore")}{" "}
+              <GradientText>{t("pub.pricing.heroTitleAccent")}</GradientText>
               <br />
-              하세요
+              {t("pub.pricing.heroTitleAfter")}
             </>
           }
-          body="무료로 시작해서 도구가 필요해지면 그때 결정. 신용카드 없이 가입."
+          body={t("pub.pricing.heroBody")}
         />
       </SectionShell>
 
@@ -96,11 +117,11 @@ export default function PricingPage() {
       <SectionShell glowPosition="top-right">
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {PLANS.map((p) => (
-            <PlanCard key={p.id} plan={p} />
+            <PlanCard key={p.id} plan={p} t={t} />
           ))}
         </div>
         <p className="mt-12 text-center text-xs uppercase tracking-[0.2em] text-white/40">
-          모든 플랜 · 7일 환불 보장 · 언제든 해지
+          {t("pub.pricing.guarantee")}
         </p>
 
         {/* Quota explainer */}
@@ -108,12 +129,12 @@ export default function PricingPage() {
           <div className="rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-[#091632]/60 via-[#06112a]/50 to-[#040b1d]/75 p-6 backdrop-blur-xl sm:p-8">
             <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
               <span className="inline-block h-px w-8 bg-cyan-400" />
-              참고
+              {t("pub.pricing.explainerEyebrow")}
             </div>
-            <h3 className="mt-4 text-lg font-bold">AI 분석 횟수만 다릅니다</h3>
+            <h3 className="mt-4 text-lg font-bold">{t("pub.pricing.explainerTitle")}</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/65">
-              거래 실행·거래 일지(저널)·성과 분석·AI 복기 코멘트는 모든 플랜에서 <strong className="text-white">제한 없이</strong>
-              {" "}쓰실 수 있습니다. 결제는 매달 분석 횟수가 충전되는 구독 방식이며, 다 쓰지 못한 횟수는 이월되지 않습니다.
+              {t("pub.pricing.explainerBodyBefore")} <strong className="text-white">{t("pub.pricing.explainerBodyStrong")}</strong>
+              {" "}{t("pub.pricing.explainerBodyAfter")}
             </p>
           </div>
         </div>
@@ -126,16 +147,16 @@ export default function PricingPage() {
             eyebrow="FAQ"
             title={
               <>
-                자주 <GradientText>묻는 질문</GradientText>
+                {t("pub.pricing.faqTitleBefore")} <GradientText>{t("pub.pricing.faqTitleAccent")}</GradientText>
               </>
             }
             body={
               <>
-                전체 FAQ는{" "}
+                {t("pub.pricing.faqBodyBefore")}{" "}
                 <Link href="/faq" className="text-cyan-300 underline-offset-4 hover:underline">
                   /faq
                 </Link>{" "}
-                에서 카테고리별로 확인할 수 있습니다.
+                {t("pub.pricing.faqBodyAfter")}
               </>
             }
           />
@@ -176,18 +197,18 @@ export default function PricingPage() {
             <div className="relative">
               <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
                 <Sparkles className="h-3 w-3" />
-                먼저 무료로
+                {t("pub.pricing.ctaEyebrow")}
               </div>
               <h2 className="mt-5 text-4xl font-bold leading-[1.15] sm:text-5xl">
-                <GradientText>먼저 무료로</GradientText> 써보세요
+                <GradientText>{t("pub.pricing.ctaTitleAccent")}</GradientText> {t("pub.pricing.ctaTitleAfter")}
               </h2>
-              <p className="mt-6 text-base text-white/60">필요해지면 그때 업그레이드.</p>
+              <p className="mt-6 text-base text-white/60">{t("pub.pricing.ctaBody")}</p>
               <div className="mt-10">
                 <Link
                   href="/login?mode=signup"
                   className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-sky-400 to-cyan-500 px-8 py-4 text-base font-semibold text-[#02060f] shadow-[0_0_32px_rgba(56,189,248,0.55)] transition-all hover:gap-3 hover:shadow-[0_0_44px_rgba(56,189,248,0.75)]"
                 >
-                  무료 회원가입
+                  {t("pub.cta.signup")}
                   <ArrowRight className="h-5 w-5" />
                 </Link>
               </div>
@@ -201,38 +222,7 @@ export default function PricingPage() {
   );
 }
 
-const FAQS = [
-  {
-    q: "정말 무료로 시작할 수 있나요?",
-    a: "네. Free 플랜은 영구 무료이며 신용카드 없이 가입 가능합니다. 매월 5회 AI 분석과 거래 실행·거래 일지·성과 분석 기능을 제한 없이 쓰실 수 있습니다.",
-  },
-  {
-    q: "플랜 간 차이는 무엇인가요?",
-    a: "월 AI 분석 횟수만 다릅니다. 거래 실행, 거래 일지(저널), 성과 분석, AI 복기 코멘트는 모든 플랜에서 무제한입니다.",
-  },
-  {
-    q: "쓰지 못한 분석 횟수는 이월되나요?",
-    a: "아니요. 매월 결제일에 새로 충전되며, 남은 횟수는 이월되지 않습니다. 본인의 평균 매매 빈도에 맞는 플랜을 선택해주세요.",
-  },
-  {
-    q: "결제 후 환불이 가능한가요?",
-    a: "결제일로부터 7일 이내 100% 환불 가능합니다. 이메일(hello@alphagate.app)로 요청 주시면 영업일 기준 1~2일 내 처리됩니다.",
-  },
-  {
-    q: "플랜 변경은 언제든 가능한가요?",
-    a: "네. 언제든 업그레이드/다운그레이드 가능합니다. 업그레이드 시 차액만 청구되며 즉시 새 횟수가 적용됩니다. 다운그레이드는 다음 결제 주기부터 반영됩니다.",
-  },
-  {
-    q: "AI가 매수/매도를 추천하나요?",
-    a: "아니요. Alpha Gate는 시나리오와 무효화 조건을 제시할 뿐 특정 매수/매도를 권유하지 않습니다. 모든 거래 결정과 결과는 사용자 본인의 책임입니다.",
-  },
-  {
-    q: "거래 데이터는 안전한가요?",
-    a: "모든 데이터는 Supabase의 Row-Level Security로 사용자별 격리됩니다. 다른 사용자는 코드 버그가 있어도 접근할 수 없으며, 언제든 본인 계정과 모든 데이터를 삭제할 수 있습니다.",
-  },
-];
-
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({ plan, t }: { plan: Plan; t: TFunction }) {
   return (
     <div
       className={cn(
@@ -283,15 +273,15 @@ function PlanCard({ plan }: { plan: Plan }) {
         <ul className="mt-5 space-y-2.5 text-sm">
           <li className="flex items-start gap-2.5">
             <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-            <span className="text-white/75">거래 실행 무제한</span>
+            <span className="text-white/75">{t("pub.pricing.feature1")}</span>
           </li>
           <li className="flex items-start gap-2.5">
             <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-            <span className="text-white/75">거래 일지·성과 분석 무제한</span>
+            <span className="text-white/75">{t("pub.pricing.feature2")}</span>
           </li>
           <li className="flex items-start gap-2.5">
             <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]" />
-            <span className="text-white/75">AI 복기 코멘트 무제한</span>
+            <span className="text-white/75">{t("pub.pricing.feature3")}</span>
           </li>
         </ul>
       </div>

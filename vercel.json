@@ -18,20 +18,12 @@
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/api/cron/resolve-arbitrage",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/cron/record-kimchi",
       "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/track-scenarios",
       "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/distribute-rankings",
-      "schedule": "0 15 * * 0"
     },
     {
       "path": "/api/cron/analysis-timing",

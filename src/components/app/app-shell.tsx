@@ -60,7 +60,7 @@ const NAV: NavItem[] = [
   { href: "/app/trade", labelKey: "nav.trade", Icon: ShieldCheck },
   { href: "/app/virtual-trade", labelKey: "nav.virtualTrade", Icon: Wallet },
   { href: "/app/journal", labelKey: "nav.journal", Icon: NotebookPen },
-  { href: "/app/dashboard", labelKey: "nav.performance", Icon: ChartLine, matchPaths: ["/app/rankings"] },
+  { href: "/app/dashboard", labelKey: "nav.performance", Icon: ChartLine },
 ];
 
 const NAV_BOTTOM: NavItem[] = [

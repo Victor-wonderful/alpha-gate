@@ -11,7 +11,6 @@ export type { ClusterTab } from "./cluster-tabs-config";
  *
  * Example clusters:
  * - 트레이딩: /app/virtual-trade
- * - 내 결과: /app/journal, /app/dashboard, /app/rankings
  *
  * Pages remain separate routes — this component just renders a tab strip and
  * highlights the matching one based on the current pathname. Switching is a

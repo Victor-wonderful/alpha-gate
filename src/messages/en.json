@@ -2436,7 +2436,7 @@
       "category": "Paper Trading",
       "title": "Using Paper Trading",
       "description": "Trade like a real exchange with vUSDT while learning the entry/exit flow. Experience the same fill prices, slippage, and fees as the real thing, without real money. Trade evaluation automatically aggregates money management and market context and reflects them in the grade.",
-      "nextLabel": "Using Arbitrage →",
+      "nextLabel": "Using My Results →",
       "s1Title": "Market orders vs limit orders",
       "marketOrderTitle": "Market order",
       "marketOrderBody": "Filled immediately at the current price. About 0.05% slippage is applied automatically. Use it when you need a fast entry, but if the price has already passed the target or stop, the guard blocks it.",

@@ -11,7 +11,7 @@ export default async function GuideTradingPage() {
       category={t("guide.trading.category")}
       title={t("guide.trading.title")}
       description={t("guide.trading.description")}
-      next={{ href: "/app/guide/arbitrage", label: t("guide.trading.nextLabel") }}
+      next={{ href: "/app/guide/results", label: t("guide.trading.nextLabel") }}
     >
       {/* 시장가 vs 지정가 */}
       <GuideSection eyebrow="01" title={t("guide.trading.s1Title")}>

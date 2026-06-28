@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AnalysisSnapshot } from "./analyze";
-import { STYLE_PRESETS } from "./style";
+import { STYLE_PRESETS, type TradingStyle } from "./style";
 import { parseJsonLoose } from "./json-extract";
+import { isStrategyEligible, regimeDefaultStrategy, routeStrategy } from "./eligibility";
 import type { Locale } from "@/lib/i18n/config";
 
 export type StrategyId =
@@ -214,9 +215,83 @@ export async function classifyStrategy(
   // sanity defaults
   parsed.confidence = Math.max(0, Math.min(1, parsed.confidence ?? 0.5));
   parsed.rejected = parsed.rejected ?? [];
-  if (parsed.primary === "wait") parsed.direction = null;
+  // 레짐/신호 라우팅 — 신호 없는 특수전략·헛된 wait 교체(시나리오 안 줄임).
+  const routed = enforceRegimeAndSignals(parsed, snapshot);
+  // 스타일×전략 허용 게이트 — LLM이 부적합 전략을 골랐으면 레짐 기본 전략으로 대체.
+  const eligible = enforceStyleEligibility(routed, snapshot.style, snapshot.trendMetrics?.classification);
+  if (eligible.primary === "wait") eligible.direction = null;
   // range_fade는 본질적으로 양방향 전략 — direction은 후속 단계(Scenario Generator)의 시나리오 majority로 결정.
   // LLM이 한쪽 방향을 골랐어도 강제로 null 처리해서 Stage 2/3 모순을 사전 차단.
-  if (parsed.primary === "range_fade") parsed.direction = null;
-  return parsed;
+  if (eligible.primary === "range_fade") eligible.direction = null;
+  return eligible;
+}
+
+/**
+ * 레짐/신호 라우팅. routeStrategy(순수)로 결정하고, 교체 시 라벨로 reasoning·rejected를
+ * 보강한다. 신호 없는 특수전략·헛된 wait만 교체 → 시나리오를 줄이지 않는다.
+ */
+function enforceRegimeAndSignals(result: StrategyResult, snapshot: AnalysisSnapshot): StrategyResult {
+  const decision = routeStrategy(
+    result.primary,
+    result.direction,
+    snapshot.trendMetrics?.classification,
+    {
+      liquiditySweep: (snapshot.liquiditySweeps?.length ?? 0) > 0,
+      fundingSqueeze: snapshot.fundingSqueeze?.active ?? false,
+      sessionOpenDrive: snapshot.sessionOpenDrive?.active ?? false,
+    },
+    snapshot.symbol === "BTCUSDT",
+  );
+  if (!decision.changed) return result;
+
+  const reasonText =
+    decision.reasonCode === "missing_signal"
+      ? `[${STRATEGY_LABELS[decision.original!]} 신호 부재 → ${STRATEGY_LABELS[decision.primary]}(으)로 대체]`
+      : `[추세/기준자산 기준 관망 부적합 → ${STRATEGY_LABELS[decision.primary]}(으)로 대체]`;
+  const rejected =
+    decision.original && decision.original !== "wait"
+      ? [
+          {
+            strategy: decision.original,
+            reason: decision.reasonCode === "missing_signal" ? `신호 부재(${decision.detail})` : "관망 부적합",
+          },
+          ...result.rejected,
+        ]
+      : result.rejected;
+
+  return {
+    ...result,
+    primary: decision.primary,
+    direction: decision.direction,
+    confidence: Math.min(result.confidence, 0.55),
+    reasoning: `${reasonText} ${result.reasoning}`,
+    rejected,
+  };
+}
+
+/**
+ * 스타일×전략 허용 게이트. LLM이 현재 스타일에서 불허된 전략을 골랐으면
+ * 레짐(추세 분류) 기본 전략으로 대체하고, 원 선택은 rejected에 사유와 함께 기록한다.
+ * 허용된 선택이면 그대로 통과(no-op).
+ */
+function enforceStyleEligibility(
+  result: StrategyResult,
+  style: TradingStyle,
+  classification: "up" | "down" | "range" | "mixed" | undefined,
+): StrategyResult {
+  if (isStrategyEligible(result.primary, style)) return result;
+
+  const original = result.primary;
+  const fallback = regimeDefaultStrategy(classification);
+  return {
+    ...result,
+    primary: fallback.primary,
+    direction: fallback.direction,
+    confidence: Math.min(result.confidence, 0.5),
+    reasoning: `[${STRATEGY_LABELS[original]}은(는) ${STYLE_PRESETS[style]?.label ?? style} 스타일에서 미지원 → ${STRATEGY_LABELS[fallback.primary]}(으)로 대체] ${result.reasoning}`,
+    rejected: [
+      { strategy: original, reason: `${STYLE_PRESETS[style]?.label ?? style} 스타일 미지원` },
+      ...result.rejected,
+    ],
+  };
 }

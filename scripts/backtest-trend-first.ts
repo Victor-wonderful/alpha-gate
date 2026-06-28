@@ -79,6 +79,7 @@ function report(name: string, t: Trade[]) {
 async function main() {
   for (const [styleName, cfg] of Object.entries(STYLES)) {
     const byStrength: Record<string, Trade[]> = { strong: [], moderate: [], weak: [] };
+    const counterStrong: Trade[] = []; // 강한 추세에서 역방향 진입 (역추세)
     for (const sym of COINS) {
       let c: Candle[];
       try { c = await klines(sym, cfg.mtf, cfg.bars); } catch { continue; }
@@ -88,16 +89,20 @@ async function main() {
         if (i - last < cfg.cooldown || !Number.isFinite(atr[i]) || atr[i] <= 0) continue;
         const v = classifyTrendComposite(c.slice(i - TREND_WIN + 1, i + 1)).composite;
         if (v.classification !== "up" && v.classification !== "down") continue; // 추세 명확할 때만
-        const side = v.classification === "up" ? "long" : "short";
-        byStrength[v.strength].push(makeTrade(c, i, side, atr[i], cfg)); last = i;
+        const withSide = v.classification === "up" ? "long" : "short";
+        byStrength[v.strength].push(makeTrade(c, i, withSide, atr[i], cfg));
+        if (v.strength === "strong") {
+          counterStrong.push(makeTrade(c, i, withSide === "long" ? "short" : "long", atr[i], cfg));
+        }
+        last = i;
       }
     }
     const all = [...byStrength.strong, ...byStrength.moderate, ...byStrength.weak];
     console.log(`\n■ ${styleName.toUpperCase()} (${cfg.mtf}) — 추세 방향 진입, 강도별`);
-    report("강한추세  ", byStrength.strong);
-    report("중간추세  ", byStrength.moderate);
-    report("약한추세  ", byStrength.weak);
-    report("전체(추세) ", all);
+    report("강한추세 순방향", byStrength.strong);
+    report("강한추세 역방향", counterStrong); // ← 역추세 비교
+    report("중간추세 순방향", byStrength.moderate);
+    report("전체(순방향)  ", all);
   }
   console.log("\n발행자격 = 기본게이트(표본≥20·기대값≥0.05R·MDD≤40%) + 워크포워드(분할≥50%양수·최근≥0) 둘 다 통과.");
   console.log("가설: 강한추세 버킷이 약한추세보다 월등하면 '추세 우선 선별' 검증.");

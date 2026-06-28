@@ -98,6 +98,11 @@ Strategy Agent가 메인 전략 1개를 골랐어도, 같은 시장 상황에서
   · session_open_drive (개장 방향)
   · trend_pullback (같은 방향) — 두 신호 정합 시 매우 강함
 
+★ 강한 추세 역행 억제 (백테스트 검증 — 매우 중요):
+- trendMetrics.strength가 "strong"이고 classification이 "up"/"down"이면, 그 추세 방향의 시나리오를 우선 생성하라.
+- 강한 추세의 반대 방향 시나리오(reversal·역방향 range_fade 등)는 만들지 마라 — 과거 데이터상 강한 추세 역행은 순방향 대비 0.3~0.7R 열위(손실 우세).
+- 단, 신호 기반 역추세(liquidity_grab은 sweep 회복, funding_squeeze는 군집 청산)는 예외 — 명확한 신호가 있으면 허용.
+
 조합 금지 (서로 모순):
 - 같은 방향의 trend_pullback과 range_fade를 동시에 만들지 마라 (서로 시장 가정이 모순).
 - 같은 가격대에 long과 short 시나리오 둘 다 만들지 마라 (단, range_fade의 박스 양 끝은 예외).
@@ -566,6 +571,24 @@ function enforceEntryProximity(
   // BTC는 기준 자산 — 손절이 수수료 하한보다 좁으면 하한까지 넓혀 시나리오를 항상 유지(사용자 요청).
   const isBtc = snapshot.symbol === "BTCUSDT";
 
+  // 강한 추세 방향 — 백테스트 검증(scripts/backtest-trend-first.ts): 강한 추세에서 역방향
+  // 진입은 순방향 대비 0.3~0.7R 열위(전 스타일). 역추세 시나리오는 경고+후순위로 강등한다.
+  // 단 신호 기반 예외(liquidity_grab 스윕 회복, funding_squeeze 군집 청산)는 정당한 역추세라 보존.
+  const tm = snapshot.trendMetrics;
+  const strongTrendDir: "long" | "short" | null =
+    tm && tm.strength === "strong"
+      ? tm.classification === "up"
+        ? "long"
+        : tm.classification === "down"
+          ? "short"
+          : null
+      : null;
+  const isCounterTrend = (sc: AnalysisReport["scenarios"][number]): boolean =>
+    strongTrendDir !== null &&
+    sc.direction !== strongTrendDir &&
+    sc.strategyHint !== "liquidity_grab" &&
+    sc.strategyHint !== "funding_squeeze";
+
   const kept: AnalysisReport["scenarios"] = [];
   const dropped: string[] = [];
   for (const s of report.scenarios) {
@@ -634,6 +657,13 @@ function enforceEntryProximity(
       );
     }
 
+    // 3b) 강한 추세 역행 — 백테스트상 순방향 대비 크게 열위. 경고(하드 폐기 아님).
+    if (isCounterTrend(s)) {
+      issues.push(
+        `강한 ${strongTrendDir === "long" ? "상승" : "하락"} 추세 역행 — 과거 데이터상 역추세 셋업은 순방향 대비 0.3R+ 열위(손실 우세). 신중히, 사이즈 축소 권장.`,
+      );
+    }
+
     // 4) Annotate entries with distancePct + sanity-check tier ordering + per-tier gate
     let processedEntries = s.entries;
     const droppedTiers: string[] = [];
@@ -695,6 +725,11 @@ function enforceEntryProximity(
       entries: processedEntries,
       qualityIssues: issues.length ? issues : undefined,
     });
+  }
+
+  // 강한 추세 역행 시나리오는 뒤로 강등(안정 정렬 — 순방향이 위로). 폐기는 아님.
+  if (strongTrendDir !== null) {
+    kept.sort((a, b) => (isCounterTrend(a) ? 1 : 0) - (isCounterTrend(b) ? 1 : 0));
   }
 
   const warnings = [...report.warnings];

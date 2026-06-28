@@ -306,6 +306,10 @@ entryType 의미:
    미달이면 시나리오 폐기.
 
 추가 데이터 활용 가이드 (스냅샷에 있으면 적극 참고):
+- detectors (코드가 계산한 객관 신호 — 시나리오 근거로 적극 활용):
+  · detectors.volSqueeze.active=true: 변동성이 바짝 줄었다가 거래량과 함께 위로 뚫림(질 좋은 돌파). breakout long 근거.
+  · detectors.sigma: side="long"이면 과매도 극단(반등 가능), "short"이면 과매수 극단. range_fade/reversal 보조.
+  · detectors.confluence: 여러 신호가 같은 방향이면(highConviction=true) 그 방향 시나리오 신뢰도↑. net이 mixed면 보수적으로.
 - atr (Average True Range): 손절폭이 ATR보다 너무 좁으면 노이즈 위험. 일반적으로 손절폭 ≥ ATR×0.7 권장.
 - vwap (세션 VWAP): 현재가가 VWAP 위면 단기 매수 우위, 아래면 매도 우위. distancePct가 ±2% 이상이면 평균회귀 압력 강함.
 - topTraderRatio (상위 트레이더 롱/숏): >1.5 = 큰손 롱 군집, <0.7 = 숏 군집. 일반 펀딩비와 다른 시각.

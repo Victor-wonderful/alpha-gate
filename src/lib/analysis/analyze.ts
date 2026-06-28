@@ -26,6 +26,13 @@ import {
   type SessionOpenDriveSignal,
 } from "./special-strategies";
 import { classifyTrendComposite } from "./trend";
+import {
+  detectVolSqueeze,
+  detectSigma,
+  computeConfluence,
+  type DirectionalVote,
+  type DetectorSignals,
+} from "./detectors";
 import { classifyDominanceRegime } from "./dominance";
 import { computeVolumeProfile } from "./volume-profile";
 import { classifyFunding, summarizeDepth, summarizeFlow } from "./order-flow";
@@ -146,6 +153,8 @@ export interface AnalysisSnapshot {
   fundingSqueeze?: FundingSqueezeSignal;
   /** US-session open drive signal — fuel for session_open_drive strategy. */
   sessionOpenDrive?: SessionOpenDriveSignal;
+  /** 코드 결정론 신호 (변동성수축돌파/과매도과매수/컨플루언스) — LLM 시나리오 근거 입력 */
+  detectors?: DetectorSignals;
   /** Trend classification using established indicators (ADX/KER/Choppiness) on style-specific TF */
   trendMetrics?: {
     refTf: Interval;
@@ -324,6 +333,18 @@ export async function buildSnapshot(
     style,
   });
 
+  // 코드 결정론 신호 detector (MTF 기준) — LLM 컨플루언스 입력. 휴리스틱 아님, 객관 신호.
+  const volSqueeze = detectVolSqueeze(mtfCandles);
+  const sigma = detectSigma(mtfCandles);
+  const confluenceVotes: DirectionalVote[] = [];
+  if (trendMetrics?.classification === "up") confluenceVotes.push({ name: "추세", side: "long" });
+  else if (trendMetrics?.classification === "down") confluenceVotes.push({ name: "추세", side: "short" });
+  if (volSqueeze.active) confluenceVotes.push({ name: "변동성수축돌파", side: "long" });
+  if (sigma.active && sigma.side) confluenceVotes.push({ name: "과매도과매수", side: sigma.side });
+  if (flow.buyRatio >= 0.58) confluenceVotes.push({ name: "체결흐름", side: "long" });
+  else if (flow.buyRatio <= 0.42) confluenceVotes.push({ name: "체결흐름", side: "short" });
+  const detectors: DetectorSignals = { volSqueeze, sigma, confluence: computeConfluence(confluenceVotes) };
+
   // 백테스트 모드면 ticker를 historical 캔들에서 재구성 (live ticker는 현재값이라 부정확)
   let tickerSnap: AnalysisSnapshot["ticker"];
   if (isBacktest) {
@@ -393,6 +414,7 @@ export async function buildSnapshot(
     liquiditySweeps,
     fundingSqueeze,
     sessionOpenDrive,
+    detectors,
     trendMetrics,
   };
 }

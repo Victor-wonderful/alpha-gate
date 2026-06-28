@@ -17,7 +17,14 @@ import {
 type Candle = { openTime: number; open: number; high: number; low: number; close: number; volume: number; closeTime: number; buyVolume: number };
 type Side = "long" | "short";
 
-const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "TRXUSDT", "LTCUSDT", "DOTUSDT"];
+// 표본 확대(강한 레짐 칸 확정) — 2021 이전 상장된 유동성 큰 28개 위주.
+const COINS = [
+  "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT",
+  "ADAUSDT", "AVAXUSDT", "LINKUSDT", "TRXUSDT", "LTCUSDT", "DOTUSDT",
+  "BCHUSDT", "ETCUSDT", "ATOMUSDT", "UNIUSDT", "AAVEUSDT", "FILUSDT",
+  "NEARUSDT", "ALGOUSDT", "EOSUSDT", "XLMUSDT", "VETUSDT", "THETAUSDT",
+  "SANDUSDT", "AXSUSDT", "FTMUSDT", "ICPUSDT",
+];
 const STYLES = {
   day:   { mtf: "1h", bars: 12000, horizon: 24, cooldown: 12, rr: 1.5, stopMin: 0.7, stopMax: 1.5 },
   swing: { mtf: "4h", bars: 12000, horizon: 60, cooldown: 12, rr: 2,   stopMin: 2,   stopMax: 5 },
@@ -109,9 +116,9 @@ async function main() {
           B[name][regime].push(makeTrade(c, i, side, atr[i], cfg)); last[name] = i;
         };
 
-        // 1) 추세추종 — 추세 방향 + EMA20 근처(눌림)
+        // 1) 추세추종 — 추세 방향 + EMA20 근처(얕은 눌림, 2.5×ATR 이내)
         const upDown = tc.classification === "up" ? "long" : tc.classification === "down" ? "short" : null;
-        if (upDown && Math.abs(price - ema20[i]) / price <= atr[i] / 100) fire("추세추종", upDown as Side);
+        if (upDown && Math.abs(price - ema20[i]) / price <= (2.5 * atr[i]) / 100) fire("추세추종", upDown as Side);
         // 2) 돌파 — 20봉 신고가/신저가
         fire("돌파", price > hi20[i] ? "long" : price < lo20[i] ? "short" : null);
         // 3) 범위페이드 — 40봉 끝단 ±0.5%

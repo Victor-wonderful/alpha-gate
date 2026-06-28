@@ -44,6 +44,8 @@ export interface RadarCandidate {
   trend: "up" | "down" | "range";
   /** 추세 지속력 (ADX/KER/Choppiness 종합). 방향 아님 — "이 추세가 이어질 힘". */
   trendStrength: "strong" | "moderate" | "weak";
+  /** 추세 기반 권장 방향 — 백테스트 검증(강한 추세+방향이 엣지). 약추세/횡보면 null. */
+  suggestedDirection: "long" | "short" | null;
   /** 예상 변동 범위 콘 (다음 horizon봉 80% 구간, %). 방향 예측 아님. */
   rangeLowPct: number;
   rangeHighPct: number;
@@ -313,33 +315,46 @@ async function scanCoin(
     if (!best || adj > best.adj) best = { style, score, signals, adj };
   }
 
-  // 고정 자산(BTC/ETH/XRP/BNB)은 신호 점수가 낮아도 항상 후보에 포함 (사용자 요청).
+  if (!best) return null;
   const isPinned = PINNED.has(meta.symbol);
-  if (!best || (!isPinned && (best.score < MIN_SCORE || best.signals.length === 0))) return null;
 
   const refCandles = byTf["4h"] ?? byTf[STYLE_TF[best.style]];
   const price = refCandles[refCandles.length - 1].close || meta.lastPrice;
   const bestCandles = byTf[STYLE_TF[best.style]] ?? refCandles;
   const trend = classifyTrend(bestCandles);
-  // A) 추세 지속력 (ADX/KER/Choppiness 종합).
+  // 추세 지속력 (ADX/KER/Choppiness 종합).
   const trendStrength =
     bestCandles.length >= 30 ? classifyTrendComposite(bestCandles).composite.strength : "weak";
-  // B) 예상 변동 범위 콘 (드리프트 0 — 방향 예측 아님).
-  const cone = simulateRange(
-    bestCandles.map((c) => c.close),
-    STYLE_HORIZON[best.style],
-    2000,
-  );
+
+  // ★ 추세 강도 보너스 — 백테스트 검증(scripts/backtest-trend-first.ts): "강한 추세 + 추세 방향"이
+  // 결정적 엣지(스윙 4h 강한추세 +0.409R·PF1.80, 워크포워드 전구간 양수). 구조신호보다 우선시해
+  // 강한 추세 코인을 상위로 선별·정렬한다. (손튜닝 아님 — 검증된 가중치)
+  const clearTrend = trend === "up" || trend === "down";
+  const trendBonus = clearTrend ? (trendStrength === "strong" ? 5 : trendStrength === "moderate" ? 1 : 0) : 0;
+  const signals =
+    clearTrend && trendStrength === "strong"
+      ? [{ key: "trend", label: trend === "up" ? "강한 상승 추세" : "강한 하락 추세" }, ...best.signals]
+      : best.signals;
+  const score = best.score + trendBonus;
+  const suggestedDirection: "long" | "short" | null =
+    clearTrend && trendStrength !== "weak" ? (trend === "up" ? "long" : "short") : null;
+
+  // 컷오프 — 추세 보너스 포함 점수 기준 (강한 추세는 구조신호 없어도 통과). 고정자산은 항상 포함.
+  if (!isPinned && (score < MIN_SCORE || signals.length === 0)) return null;
+
+  // 예상 변동 범위 콘 (드리프트 0 — 방향 예측 아님).
+  const cone = simulateRange(bestCandles.map((c) => c.close), STYLE_HORIZON[best.style], 2000);
 
   return {
     symbol: meta.symbol,
-    score: best.score,
-    signals: best.signals,
+    score,
+    signals,
     bestStyle: best.style,
     styleFit,
     styleAtr,
     trend,
     trendStrength,
+    suggestedDirection,
     rangeLowPct: cone.insufficient ? 0 : cone.lowPct,
     rangeHighPct: cone.insufficient ? 0 : cone.highPct,
     price,

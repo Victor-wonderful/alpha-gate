@@ -75,6 +75,13 @@ export async function loadLatestRadar(): Promise<RadarSnapshot> {
     styleAtr: ((r.style_atr as StyleFit) ?? ({} as StyleFit)),
     trend: ((r.trend as "up" | "down" | "range") ?? "range"),
     trendStrength: ((r.trend_strength as "strong" | "moderate" | "weak") ?? "weak"),
+    // 권장 방향은 trend+strength에서 파생(별도 컬럼 불필요).
+    suggestedDirection:
+      (r.trend === "up" || r.trend === "down") && r.trend_strength !== "weak"
+        ? r.trend === "up"
+          ? "long"
+          : "short"
+        : null,
     rangeLowPct: r.range_low_pct == null ? 0 : Number(r.range_low_pct),
     rangeHighPct: r.range_high_pct == null ? 0 : Number(r.range_high_pct),
     price: Number(r.price),

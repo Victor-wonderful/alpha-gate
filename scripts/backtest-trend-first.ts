@@ -37,7 +37,7 @@ async function klines(sym: string, interval: string, totalBars: number): Promise
     const limit = Math.min(1500, totalBars - out.length);
     const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=${interval}&limit=${limit}&endTime=${endTime}`);
     if (!res.ok) throw new Error(`${sym} ${res.status}`);
-    const raw = (await res.json()) as unknown[][];
+    const raw = (await res.json()) as number[][];
     if (!raw.length) break;
     const batch: Candle[] = raw.map((k) => ({ openTime: +k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5], closeTime: +k[6], buyVolume: +k[9] }));
     out.unshift(...batch); endTime = batch[0].openTime - 1; await sleep(110);

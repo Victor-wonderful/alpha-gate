@@ -589,6 +589,10 @@ function enforceEntryProximity(
     sc.strategyHint !== "liquidity_grab" &&
     sc.strategyHint !== "funding_squeeze";
 
+  // 횡보/추세 불명확 레짐 — 백테스트(scripts/backtest-matrix.ts): 횡보장은 전 전략 음수~본전
+  // (게이트 통과 0). 셋업은 보여주되 "검증된 엣지 없음 — 관망/사이즈↓"를 명시한다.
+  const isRangeRegime = tm != null && (tm.classification === "range" || tm.classification === "mixed");
+
   const kept: AnalysisReport["scenarios"] = [];
   const dropped: string[] = [];
   for (const s of report.scenarios) {
@@ -734,6 +738,12 @@ function enforceEntryProximity(
 
   const warnings = [...report.warnings];
   for (const msg of dropped) warnings.push(`시나리오 제외: ${msg}`);
+  // 횡보 레짐 경고 — 검증된 엣지 없음(맨 앞에 노출).
+  if (isRangeRegime && kept.length > 0) {
+    warnings.unshift(
+      "현재 횡보·추세 불명확 — 과거 데이터상 횡보장은 검증된 엣지가 없음(전 전략 손실~본전). 사이즈 축소·관망 권장.",
+    );
+  }
 
   const flawedCount = kept.filter((s) => s.qualityIssues && s.qualityIssues.length > 0).length;
   const cleanCount = kept.length - flawedCount;

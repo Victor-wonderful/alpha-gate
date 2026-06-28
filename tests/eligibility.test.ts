@@ -54,12 +54,12 @@ describe("레짐 기본 전략", () => {
   it("down → trend_pullback short", () => {
     expect(regimeDefaultStrategy("down")).toEqual({ primary: "trend_pullback", direction: "short" });
   });
-  it("range → range_fade null", () => {
-    expect(regimeDefaultStrategy("range")).toEqual({ primary: "range_fade", direction: null });
+  it("range → breakout null (페이드 손실 검증 → 돌파로)", () => {
+    expect(regimeDefaultStrategy("range")).toEqual({ primary: "breakout", direction: null });
   });
-  it("mixed/undefined → range_fade (하드 wait 아님 — 시나리오 0개·BTC규칙 위반 회피)", () => {
-    expect(regimeDefaultStrategy("mixed")).toEqual({ primary: "range_fade", direction: null });
-    expect(regimeDefaultStrategy(undefined)).toEqual({ primary: "range_fade", direction: null });
+  it("mixed/undefined → breakout (하드 wait 아님 + 페이드 아님 — 항상 거래 가능)", () => {
+    expect(regimeDefaultStrategy("mixed")).toEqual({ primary: "breakout", direction: null });
+    expect(regimeDefaultStrategy(undefined)).toEqual({ primary: "breakout", direction: null });
   });
 });
 
@@ -98,9 +98,9 @@ describe("routeStrategy — 레짐/신호 라우팅 (시나리오 안 줄임)", 
     expect(d.primary).toBe("wait");
   });
 
-  it("BTC 기준자산은 mixed에서도 wait 금지 → range_fade", () => {
+  it("BTC 기준자산은 mixed에서도 wait 금지 → breakout", () => {
     const d = routeStrategy("wait", null, "mixed", NO_SIGNALS, true);
     expect(d.changed).toBe(true);
-    expect(d.primary).toBe("range_fade");
+    expect(d.primary).toBe("breakout");
   });
 });

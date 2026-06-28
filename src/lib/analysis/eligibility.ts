@@ -52,8 +52,9 @@ export function regimeDefaultStrategy(
     case "down":
       return { primary: "trend_pullback", direction: "short" };
     default:
-      // range + mixed + 미상 → range_fade (양방향, 항상 시도)
-      return { primary: "range_fade", direction: null };
+      // range + mixed + 미상 → breakout (박스 돌파=새 추세. 백테스트: 페이드는 손실, 돌파는 +).
+      // 항상 거래 셋업을 내기 위해 wait이 아닌 breakout으로.
+      return { primary: "breakout", direction: null };
   }
 }
 

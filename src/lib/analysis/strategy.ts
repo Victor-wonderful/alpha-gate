@@ -87,14 +87,14 @@ const SYSTEM_PROMPT = `당신은 시장 구조 스냅샷을 보고 가장 적합
   · "wait" 절대 금지
 
 - classification = "range" (횡보 합의):
-  · 기본 선택: primary="range_fade", direction=null (양방향 가능 — Scenario Generator가 박스 상하단 모두 시나리오 생성)
-  · 박스 한쪽 끝에 가까우면 그 방향 fade(반대방향 진입) 우선
-  · 박스 돌파 임박(거래량 동반 + OI 증가)이면 breakout 검토
-  · "wait" 절대 금지 — 횡보장은 양 끝에서 매매가 정상
+  · 기본 선택: primary="breakout", direction=null (박스 돌파 = 새 추세의 시작 → 돌파를 노린다)
+  · ★ 백테스트 검증: 횡보장 "박스 끝 페이드(range_fade)"는 손실(박스가 자주 깨짐), "돌파(breakout)"는 +. 그래서 횡보 기본은 돌파.
+  · range_fade는 비추 — 박스가 매우 명확하고 양 끝 반복이 또렷할 때만 보조로 검토.
+  · "wait" 절대 금지 — 항상 거래 셋업을 낸다(돌파 대기).
 
 - classification = "mixed" (혼조 — 지표 의견 갈림):
-  · 가격이 명확한 키레벨(POC/VAH/VAL/직전 스윙) 근처면 range_fade
-  · 그렇지 않으면 wait 허용
+  · 기본 선택: primary="breakout" (방향 불명확 시 돌파 대기로 새 추세를 노림)
+  · range_fade는 비추(손실 검증). "wait" 금지 — 항상 셋업 제시.
   · ★ 단, snapshot.symbol이 "BTCUSDT"이면 wait 금지 — 가장 가까운 구조로 방향을 잡아라(기준 자산, 항상 분석 가능해야 함).
 
 ★ 특수 전략 우선 트리거 (위 분류보다 먼저 검사):

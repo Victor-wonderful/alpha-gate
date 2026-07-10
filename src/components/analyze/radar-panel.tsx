@@ -197,18 +197,53 @@ function estScenarios(c: RadarCandidate): number {
   return Math.min(4, Math.max(1, n));
 }
 
-function TrendMark({ trend }: { trend: "up" | "down" | "range" }) {
+/** 강한/중간 추세 강도 태그 — 방향이 있는(up/down) 후보에만. 강도가 검증된 엣지라 강조. */
+function StrengthTag({ strength }: { strength: "strong" | "moderate" | "weak" }) {
   const t = useT();
+  if (strength === "strong")
+    return (
+      <span
+        title={t("analyze.cmpC.strengthStrongTitle")}
+        className="rounded-sm bg-grade-a/15 px-1 text-[9px] font-bold leading-tight text-grade-a"
+      >
+        {t("analyze.cmpC.strengthStrong")}
+      </span>
+    );
+  if (strength === "moderate")
+    return (
+      <span
+        title={t("analyze.cmpC.strengthModerateTitle")}
+        className="rounded-sm bg-foreground/10 px-1 text-[9px] font-semibold leading-tight text-muted-foreground"
+      >
+        {t("analyze.cmpC.strengthModerate")}
+      </span>
+    );
+  return null;
+}
+
+function TrendMark({
+  trend,
+  strength,
+}: {
+  trend: "up" | "down" | "range";
+  strength?: "strong" | "moderate" | "weak";
+}) {
+  const t = useT();
+  const showStrength = (trend === "up" || trend === "down") && strength ? (
+    <StrengthTag strength={strength} />
+  ) : null;
   if (trend === "up")
     return (
-      <span title={t("analyze.cmpC.trendUp")} className="flex items-center text-grade-a">
+      <span title={t("analyze.cmpC.trendUp")} className="flex items-center gap-0.5 text-grade-a">
         <TrendingUp className="h-3.5 w-3.5" />
+        {showStrength}
       </span>
     );
   if (trend === "down")
     return (
-      <span title={t("analyze.cmpC.trendDown")} className="flex items-center text-grade-d">
+      <span title={t("analyze.cmpC.trendDown")} className="flex items-center gap-0.5 text-grade-d">
         <TrendingDown className="h-3.5 w-3.5" />
+        {showStrength}
       </span>
     );
   return (
@@ -452,9 +487,9 @@ function CandidateRow({
           {rank}
         </span>
 
-        {/* 심볼 + 추세 */}
-        <span className="flex w-[76px] shrink-0 items-center gap-1.5">
-          <TrendMark trend={c.trend} />
+        {/* 심볼 + 추세 + 강도 */}
+        <span className="flex w-[92px] shrink-0 items-center gap-1">
+          <TrendMark trend={c.trend} strength={c.trendStrength} />
           <span className="truncate font-mono text-sm font-semibold text-foreground">{base}</span>
         </span>
 

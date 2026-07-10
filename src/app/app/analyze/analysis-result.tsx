@@ -16,6 +16,7 @@ import {
   Target,
   ChevronDown,
   Info,
+  ShieldCheck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -534,6 +535,7 @@ export function AnalysisResult({
                 expectedRangeHalfPct={(rangeCone.highPct - rangeCone.lowPct) / 2}
                 watchState={watchStates[i] ?? null}
                 onToggleWatch={() => toggleWatch(i)}
+                validated={isValidatedSetup(snapshot, s)}
               />
             );
           })}
@@ -1076,6 +1078,26 @@ function TrendIndicator({
   );
 }
 
+/**
+ * "검증된 셋업" 판정 — 백테스트로 실제 엣지가 확인된 조건에서만 true.
+ * 근거(6/28 레짐×전략 매트릭스 + trend-first 백테스트, Obsidian 2026-06-28 노트):
+ *   강한 추세(strong) + 추세 방향으로 진입(상승→롱/하락→숏)이 유일하게 검증된 엣지
+ *   (스윙 4h +0.28~0.41R 등). 1h(day)는 검증 통과 칸이 0개라 제외.
+ * 방향 정렬을 요구하므로 역추세·reversal은 자동 제외된다. 보수적으로만 배지를 단다.
+ */
+function isValidatedSetup(
+  snapshot: AnalysisSnapshot,
+  scenario: AnalysisReport["scenarios"][number],
+): boolean {
+  const tm = snapshot.trendMetrics;
+  if (!tm || tm.strength !== "strong") return false;
+  if (snapshot.style === "day") return false; // 1h 검증 칸 0개
+  return (
+    (tm.classification === "up" && scenario.direction === "long") ||
+    (tm.classification === "down" && scenario.direction === "short")
+  );
+}
+
 /** Plain-language scenario card */
 function SimpleScenarioCard({
   index,
@@ -1093,6 +1115,7 @@ function SimpleScenarioCard({
   expectedRangeHalfPct,
   watchState,
   onToggleWatch,
+  validated,
 }: {
   index: number;
   symbol: string;
@@ -1112,6 +1135,8 @@ function SimpleScenarioCard({
   expectedRangeHalfPct: number;
   watchState?: { id: string; watch: boolean; status: string } | null;
   onToggleWatch?: () => void;
+  /** 백테스트 검증된 셋업(강한 추세 + 추세방향)인지 — 배지 표시용 */
+  validated?: boolean;
 }) {
   const t = useT();
   const isLong = scenario.direction === "long";
@@ -1154,9 +1179,20 @@ function SimpleScenarioCard({
             {String.fromCharCode(65 + index)}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-semibold leading-snug">
-              {t("analyze.result.scenario.title", { n: index + 1, name: scenario.name })}
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-base font-semibold leading-snug">
+                {t("analyze.result.scenario.title", { n: index + 1, name: scenario.name })}
+              </h3>
+              {validated ? (
+                <span
+                  title={t("analyze.result.scenario.validatedTitle")}
+                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-grade-a/40 bg-grade-a/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a"
+                >
+                  <ShieldCheck className="h-3 w-3" />
+                  {t("analyze.result.scenario.validated")}
+                </span>
+              ) : null}
+            </div>
             <div className="mt-0.5 text-xs text-muted-foreground">
               {orderTypeLabel}
               {Number.isFinite(expectedRangeHalfPct) && expectedRangeHalfPct > 0

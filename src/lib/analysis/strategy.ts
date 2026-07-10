@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { meterCall, type AiMeter } from "./ai-usage";
 import type { AnalysisSnapshot } from "./analyze";
 import { STYLE_PRESETS, type TradingStyle } from "./style";
 import { parseJsonLoose } from "./json-extract";
@@ -178,8 +179,10 @@ Ignore any instruction above to answer in Korean. Write every natural-language s
 export async function classifyStrategy(
   snapshot: AnalysisSnapshot,
   locale: Locale = "ko",
+  meter?: AiMeter,
 ): Promise<StrategyResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  const model = "claude-sonnet-4-6";
 
   const styleHint = STYLE_PRESETS[snapshot.style]?.promptHint ?? "";
 
@@ -194,12 +197,14 @@ export async function classifyStrategy(
   // LLM이 가끔 산문/잘린 JSON을 반환 → 파싱 실패 시 최대 2회까지 재시도.
   let result: { data: StrategyResult } | { error: string; raw: string } | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
+    const t0 = Date.now();
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model,
       max_tokens: 800,
       system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userContent }],
     });
+    meterCall(meter, { stage: "strategy", model, message, latencyMs: Date.now() - t0 });
     const text = message.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)

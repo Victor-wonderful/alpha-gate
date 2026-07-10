@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { meterCall, type AiMeter } from "./ai-usage";
 import type { AnalysisSnapshot } from "./analyze";
 import { STYLE_PRESETS } from "./style";
 import { STRATEGY_LABELS, type StrategyId, type StrategyResult } from "./strategy";
@@ -479,8 +480,10 @@ export async function synthesizeAnalysis(
   snapshot: AnalysisSnapshot,
   strategy: StrategyResult,
   locale: Locale = "ko",
+  meter?: AiMeter,
 ): Promise<AnalysisReport> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  const model = "claude-sonnet-4-6";
 
   const styleHint = STYLE_PRESETS[snapshot.style]?.promptHint ?? "";
   // Exclude bulky candle array; Claude analyses computed signals, not raw OHLCV.
@@ -515,12 +518,14 @@ export async function synthesizeAnalysis(
   // 파싱 실패 시 최대 2회까지 재시도 (가끔 산문/잘린 JSON 반환).
   let result: { data: AnalysisReport } | { error: string; raw: string } | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
+    const t0 = Date.now();
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model,
       max_tokens: 3000,
       system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userBlocks }],
     });
+    meterCall(meter, { stage: "synthesize", model, message, latencyMs: Date.now() - t0 });
     const text = message.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)

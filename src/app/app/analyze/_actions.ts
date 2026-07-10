@@ -11,6 +11,9 @@ import { simulateTrade } from "@/lib/backtest/simulator";
 import { revalidatePath } from "next/cache";
 import { getAiCredits, spendAiCredit } from "@/lib/paper-wallet";
 import { getLocale } from "@/lib/i18n/server";
+import { newMeter, persistAiUsage, meterTotals } from "@/lib/analysis/ai-usage";
+import { classifyAiOutage, alertOperatorAiOutage } from "@/lib/analysis/ai-outage";
+import { buildCodeReport } from "@/lib/analysis/code-scenario";
 
 export async function runAnalysisAction(
   symbol: string,
@@ -23,6 +26,8 @@ export async function runAnalysisAction(
   report?: AnalysisReport;
   analysisId?: string;
   error?: string;
+  /** AI 미가용으로 코드 규칙 기반 폴백 시나리오를 제공했는지 (UI 배지·안내용) */
+  aiUnavailable?: boolean;
 }> {
   const supabase = await getSupabaseServer();
   const {
@@ -70,28 +75,30 @@ export async function runAnalysisAction(
   if (!process.env.ANTHROPIC_API_KEY)
     return { snapshot, error: "ANTHROPIC_API_KEY가 설정되지 않았습니다. 데이터 스냅샷만 표시합니다." };
 
-  // Stage 2: Strategy Agent (LLM, focused classification)
+  // AI 원가·속도 계측 미터 (LLM 호출마다 토큰·지연 누적 → 분석 종료 시 ai_usage_log 기록)
+  const meter = newMeter();
+
+  // Stage 2+3: Strategy Agent → Scenario Synthesis (LLM).
+  // AI가 어떤 이유로든 실패하면(잔액 소진·한도·장애·파싱) 분석이 죽지 않도록 코드 폴백으로 전환.
   const locale = await getLocale();
   let strategy: StrategyResult;
-  try {
-    strategy = await classifyStrategy(snapshot, locale);
-  } catch (e) {
-    return {
-      snapshot,
-      error: `Strategy Agent 실패: ${e instanceof Error ? e.message : "unknown"}`,
-    };
-  }
-
-  // Stage 3: Scenario Synthesis (LLM, constrained by strategy)
   let report: AnalysisReport;
+  let usedFallback = false;
   try {
-    report = await synthesizeAnalysis(snapshot, strategy, locale);
+    strategy = await classifyStrategy(snapshot, locale, meter);
+    report = await synthesizeAnalysis(snapshot, strategy, locale, meter);
   } catch (e) {
-    return {
-      snapshot,
-      strategy,
-      error: `시나리오 생성 실패: ${e instanceof Error ? e.message : "unknown"}`,
-    };
+    const outage = classifyAiOutage(e);
+    console.error(
+      `[analyze] AI 실패(${outage ?? "기타"}) → 코드 폴백:`,
+      e instanceof Error ? e.message : e,
+    );
+    // 시스템 장애(잔액/한도/서버)면 운영자에게 즉시 알림 — 구독자 분석이 폴백 중임을 알림.
+    if (outage) await alertOperatorAiOutage(outage, e instanceof Error ? e.message : String(e), Date.now());
+    const fb = buildCodeReport(snapshot);
+    strategy = fb.strategy;
+    report = fb.report;
+    usedFallback = true;
   }
 
   // range_fade 양방향 전략 — Stage 2의 direction은 null (강제). Stage 3 시나리오의 majority로 결정.
@@ -147,14 +154,33 @@ export async function runAnalysisAction(
     console.error("Failed to persist analysis:", e);
   }
 
-  // AI 크레딧 차감 (분석 성공 시에만 — best-effort)
-  try {
-    await spendAiCredit(user.id);
-  } catch (e) {
-    console.error("AI 크레딧 차감 실패 (분석은 완료됨):", e);
+  // AI 사용량·원가·지연 기록 (best-effort — 실패해도 분석 완료). 유료 단위 경제 측정용.
+  const totals = meterTotals(meter);
+  console.log(
+    `[ai-usage] ${symbol} ${style} ${isBacktest ? "backtest" : "live"} — ` +
+      `$${totals.costUsd.toFixed(4)} · ${totals.latencyMs}ms · ` +
+      `in ${totals.inputTokens} / out ${totals.outputTokens} tok`,
+  );
+  await persistAiUsage(supabase, {
+    userId: user.id,
+    analysisId: analysisId ?? null,
+    symbol,
+    style,
+    mode: isBacktest ? "backtest" : "live",
+    meter,
+  });
+
+  // AI 크레딧 차감 (AI가 실제로 돈다 = 성공 시에만 — best-effort).
+  // 코드 폴백은 AI 미가용 중의 열화된 결과이므로 사용자 분석 횟수를 차감하지 않는다.
+  if (!usedFallback) {
+    try {
+      await spendAiCredit(user.id);
+    } catch (e) {
+      console.error("AI 크레딧 차감 실패 (분석은 완료됨):", e);
+    }
   }
 
-  return { snapshot, strategy, report, analysisId };
+  return { snapshot, strategy, report, analysisId, aiUnavailable: usedFallback };
 }
 
 export async function loadAnalysisAction(id: string): Promise<

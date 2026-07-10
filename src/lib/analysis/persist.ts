@@ -96,6 +96,9 @@ export async function saveAnalysis(args: {
           target_price: targetPrice,
           status: "pending",
           expires_at: expiresAt,
+          // 추세 강도/분류 기록 — "강한 추세 즉시진입"만 골라 사후 측정하기 위함 (migration 0039)
+          trend_strength: snapshot.trendMetrics?.strength ?? null,
+          trend_classification: snapshot.trendMetrics?.classification ?? null,
         };
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);

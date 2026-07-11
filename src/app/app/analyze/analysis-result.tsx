@@ -51,13 +51,21 @@ import {
 // 예상 변동폭 콘 horizon (스타일 기준 TF 봉 수) — 레이더와 동일.
 const RANGE_HORIZON: Record<TradingStyle, number> = { scalp: 8, day: 12, swing: 20, position: 14 };
 
-// 시나리오 카드 A/B/C 배지 색 (시안: A 초록 · B 스카이 · C 바이올렛).
+// 시나리오 카드 A/B/C 배지 색 (시안: A 초록 · B 스카이 · C 바이올렛). ※ 이건 시나리오 "순번"이지 등급 아님.
 const SCENARIO_BADGE = [
   "bg-grade-a/15 text-grade-a",
   "bg-sky-500/15 text-sky-300",
   "bg-violet-500/15 text-violet-300",
   "bg-amber-500/15 text-amber-300",
 ];
+
+// 매매 등급(A/B/C/D) 칩 색 — 시나리오 순번 배지와 구분하기 위해 헤더에 별도 표시.
+const GRADE_CHIP: Record<string, string> = {
+  A: "border-grade-a/40 bg-grade-a/10 text-grade-a",
+  B: "border-grade-b/40 bg-grade-b/10 text-grade-b",
+  C: "border-grade-c/40 bg-grade-c/10 text-grade-c",
+  D: "border-grade-d/40 bg-grade-d/10 text-grade-d",
+};
 
 /** 시안 시나리오 카드의 진입가/손절가/목표가/손익비 셀. 값 + 괄호 델타. */
 function StatCell({
@@ -1183,6 +1191,15 @@ function SimpleScenarioCard({
               <h3 className="text-base font-semibold leading-snug">
                 {t("analyze.result.scenario.title", { n: index + 1, name: scenario.name })}
               </h3>
+              <span
+                title={t("grade.badgeLabel", { grade: grade.grade })}
+                className={cn(
+                  "inline-flex items-center whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-bold",
+                  GRADE_CHIP[grade.grade],
+                )}
+              >
+                {t("grade.badgeLabel", { grade: grade.grade })}
+              </span>
               {validated ? (
                 <span
                   title={t("analyze.result.scenario.validatedTitle")}

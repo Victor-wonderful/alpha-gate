@@ -2,6 +2,7 @@ import type { AnalysisSnapshot } from "./analyze";
 import type { AnalysisReport } from "./synthesize";
 import type { StrategyResult, StrategyId } from "./strategy";
 import { STYLE_STANDARDS } from "./standards";
+import { computeMarketAssessment } from "./market-assessment";
 
 /**
  * 코드 전용 시나리오 생성기 — AI(Strategy/Scenario) 미가용 시 폴백.
@@ -89,13 +90,8 @@ export function buildCodeReport(snapshot: AnalysisSnapshot): {
     invalidation: round(stop),
     target: round(target),
     note: "코드 규칙 기반 추정 시나리오 — 레벨 정밀도가 AI보다 낮을 수 있습니다.",
-    marketAssessment: {
-      higher_highs_lows: cls === "up",
-      near_key_level: true,
-      not_box_middle: clearTrend,
-      volume_confirm: false,
-      aligned_with_btc: false,
-    },
+    // 등급 입력(marketAssessment)은 스냅샷 사실로 계산 — AI 경로와 동일 기준.
+    marketAssessment: computeMarketAssessment(snapshot, direction, price),
   };
 
   const report: AnalysisReport = {

@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { meterCall, type AiMeter } from "./ai-usage";
+import { computeMarketAssessment } from "./market-assessment";
 import type { AnalysisSnapshot } from "./analyze";
 import { STYLE_PRESETS } from "./style";
 import { STRATEGY_LABELS, type StrategyId, type StrategyResult } from "./strategy";
@@ -537,7 +538,21 @@ export async function synthesizeAnalysis(
   if (!result || "error" in result) {
     throw new Error(`시나리오 응답 파싱 실패: ${result?.error}\n\n원문: ${result?.raw}`);
   }
-  return enforceEntryProximity(result.data, snapshot, strategy);
+  const report = enforceEntryProximity(result.data, snapshot, strategy);
+  // 등급 입력(marketAssessment)은 AI 판단이 아니라 스냅샷 사실로 재계산 — 폴백과 동일 기준·AI 독립적 등급.
+  for (const s of report.scenarios) {
+    const entryMid =
+      s.entries && s.entries.length > 0
+        ? (() => {
+            const w = s.entries.reduce((a, e) => a + (e.weight || 0), 0);
+            return w > 0
+              ? s.entries.reduce((a, e) => a + e.price * (e.weight / w), 0)
+              : s.entries.reduce((a, e) => a + e.price, 0) / s.entries.length;
+          })()
+        : (s.entryZone.low + s.entryZone.high) / 2;
+    s.marketAssessment = computeMarketAssessment(snapshot, s.direction, entryMid);
+  }
+  return report;
 }
 
 // 저변동 장세에서 셋업이 안 나올 때 한 단계 큰 스타일을 권한다.

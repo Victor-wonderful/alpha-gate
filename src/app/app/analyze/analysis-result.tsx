@@ -60,6 +60,12 @@ const GRADE_CHIP: Record<string, string> = {
   D: "bg-grade-d text-white",
 };
 
+// 방향 배지 색 — 롱=초록, 숏=빨강. (양방향/횡보 중립은 최근 기록에서 처리.)
+const DIR_CHIP = {
+  long: "border-grade-a/40 bg-grade-a/10 text-grade-a",
+  short: "border-grade-d/40 bg-grade-d/10 text-grade-d",
+};
+
 /** 시안 시나리오 카드의 진입가/손절가/목표가/손익비 셀. 값 + 괄호 델타. */
 function StatCell({
   label,
@@ -1186,6 +1192,15 @@ function SimpleScenarioCard({
               <h3 className="text-base font-semibold leading-snug">
                 {t("analyze.result.scenario.title", { n: index + 1, name: scenario.name })}
               </h3>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[11px] font-bold",
+                  isLong ? DIR_CHIP.long : DIR_CHIP.short,
+                )}
+              >
+                {isLong ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {isLong ? t("common.long") : t("common.short")}
+              </span>
               {validated ? (
                 <span
                   title={t("analyze.result.scenario.validatedTitle")}

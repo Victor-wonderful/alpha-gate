@@ -65,12 +65,7 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
             {analysisRows.map((a) => {
               const isWait = a.primary_strategy === "wait";
               const isBacktest = a.mode === "backtest";
-              const dirLabel =
-                a.strategy_direction === "long"
-                  ? t("common.long")
-                  : a.strategy_direction === "short"
-                    ? t("common.short")
-                    : null;
+              const dir = a.strategy_direction;
               return (
                 <li
                   key={a.id}
@@ -110,14 +105,29 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
                       "relative border",
                       isWait
                         ? "border-grade-c/40 bg-grade-c/10 text-grade-c"
-                        : a.strategy_direction === "short"
-                          ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
-                          : "border-primary/40 bg-primary/10 text-primary",
+                        : "border-primary/40 bg-primary/10 text-primary",
                     )}
                   >
                     {STRATEGY_LABELS[a.primary_strategy]}
-                    {dirLabel ? ` · ${dirLabel}` : ""}
                   </Badge>
+                  {!isWait ? (
+                    <Badge
+                      className={cn(
+                        "relative border font-bold",
+                        dir === "long"
+                          ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
+                          : dir === "short"
+                            ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
+                            : "border-border bg-muted/40 text-muted-foreground",
+                      )}
+                    >
+                      {dir === "long"
+                        ? t("common.long")
+                        : dir === "short"
+                          ? t("common.short")
+                          : t("analyze.cmpC.biasNeutral")}
+                    </Badge>
+                  ) : null}
                   <span className="relative text-xs text-muted-foreground">
                     {t("analyze.cmpA.scenarioCount", { n: a.scenarios_count })}
                   </span>

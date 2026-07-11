@@ -51,16 +51,8 @@ import {
 // 예상 변동폭 콘 horizon (스타일 기준 TF 봉 수) — 레이더와 동일.
 const RANGE_HORIZON: Record<TradingStyle, number> = { scalp: 8, day: 12, swing: 20, position: 14 };
 
-// 시나리오 카드 A/B/C 배지 색 (시안: A 초록 · B 스카이 · C 바이올렛). ※ 이건 시나리오 "순번"이지 등급 아님.
-const SCENARIO_BADGE = [
-  "bg-grade-a/15 text-grade-a",
-  "bg-sky-500/15 text-sky-300",
-  "bg-violet-500/15 text-violet-300",
-  "bg-amber-500/15 text-amber-300",
-];
-
-// 매매 등급(A/B/C/D) 칩 색 — 시나리오 순번 배지와 구분하기 위해 헤더에 별도 표시.
-// 진한 단색 배경 + 흰 글씨로 눈에 띄게 (작은 칩은 놓치기 쉬움).
+// 매매 등급(A/B/C/D) 배지 색 — 시나리오 카드 왼쪽 큰 배지에 등급을 직접 표시.
+// 진한 단색 배경 + 흰 글씨. (시나리오 순번은 제목 "시나리오 N"에 있음.)
 const GRADE_CHIP: Record<string, string> = {
   A: "bg-grade-a text-white",
   B: "bg-grade-b text-white",
@@ -1179,28 +1171,21 @@ function SimpleScenarioCard({
       <div className="space-y-3.5 p-5 pl-6">
         {/* Header — A/B 배지 + 제목 + 알림 (시안) */}
         <div className="flex items-start gap-3">
+          {/* 큰 배지 = 매매 등급 (등급 색·등급 글자). 시나리오 순번은 제목("시나리오 N")에. */}
           <div
+            title={t("grade.badgeLabel", { grade: grade.grade })}
             className={cn(
-              "flex h-9 w-9 flex-none items-center justify-center rounded-lg text-sm font-bold",
-              SCENARIO_BADGE[index % SCENARIO_BADGE.length],
+              "flex h-9 w-9 flex-none items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm",
+              GRADE_CHIP[grade.grade],
             )}
           >
-            {String.fromCharCode(65 + index)}
+            {grade.grade}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-semibold leading-snug">
                 {t("analyze.result.scenario.title", { n: index + 1, name: scenario.name })}
               </h3>
-              <span
-                title={t("grade.badgeLabel", { grade: grade.grade })}
-                className={cn(
-                  "inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-bold shadow-sm",
-                  GRADE_CHIP[grade.grade],
-                )}
-              >
-                {t("grade.badgeLabel", { grade: grade.grade })}
-              </span>
               {validated ? (
                 <span
                   title={t("analyze.result.scenario.validatedTitle")}

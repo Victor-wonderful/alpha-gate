@@ -118,7 +118,8 @@ export function buildCodeReport(snapshot: AnalysisSnapshot): {
 
   const strategy: StrategyResult = {
     primary: "trend_pullback",
-    direction: clearTrend ? direction : null,
+    // 시나리오가 단일 방향을 트레이드하므로 그 방향을 그대로 표기. 불확실성은 confidence로 표현.
+    direction,
     confidence: strength === "strong" ? 0.6 : strength === "moderate" ? 0.45 : 0.3,
     reasoning: `코드 폴백: ${dirNote}. AI 미가용으로 추세 기반 규칙 시나리오를 생성했습니다.`,
     rejected: [],

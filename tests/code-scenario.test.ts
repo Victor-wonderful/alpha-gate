@@ -43,14 +43,16 @@ describe("buildCodeReport (AI 폴백)", () => {
     expect(s.target).toBeLessThan(100_000);
   });
 
-  it("횡보/혼조 → POC 대비 위치로 방향 추정 + 신뢰도 낮음(strategy.direction null)", () => {
+  it("횡보/혼조 → POC 대비 위치로 방향 추정 + 신뢰도 낮음(단, 방향은 시나리오와 일치)", () => {
     // price 100k >= poc 99k → long lean
     const { strategy, report } = buildCodeReport(
       mockSnap({ trendMetrics: { classification: "range", strength: "weak" } }),
     );
     const s = report.scenarios[0];
     expect(s.direction).toBe("long");
-    expect(strategy.direction).toBeNull(); // 불명확이라 전략 방향은 null
+    // 방향은 시나리오와 일치(롱). 불확실성은 confidence(낮음)로 표현.
+    expect(strategy.direction).toBe("long");
+    expect(strategy.confidence).toBeLessThan(0.5);
     expect(s.qualityIssues && s.qualityIssues.length).toBeGreaterThan(0);
   });
 

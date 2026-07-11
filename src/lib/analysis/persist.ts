@@ -14,6 +14,13 @@ const SCENARIO_TIMEOUT_MS: Record<string, number> = {
   "1d": 30 * 24 * 60 * 60_000,
 };
 
+/** 표시용 방향 — 전략 방향이 null이어도 시나리오가 단일 방향이면 그걸로. 혼합/없음은 null(양방향). */
+function displayDirection(strategy: StrategyResult, report: AnalysisReport): "long" | "short" | null {
+  if (strategy.direction) return strategy.direction;
+  const dirs = new Set(report.scenarios.map((s) => s.direction));
+  return dirs.size === 1 ? ([...dirs][0] as "long" | "short") : null;
+}
+
 function inferTimeframe(style: string): string {
   // 스타일별 기준 타임프레임 (entry trigger TF)
   if (style === "scalp") return "15m";
@@ -44,7 +51,7 @@ export async function saveAnalysis(args: {
       symbol: snapshot.symbol,
       style: snapshot.style,
       primary_strategy: strategy.primary,
-      strategy_direction: strategy.direction,
+      strategy_direction: displayDirection(strategy, report),
       strategy_confidence: strategy.confidence,
       scenarios_count: report.scenarios.length,
       current_price: snapshot.ticker.last,

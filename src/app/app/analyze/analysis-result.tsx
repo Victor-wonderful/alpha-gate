@@ -60,11 +60,12 @@ const SCENARIO_BADGE = [
 ];
 
 // 매매 등급(A/B/C/D) 칩 색 — 시나리오 순번 배지와 구분하기 위해 헤더에 별도 표시.
+// 진한 단색 배경 + 흰 글씨로 눈에 띄게 (작은 칩은 놓치기 쉬움).
 const GRADE_CHIP: Record<string, string> = {
-  A: "border-grade-a/40 bg-grade-a/10 text-grade-a",
-  B: "border-grade-b/40 bg-grade-b/10 text-grade-b",
-  C: "border-grade-c/40 bg-grade-c/10 text-grade-c",
-  D: "border-grade-d/40 bg-grade-d/10 text-grade-d",
+  A: "bg-grade-a text-white",
+  B: "bg-grade-b text-white",
+  C: "bg-grade-c text-white",
+  D: "bg-grade-d text-white",
 };
 
 /** 시안 시나리오 카드의 진입가/손절가/목표가/손익비 셀. 값 + 괄호 델타. */
@@ -1194,7 +1195,7 @@ function SimpleScenarioCard({
               <span
                 title={t("grade.badgeLabel", { grade: grade.grade })}
                 className={cn(
-                  "inline-flex items-center whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-bold",
+                  "inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-bold shadow-sm",
                   GRADE_CHIP[grade.grade],
                 )}
               >

@@ -39,8 +39,8 @@ export interface PlaceOrderResult {
   status?: "filled" | "pending";
 }
 
-const PAPER_SLIPPAGE_PCT = 0.05;
-// Binance USDT-M Futures 왕복 수수료 — 테이커+메이커 합쳐 최대 0.075%. 슬리피지는 별도 처리.
+// 슬리피지 미적용 — 시장가 진입/청산 모두 조회한 실제 시장가 그대로 체결.
+// Binance USDT-M Futures 왕복 수수료 — 테이커+메이커 합쳐 최대 0.075%.
 const PAPER_FEES_PCT_FUTURES = 0.075;
 // Binance Spot Taker 0.1% × 2 — 현물은 더 비쌈.
 const PAPER_FEES_PCT_SPOT = 0.2;
@@ -280,8 +280,9 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
     return { ok: false, error: `시세 조회 실패: ${e instanceof Error ? e.message : String(e)}` };
   }
 
-  const slippage = input.direction === "long" ? PAPER_SLIPPAGE_PCT : -PAPER_SLIPPAGE_PCT;
-  const fillPrice = lastPrice * (1 + slippage / 100);
+  // 시장가 주문은 조회한 실제 시장가 그대로 체결한다 (슬리피지 미적용).
+  // 폼에 표시되는 현재가와 기록되는 진입가를 일치시키기 위함. 비용은 fees_pct(왕복 0.075%)로만 반영.
+  const fillPrice = lastPrice;
 
   // Validate stop/target (optional)
   if (input.stop != null) {
@@ -339,7 +340,7 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
       pre_rr: Math.abs((target - fillPrice) / (fillPrice - stop)),
       simulation_meta: null,
       entry_actual: fillPrice,
-      entry_slippage_pct: slippage,
+      entry_slippage_pct: 0,
       fees_pct: feesPct,
       paper_margin: margin,
       is_paper: true,
@@ -453,9 +454,8 @@ export async function closeVirtualPositionAction(
     return { ok: false, error: `시세 조회 실패: ${e instanceof Error ? e.message : String(e)}` };
   }
 
-  // Apply slippage (unfavorable on exit too)
-  const exitSlippage = trade.direction === "long" ? -PAPER_SLIPPAGE_PCT : PAPER_SLIPPAGE_PCT;
-  const exitActual = exitPrice * (1 + exitSlippage / 100);
+  // 슬리피지 미적용 — 조회한 실제 시장가 그대로 청산.
+  const exitActual = exitPrice;
 
   const entryActual = Number(trade.entry_actual ?? trade.entry);
   const qty = Number(trade.position_quantity ?? 0);

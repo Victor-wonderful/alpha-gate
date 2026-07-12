@@ -135,7 +135,7 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
                 label={t("journal.detail.actualFill")}
                 value={`$${formatNumber(Number(trade.entry_actual))}`}
                 sub={
-                  trade.entry_slippage_pct != null
+                  trade.entry_slippage_pct != null && Number(trade.entry_slippage_pct) !== 0
                     ? t("journal.detail.slippage", { value: `${Number(trade.entry_slippage_pct) >= 0 ? "+" : ""}${Number(trade.entry_slippage_pct).toFixed(3)}` })
                     : t("journal.detail.marketFill")
                 }

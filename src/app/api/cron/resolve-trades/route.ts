@@ -4,9 +4,6 @@ import { fetchKlines, fetchTicker24h } from "@/lib/analysis/binance";
 import { dispatch } from "@/lib/notify-dispatch";
 import { settleMargin } from "@/lib/paper-wallet";
 
-/** 시장가 슬리피지 % — 자동 청산 시 적용 (수동 청산과 동일) */
-const PAPER_SLIPPAGE_PCT = 0.05;
-
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -186,10 +183,8 @@ export async function GET(req: NextRequest) {
       try {
         const ticker = await fetchTicker24h(t.symbol);
         const market = ticker.lastPrice;
-        // 청산도 슬리피지 불리하게
-        const exitSlip =
-          t.direction === "long" ? -PAPER_SLIPPAGE_PCT : PAPER_SLIPPAGE_PCT;
-        const exitActual = market * (1 + exitSlip / 100);
+        // 슬리피지 미적용 — 조회한 실제 시장가 그대로 청산.
+        const exitActual = market;
         const entryActual = Number(t.entry_actual ?? t.entry);
         const stopDist = Math.abs(entryActual - t.stop);
         const feesPct = Number(t.fees_pct ?? 0.12);

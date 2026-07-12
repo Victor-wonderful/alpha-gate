@@ -10,32 +10,27 @@ import type { TradingStyle } from "@/lib/analysis/style";
 import type { GradeResult, SizingResult, TradeInput } from "@/types/trade";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Simulated market-order slippage in % for paper trading.
- *  Direction-aware: long fills slightly higher, short slightly lower (unfavorable side). */
-const PAPER_SLIPPAGE_PCT = 0.05;
 /** Round-trip fee (entry + exit) — Binance USDT-M Futures, 테이커+메이커 합쳐 최대 0.075%.
- *  슬리피지는 entry_actual/exit_actual에서 PAPER_SLIPPAGE_PCT로 별도 적용. */
+ *  슬리피지는 미적용 — 시장가는 조회한 실제 시장가 그대로 체결. */
 const PAPER_FEES_PCT = 0.075;
 
 /** Simulate a market-order fill for paper trading.
  *  - Fetches Binance current price
- *  - Applies direction-aware slippage on top
- *  - Returns the actual fill price + slippage % used
+ *  - 슬리피지 미적용: 조회한 실제 시장가 그대로 체결
  *  Falls back to the user-typed entry if the API call fails (graceful degradation). */
 async function simulateMarketFill(
   symbol: string,
   direction: "long" | "short",
   userEntry: number,
 ): Promise<{ fillPrice: number; slippagePct: number; fromMarket: boolean }> {
+  void direction; // 방향 무관 — 슬리피지 제거
   try {
     const ticker = await fetchTicker24h(symbol);
     const last = ticker.lastPrice;
     if (!last || !Number.isFinite(last) || last <= 0) {
       return { fillPrice: userEntry, slippagePct: 0, fromMarket: false };
     }
-    const slip = direction === "long" ? PAPER_SLIPPAGE_PCT : -PAPER_SLIPPAGE_PCT;
-    const fillPrice = last * (1 + slip / 100);
-    return { fillPrice, slippagePct: slip, fromMarket: true };
+    return { fillPrice: last, slippagePct: 0, fromMarket: true };
   } catch {
     return { fillPrice: userEntry, slippagePct: 0, fromMarket: false };
   }

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { Logo } from "@/components/app/logo";
+import { Wordmark } from "@/components/app/wordmark";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 
@@ -25,12 +25,9 @@ export function MarketingHeader() {
     <header className="relative z-30">
       <div className="flex items-center justify-between px-6 py-6 sm:px-10">
         <Link href="/" className="flex items-center gap-2.5">
-          <Logo size={24} />
           <div>
-            <div className="font-mono text-sm font-bold leading-tight tracking-[0.24em] text-white">
-              ALPHA GATE
-            </div>
-            <div className="text-[9px] font-medium tracking-[0.2em] text-white/40">
+            <Wordmark height={17} className="text-white" />
+            <div className="mt-1 text-[9px] font-medium tracking-[0.2em] text-white/40">
               PRE-TRADE DECISION CHECK
             </div>
           </div>

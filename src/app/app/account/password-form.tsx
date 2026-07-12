@@ -41,7 +41,7 @@ export function PasswordForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-5 rounded-2xl border border-border/60 bg-card/40 p-5"
+      className="space-y-5 rounded-2xl border border-border/60 bg-card shadow-card p-5"
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-1.5">

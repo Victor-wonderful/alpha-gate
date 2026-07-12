@@ -179,7 +179,7 @@ export default async function AccountPage() {
       {/* Danger zone */}
       <section>
         <h2 className="mb-3 text-base font-semibold text-grade-d">{t("acct.dangerTitle")}</h2>
-        <div className="rounded-2xl border border-grade-d/30 bg-card/40 p-5">
+        <div className="rounded-2xl border border-grade-d/30 bg-card shadow-card p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">{t("acct.logout")}</div>
@@ -209,7 +209,7 @@ function StatCard({
   tone?: "good" | "bad";
 }) {
   return (
-    <article className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/40 px-5 py-4">
+    <article className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-card shadow-card px-5 py-4">
       <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
         {icon}
         {label}
@@ -248,7 +248,7 @@ function ServiceCard({
   return (
     <Link
       href={href}
-      className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/40 px-5 py-4 transition-colors hover:border-primary/40 hover:bg-card/70"
+      className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card shadow-card px-5 py-4 transition-colors hover:border-primary/40 hover:shadow-card-hover hover:-translate-y-0.5"
     >
       <div className="flex items-center gap-3">
         <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">

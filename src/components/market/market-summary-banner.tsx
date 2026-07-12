@@ -116,7 +116,7 @@ export async function MarketSummaryBanner() {
   return (
     <section
       className={cn(
-        "flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl border bg-card/40 px-5 py-4",
+        "flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl border bg-card shadow-card px-5 py-4",
         verdict.border,
       )}
     >

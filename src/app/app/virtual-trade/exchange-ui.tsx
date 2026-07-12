@@ -588,13 +588,13 @@ function ChartArea({
               ) : null}
               {header.ma10 != null ? (
                 <span className="text-[10px]">
-                  <span className="text-purple-400/90">MA10</span>{" "}
+                  <span className="text-violet-400/90">MA10</span>{" "}
                   <span className="font-mono tabular-nums">{formatNumber(header.ma10, { maximumFractionDigits: 2 })}</span>
                 </span>
               ) : null}
               {header.ma20 != null ? (
                 <span className="text-[10px]">
-                  <span className="text-pink-400/90">MA20</span>{" "}
+                  <span className="text-cyan-400/90">MA20</span>{" "}
                   <span className="font-mono tabular-nums">{formatNumber(header.ma20, { maximumFractionDigits: 2 })}</span>
                 </span>
               ) : null}

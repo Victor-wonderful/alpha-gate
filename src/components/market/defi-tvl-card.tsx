@@ -131,7 +131,7 @@ export async function DefiTvlCard() {
         <span className="text-xs text-muted-foreground">via DeFiLlama</span>
       </div>
 
-      <article className="flex h-full flex-col gap-3 rounded-2xl border border-border/60 bg-card/40 p-5">
+      <article className="flex h-full flex-col gap-3 rounded-2xl border border-border/60 bg-card shadow-card p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
           Total Value Locked
         </p>

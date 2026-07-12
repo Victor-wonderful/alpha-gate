@@ -31,7 +31,7 @@ export function ModeFilter({
     return q ? `${basePath}?${q}` : basePath;
   }
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card/40 p-0.5 text-xs">
+    <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card shadow-card p-0.5 text-xs">
       {tabs.map((t) => {
         const active = current === t.key;
         const count = counts?.[t.key];

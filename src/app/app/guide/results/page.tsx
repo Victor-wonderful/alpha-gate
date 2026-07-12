@@ -122,7 +122,7 @@ export default async function GuideResultsPage() {
 
 function TabCard({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-card/30 p-5">
+    <div className="rounded-xl border border-border/60 bg-card shadow-card p-5">
       <div className="text-sm font-semibold">{title}</div>
       <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{desc}</p>
     </div>
@@ -131,7 +131,7 @@ function TabCard({ title, desc }: { title: string; desc: string }) {
 
 function Metric({ name, body }: { name: string; body: string }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-card/30 p-4">
+    <div className="rounded-lg border border-border/60 bg-card shadow-card p-4">
       <div className="text-sm font-semibold">{name}</div>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{body}</p>
     </div>

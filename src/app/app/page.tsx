@@ -200,7 +200,7 @@ export default async function HomePage() {
           </div>
           <Link
             href="/app/guide"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/40 px-4 py-2 text-sm text-foreground transition-colors hover:border-border/80 hover:bg-card/80"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card shadow-card px-4 py-2 text-sm text-foreground transition-colors hover:border-border/80 hover:shadow-card-hover hover:-translate-y-0.5"
           >
             <HelpCircle className="h-4 w-4 text-muted-foreground" />
             {t("home.howToUse")}
@@ -250,7 +250,7 @@ export default async function HomePage() {
         {/* 4. 일일 리스크 게이지 */}
         <section
           className={cn(
-            "flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2xl border bg-card/40 px-5 py-4",
+            "flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2xl border bg-card shadow-card px-5 py-4",
             limitHit ? "border-grade-d/50" : limitNear ? "border-grade-c/50" : "border-border/60",
           )}
         >
@@ -337,7 +337,7 @@ export default async function HomePage() {
         {isEmpty ? (
           <Link
             href="/app/guide"
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/40 px-6 py-4 transition-all hover:border-ring/40 hover:bg-card/60"
+            className="group flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card shadow-card px-6 py-4 transition-all hover:border-ring/40 hover:shadow-card-hover hover:-translate-y-0.5"
           >
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-ring/10 text-primary">
@@ -373,7 +373,7 @@ export default async function HomePage() {
                 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </div>
-            <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card/40">
+            <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card shadow-card">
               {recent.map((tr) => {
                 const status = (tr as { order_status?: string }).order_status;
                 const orderType = (tr as { order_type?: string }).order_type;
@@ -458,7 +458,7 @@ export default async function HomePage() {
       {/* ════════ 우측 레일 ════════ */}
       <aside className="min-w-0 space-y-4">
         {/* 다음 액션 */}
-        <section className="rounded-2xl border border-ring/40 bg-card/50 p-4">
+        <section className="rounded-2xl border border-ring/40 bg-card shadow-card p-4">
           <div className="flex items-center gap-1.5 text-[15px] font-semibold">
             <Zap className="h-4 w-4 text-primary" />
             {t("home.nextAction.title")}
@@ -524,7 +524,7 @@ export default async function HomePage() {
         </section>
 
         {/* 최근 AI 분석 */}
-        <section className="rounded-2xl border border-border/60 bg-card/40 p-4">
+        <section className="rounded-2xl border border-border/60 bg-card shadow-card p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[15px] font-semibold">{t("home.aiRecent.title")}</h2>
             <Link
@@ -573,7 +573,7 @@ export default async function HomePage() {
         {/* 시장 현황 바로가기 */}
         <Link
           href="/app/market"
-          className="group flex items-center justify-between rounded-2xl border border-border/60 bg-card/40 px-4 py-3.5 transition-all hover:border-ring/40 hover:bg-card/60"
+          className="group flex items-center justify-between rounded-2xl border border-border/60 bg-card shadow-card px-4 py-3.5 transition-all hover:border-ring/40 hover:shadow-card-hover hover:-translate-y-0.5"
         >
           <div>
             <div className="text-sm font-semibold">{t("home.marketLink.title")}</div>
@@ -617,7 +617,7 @@ function MetricCard({
     <Link
       href={href}
       className={cn(
-        "group flex flex-col gap-2 rounded-2xl border bg-card/40 px-5 py-4 transition-all hover:bg-card/70",
+        "group flex flex-col gap-2 rounded-2xl border bg-card shadow-card px-5 py-4 transition-all hover:shadow-card-hover hover:-translate-y-0.5",
         alert ? "border-grade-d/40 hover:border-grade-d/70" : "border-border/60 hover:border-ring/40",
       )}
     >
@@ -678,7 +678,7 @@ function PositionCard({ trade, current, t }: { trade: OpenTradeRow; current?: nu
   return (
     <Link
       href="/app/journal"
-      className="group rounded-2xl border border-border/60 bg-card/40 p-4 transition-all hover:border-ring/40 hover:bg-card/70"
+      className="group rounded-2xl border border-border/60 bg-card shadow-card p-4 transition-all hover:border-ring/40 hover:shadow-card-hover hover:-translate-y-0.5"
     >
       <div className="flex items-center gap-2">
         <span className="font-mono text-sm font-bold">{trade.symbol}</span>
@@ -727,7 +727,7 @@ function PendingCard({ trade, current, t }: { trade: OpenTradeRow; current?: num
   return (
     <Link
       href="/app/journal"
-      className="group rounded-2xl border border-grade-c/40 bg-card/40 p-4 transition-all hover:border-grade-c/70 hover:bg-card/70"
+      className="group rounded-2xl border border-grade-c/40 bg-card shadow-card p-4 transition-all hover:border-grade-c/70 hover:shadow-card-hover hover:-translate-y-0.5"
     >
       <div className="flex items-center gap-2">
         <span className="font-mono text-sm font-bold">{trade.symbol}</span>
@@ -757,7 +757,7 @@ function QuickLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="group flex items-center justify-between rounded-xl border border-border/60 bg-card/40 px-3.5 py-2.5 text-sm font-medium transition-all hover:border-ring/40 hover:bg-card/70"
+      className="group flex items-center justify-between rounded-xl border border-border/60 bg-card shadow-card px-3.5 py-2.5 text-sm font-medium transition-all hover:border-ring/40 hover:shadow-card-hover hover:-translate-y-0.5"
     >
       {label}
       <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
@@ -767,7 +767,7 @@ function QuickLink({ href, label }: { href: string; label: string }) {
 
 function TodaySkeleton({ t }: { t: TFunction }) {
   return (
-    <div className="flex items-center justify-between gap-6 rounded-2xl border border-border/60 bg-card/40 px-6 py-4">
+    <div className="flex items-center justify-between gap-6 rounded-2xl border border-border/60 bg-card shadow-card px-6 py-4">
       <span className="text-sm text-muted-foreground">{t("home.todaySkeleton.checking")}</span>
       <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
         {t("home.todaySkeleton.viewMarket")}

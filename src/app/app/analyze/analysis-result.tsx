@@ -555,7 +555,7 @@ export function AnalysisResult({
           <button
             type="button"
             onClick={() => setShowChart(!showChart)}
-            className="flex w-full items-center justify-between rounded-lg border border-border bg-card/40 px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30"
+            className="flex w-full items-center justify-between rounded-lg border border-border bg-card shadow-card px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30"
           >
             <span className="flex items-center gap-2 text-muted-foreground">
               <ChartCandlestick className="h-4 w-4" />
@@ -608,7 +608,7 @@ export function AnalysisResult({
               <CardContent>
                 <ChartErrorBoundary
                   fallback={
-                    <div className="flex h-[480px] items-center justify-center rounded-md border border-border bg-card/30 text-sm text-muted-foreground">
+                    <div className="flex h-[480px] items-center justify-center rounded-md border border-border bg-card shadow-card text-sm text-muted-foreground">
                       {t("analyze.result.chart.redrawing")}
                     </div>
                   }
@@ -647,7 +647,7 @@ export function AnalysisResult({
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="flex w-full items-center justify-between rounded-lg border border-border bg-card/40 px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30"
+          className="flex w-full items-center justify-between rounded-lg border border-border bg-card shadow-card px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30"
         >
           <span className="flex items-center gap-2 text-muted-foreground">
             <Target className="h-4 w-4" />
@@ -830,7 +830,7 @@ function ExpertRow({
   children: ReactNode;
 }) {
   return (
-    <details open={defaultOpen} className="group rounded-lg border border-border bg-card/40">
+    <details open={defaultOpen} className="group rounded-lg border border-border bg-card shadow-card">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5">
         <span className="flex-none text-sm font-medium">{title}</span>
         {summary ? (

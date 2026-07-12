@@ -79,7 +79,7 @@ export function ExpiryActions({ kind, id, canExtend }: Props) {
           type="button"
           disabled={pending}
           onClick={() => run(kind === "trade" ? "extend-trade" : "extend-limit", extend)}
-          className="inline-flex items-center gap-1 rounded-md border border-border bg-card/40 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-card/70 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-card shadow-card px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:shadow-card-hover hover:-translate-y-0.5 disabled:opacity-50"
         >
           {busyKey?.startsWith("extend")
             ? t("trade.expiry.processing")
@@ -92,7 +92,7 @@ export function ExpiryActions({ kind, id, canExtend }: Props) {
           type="button"
           disabled
           title={t("trade.expiry.extendOnce")}
-          className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-border/60 bg-card/20 px-3 py-1.5 text-xs font-semibold text-muted-foreground opacity-60"
+          className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-border/60 bg-card shadow-card px-3 py-1.5 text-xs font-semibold text-muted-foreground opacity-60"
         >
           {t("trade.expiry.cannotExtend")}
         </button>

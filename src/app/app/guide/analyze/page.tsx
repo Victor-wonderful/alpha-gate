@@ -73,7 +73,7 @@ export default async function GuideAnalyzePage() {
             {SESSIONS.map((s) => (
               <li
                 key={s.label}
-                className="flex items-center gap-3 rounded-lg border border-border/60 bg-card/30 px-4 py-2.5 text-sm"
+                className="flex items-center gap-3 rounded-lg border border-border/60 bg-card shadow-card px-4 py-2.5 text-sm"
               >
                 <span
                   className={cn(
@@ -160,7 +160,7 @@ export default async function GuideAnalyzePage() {
           {t("guide.analyze.s3Intro")}
         </p>
         <div className="grid gap-3 lg:grid-cols-2 mt-4">
-          <div className="rounded-xl border border-border/60 bg-card/30 p-5">
+          <div className="rounded-xl border border-border/60 bg-card shadow-card p-5">
             <div className="text-sm font-semibold mb-2">{t("guide.analyze.autoLabelTitle")}</div>
             <ul className="space-y-1 text-sm text-muted-foreground">
               <li>· {t("guide.analyze.autoLabel1")}</li>
@@ -169,7 +169,7 @@ export default async function GuideAnalyzePage() {
               <li>· {t("guide.analyze.autoLabel4")}</li>
             </ul>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/30 p-5">
+          <div className="rounded-xl border border-border/60 bg-card shadow-card p-5">
             <div className="text-sm font-semibold mb-2">{t("guide.analyze.hitRateTitle")}</div>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {t("guide.analyze.hitRateBody")}
@@ -241,7 +241,7 @@ export default async function GuideAnalyzePage() {
 async function ReadingBlock({ title, desc, tip }: { title: string; desc: string; tip: string }) {
   const t = await getT();
   return (
-    <div className="rounded-lg border border-border/60 bg-card/30 p-4">
+    <div className="rounded-lg border border-border/60 bg-card shadow-card p-4">
       <div className="text-sm font-semibold">{title}</div>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{desc}</p>
       <div className="mt-2 flex items-start gap-2 text-xs">
@@ -257,7 +257,7 @@ async function ReadingBlock({ title, desc, tip }: { title: string; desc: string;
 
 function Misconception({ wrong, right }: { wrong: string; right: string }) {
   return (
-    <li className="rounded-lg border border-border/60 bg-card/30 p-4">
+    <li className="rounded-lg border border-border/60 bg-card shadow-card p-4">
       <div className="flex items-start gap-2 text-sm">
         <span className="mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded bg-grade-d/15 text-[10px] font-bold text-grade-d">
           ✕

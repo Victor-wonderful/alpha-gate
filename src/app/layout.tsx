@@ -1,30 +1,43 @@
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
+import { Inter, Noto_Sans_KR, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { getLocale } from "@/lib/i18n/server";
 import { I18nProvider } from "@/lib/i18n/context";
 
+// VECTA design system typography: Inter (en) / Noto Sans KR (kr) / JetBrains Mono
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const notoSansKr = Noto_Sans_KR({
+  weight: ["400", "500", "700"],
+  preload: false,
+  variable: "--font-noto-kr",
+  display: "swap",
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: {
-    default: "Alpha Gate — 매매 전 의사결정 체크",
-    template: "%s · Alpha Gate",
+    default: "VECTA — 매매 전 의사결정 체크",
+    template: "%s · VECTA",
   },
   description:
     "진입 버튼을 누르기 전에 이 거래를 해도 되는지 점검하세요. AI 분석 + 매매 등급 + 거래 저널 + AI 복기.",
   openGraph: {
     type: "website",
-    siteName: "Alpha Gate",
-    title: "Alpha Gate — 매매 전 의사결정 체크",
+    siteName: "VECTA",
+    title: "VECTA — 매매 전 의사결정 체크",
     description:
       "진입 버튼을 누르기 전에 이 거래를 해도 되는지 점검하세요. AI 분석 + 매매 등급 + 거래 저널 + AI 복기.",
     locale: "ko_KR",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Alpha Gate — 매매 전 의사결정 체크",
+    title: "VECTA — 매매 전 의사결정 체크",
     description:
       "AI 시장 분석 · 매매 등급 평가 · 거래 저널 · AI 복기. 진입 전에 점검하세요.",
   },
@@ -61,7 +74,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      className={`dark ${GeistSans.variable} ${GeistMono.variable}`}
+      className={`${inter.variable} ${notoSansKr.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -74,7 +87,7 @@ export default async function RootLayout({
         <I18nProvider locale={locale}>
           <Providers>{children}</Providers>
         </I18nProvider>
-        <Toaster position="top-right" richColors theme="dark" />
+        <Toaster position="top-right" richColors theme="light" />
       </body>
     </html>
   );

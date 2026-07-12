@@ -27,7 +27,7 @@ function Card({
   return (
     <article
       className={cn(
-        "flex h-full flex-col gap-3 rounded-2xl border bg-card/40 p-5",
+        "flex h-full flex-col gap-3 rounded-2xl border bg-card shadow-card p-5",
         alert ? "border-grade-d/40" : "border-border/60",
       )}
     >

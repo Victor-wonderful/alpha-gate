@@ -63,7 +63,7 @@ export function UnrealizedPnl({
 
   if (price == null) {
     return (
-      <div className="rounded-lg border border-border bg-card/50 px-4 py-3 text-xs text-muted-foreground">
+      <div className="rounded-lg border border-border bg-card shadow-card px-4 py-3 text-xs text-muted-foreground">
         {t("journal.cmp.loadingPrice")}
         {error ? <span className="ml-2 text-grade-d">({error})</span> : null}
       </div>
@@ -97,7 +97,7 @@ export function UnrealizedPnl({
 
   return (
     <div className={cn(
-      "rounded-lg border bg-card/70 p-4",
+      "rounded-lg border bg-card shadow-card p-4",
       inProfit ? "border-grade-a/40" : "border-grade-d/40",
     )}>
       <div className="flex items-start justify-between gap-3">

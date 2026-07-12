@@ -303,7 +303,7 @@ function PainCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-rose-500/15 bg-gradient-to-br from-[#1a0a14]/70 via-[#100614]/60 to-[#04020a]/85 p-7 backdrop-blur-xl transition-all hover:border-rose-400/40 hover:shadow-[0_30px_80px_-20px_rgba(244,63,94,0.30)]">
+    <div className="group relative overflow-hidden rounded-2xl border border-rose-500/15 bg-gradient-to-br from-[#101A30]/70 via-[#0A1020]/60 to-[#04070F]/85 p-7 backdrop-blur-xl transition-all hover:border-rose-400/40 hover:shadow-[0_30px_80px_-20px_rgba(244,63,94,0.30)]">
       <div
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -top-16 h-32 bg-gradient-to-b from-rose-400/10 to-transparent opacity-0 blur-2xl transition-opacity group-hover:opacity-100"

@@ -247,7 +247,7 @@ function GuideCard({
   return (
     <Link
       href={href}
-      className="group flex flex-col gap-3 rounded-xl border border-border/60 bg-card/30 p-5 transition-colors hover:border-border/80 hover:bg-card/60"
+      className="group flex flex-col gap-3 rounded-xl border border-border/60 bg-card shadow-card p-5 transition-colors hover:border-border/80 hover:shadow-card-hover hover:-translate-y-0.5"
     >
       <div className="flex items-center justify-between">
         <Icon className={cn("h-5 w-5", iconColor)} />

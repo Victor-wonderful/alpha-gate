@@ -121,7 +121,7 @@ export async function CapitalFlowCard() {
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-base font-semibold">Capital Flow · 7d</h2>
         </div>
-        <article className="rounded-2xl border border-border/60 bg-card/40 px-6 py-8 text-center text-sm text-muted-foreground">
+        <article className="rounded-2xl border border-border/60 bg-card shadow-card px-6 py-8 text-center text-sm text-muted-foreground">
           {t("market.flow.noData")}
         </article>
       </section>
@@ -137,7 +137,7 @@ export async function CapitalFlowCard() {
         <span className="text-xs text-muted-foreground">via CoinGecko</span>
       </div>
 
-      <article className="flex h-full flex-col gap-3 rounded-2xl border border-border/60 bg-card/40 p-5">
+      <article className="flex h-full flex-col gap-3 rounded-2xl border border-border/60 bg-card shadow-card p-5">
         {/* Verdict */}
         <div className="flex items-center gap-2">
           <span className={cn("h-2.5 w-2.5 rounded-full animate-pulse", r.dot)} />

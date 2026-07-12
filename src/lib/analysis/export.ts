@@ -26,7 +26,7 @@ export function buildAnalysisMarkdown(args: {
   });
 
   const lines: string[] = [];
-  lines.push(`# Alpha Gate 분석 — ${snapshot.symbol}`);
+  lines.push(`# VECTA 분석 — ${snapshot.symbol}`);
   lines.push("");
   lines.push(`- 분석 시각: ${ts} KST`);
   lines.push(`- 현재가: $${snapshot.ticker.last.toLocaleString("en-US")}`);
@@ -131,7 +131,7 @@ export function buildAnalysisMarkdown(args: {
 
   lines.push("---");
   lines.push("");
-  lines.push("*Alpha Gate — 본 분석은 투자 자문이 아닙니다. 모든 거래 결정과 결과는 본인의 책임입니다.*");
+  lines.push("*VECTA — 본 분석은 투자 자문이 아닙니다. 모든 거래 결정과 결과는 본인의 책임입니다.*");
 
   return lines.join("\n");
 }
@@ -161,5 +161,5 @@ export function exportFilename(symbol: string, ext: "md" | "json" | "png"): stri
     .replace(/[:.]/g, "-")
     .replace("T", "_")
     .slice(0, 16);
-  return `alpha-gate_${symbol}_${date}.${ext}`;
+  return `vecta_${symbol}_${date}.${ext}`;
 }

@@ -43,6 +43,7 @@ import { cn, formatNumber } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 import { LanguageSwitcher } from "./language-switcher";
 import { Logo } from "./logo";
+import { Wordmark } from "./wordmark";
 
 type NavItem = {
   href: string;
@@ -330,33 +331,29 @@ export function AppShell({
       {/* ── 데스크톱 사이드바 ───────────────────────────── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-border bg-popover/80 backdrop-blur transition-[width] duration-200 lg:flex",
+          "fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-border bg-sidebar transition-[width] duration-200 lg:flex",
           sidebarWidth,
           !hydrated && "transition-none",
         )}
       >
         <div
           className={cn(
-            "flex items-center border-b border-border py-3.5",
-            collapsed ? "justify-center px-0" : "gap-2.5 px-4",
+            "relative flex h-14 items-center",
+            collapsed ? "justify-center px-0" : "px-6",
           )}
         >
-          <Link href="/app" className="flex items-center gap-2.5" title={t("nav.dashboard")}>
-            <Logo size={28} />
-            {!collapsed ? (
-              <span className="leading-[1.15]">
-                <span className="block text-[15px] font-bold tracking-tight">Alpha Gate</span>
-                <span className="block text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                  {t("brand.tagline")}
-                </span>
-              </span>
-            ) : null}
+          <Link href="/app" className="flex items-center" title={t("nav.dashboard")}>
+            {collapsed ? (
+              <Logo size={28} />
+            ) : (
+              <Wordmark height={18} className="block text-foreground" />
+            )}
           </Link>
           {!collapsed ? (
             <button
               type="button"
               onClick={toggleCollapsed}
-              className="ml-auto rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
               aria-label="사이드바 접기"
             >
               <PanelLeftClose className="h-4 w-4" />
@@ -383,15 +380,14 @@ export function AppShell({
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute left-0 top-0 flex h-full w-64 flex-col bg-popover shadow-2xl">
+          <div className="absolute left-0 top-0 flex h-full w-64 flex-col bg-sidebar shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <Link
                 href="/app"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-2"
               >
-                <Logo size={24} />
-                <span className="font-bold tracking-tight">Alpha Gate</span>
+                <Wordmark height={16} className="text-foreground" />
               </Link>
               <button
                 type="button"
@@ -413,7 +409,7 @@ export function AppShell({
 
       {/* ── 탑바 + 콘텐츠 ──────────────────────────────── */}
       <div className={cn("transition-[padding] duration-200", contentPad, !hydrated && "transition-none")}>
-        <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur">
+        <header className="sticky top-0 z-20 bg-background/80 backdrop-blur shadow-[0_6px_20px_-14px_hsl(222_47%_11%/0.30)]">
           <div className="flex h-14 items-center gap-3 px-4 lg:px-6">
             <button
               type="button"
@@ -424,8 +420,7 @@ export function AppShell({
               <Menu className="h-5 w-5" />
             </button>
             <Link href="/app" className="flex items-center gap-2 lg:hidden">
-              <Logo size={22} />
-              <span className="text-sm font-bold tracking-tight">Alpha Gate</span>
+              <Wordmark height={15} className="text-foreground" />
             </Link>
 
             <div className="ml-auto flex items-center gap-2">

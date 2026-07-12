@@ -2,7 +2,7 @@
  * 백테스트 성과 지표 + 품질 게이트 — 순수 함수 모듈.
  *
  * Stock-Alpha(apps/engine/engine/backtest)의 metrics.py / gate.py / costs.py 를
- * Alpha Gate(암호화폐 선물)에 맞춰 TS로 포팅한 것. 의존성 없음(테스트 용이).
+ * VECTA(암호화폐 선물)에 맞춰 TS로 포팅한 것. 의존성 없음(테스트 용이).
  *
  * 핵심 단위는 'R'(리스크 배수): 트레이드 손익 / (진입~손절 거리).
  * R>0=수익, R<0=손실. R 기반이면 코인·가격대 무관하게 합산 가능.
@@ -10,7 +10,7 @@
  * 주식판과의 차이(암호화폐 적응):
  *  - 세금 없음. 비용 = 왕복 수수료(taker+maker) + (선택) 펀딩비.
  *  - 롱/숏 모두 지원(주식 롱온리와 달리 선물은 양방향).
- *  - 슬리피지는 체결가(entry_actual/exit_actual)에서 별도 처리하는 게 Alpha Gate
+ *  - 슬리피지는 체결가(entry_actual/exit_actual)에서 별도 처리하는 게 VECTA
  *    관례라, 여기 비용모델은 기본적으로 수수료+펀딩만 R에서 차감(이중차감 방지).
  *
  * 사용 흐름: simulator.ts(워크포워드) → tradeFromSim() → evaluateGate().

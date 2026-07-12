@@ -1,34 +1,44 @@
 import { cn } from "@/lib/utils";
 
 export function Logo({ size = 28, className }: { size?: number; className?: string }) {
-  const id = `ag-grad-${size}`;
+  const id = `vecta-grad-${size}`;
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 64 64"
+      viewBox="0 0 100 92"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Alpha Gate"
+      aria-label="VECTA"
       className={cn("flex-none", className)}
     >
       <defs>
-        <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="hsl(199 92% 78%)" />
-          <stop offset="55%" stopColor="hsl(199 89% 56%)" />
-          <stop offset="100%" stopColor="hsl(217 91% 50%)" />
+        <linearGradient
+          id={id}
+          gradientUnits="userSpaceOnUse"
+          x1="0"
+          y1="0"
+          x2="100"
+          y2="92"
+        >
+          <stop offset="0%" stopColor="#38C6E0" />
+          <stop offset="50%" stopColor="#2E8FFF" />
+          <stop offset="100%" stopColor="#7A5CFF" />
         </linearGradient>
       </defs>
 
-      {/* Back chevron (lighter, offset down — depth) */}
+      {/* Hollow triangle (A-mark) */}
       <path
-        d="M 32 22 L 60 58 L 32 50 L 4 58 Z"
+        d="M50 0l50 86-100 0z m0 24l29 50-58 0z"
         fill={`url(#${id})`}
-        opacity="0.4"
+        fillRule="evenodd"
       />
 
-      {/* Front chevron (solid, leading) */}
-      <path d="M 32 6 L 52 38 L 32 30 L 12 38 Z" fill={`url(#${id})`} />
+      {/* Ascending arrow crossing the mark */}
+      <path
+        d="M4.1 88.1l57-57-7.4-7.4 28.3-5.7-5.7 28.3-7.4-7.4-57 57z"
+        fill={`url(#${id})`}
+      />
     </svg>
   );
 }

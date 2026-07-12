@@ -97,7 +97,7 @@ export async function TodayMarketStrip() {
   return (
     <Link
       href="/app/market"
-      className="group flex items-center justify-between gap-6 rounded-2xl border border-border/60 bg-card/40 px-6 py-4 transition-all hover:border-primary/40 hover:bg-card/60"
+      className="group flex items-center justify-between gap-6 rounded-2xl border border-border/60 bg-card shadow-card px-6 py-4 transition-all hover:border-primary/40 hover:shadow-card-hover hover:-translate-y-0.5"
     >
       <div className="flex min-w-0 items-center gap-6">
         {/* Verdict */}

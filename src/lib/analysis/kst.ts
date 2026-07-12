@@ -2,7 +2,7 @@
  * KST datetime-local 입력값 처리.
  *
  * datetime-local 인풋의 value는 timezone 없는 "yyyy-MM-ddTHH:mm" 문자열.
- * Alpha Gate는 한국 시장 기준이므로 이 문자열을 무조건 KST(UTC+9)로 해석.
+ * VECTA는 한국 시장 기준이므로 이 문자열을 무조건 KST(UTC+9)로 해석.
  * (사용자 PC가 어느 timezone이든 같은 결과)
  */
 

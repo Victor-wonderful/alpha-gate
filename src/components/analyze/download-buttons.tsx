@@ -85,7 +85,7 @@ export function DownloadButtons({ snapshot, strategy, report, captureRef }: Prop
   return (
     <div
       data-export-skip="true"
-      className="flex flex-col gap-3 rounded-lg border border-border bg-card/40 p-4 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-3 rounded-lg border border-border bg-card shadow-card p-4 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex items-center gap-2 text-sm">
         <Download className="h-4 w-4 text-muted-foreground" />

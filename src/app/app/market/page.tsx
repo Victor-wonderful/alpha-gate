@@ -123,7 +123,7 @@ export default async function MarketPage() {
 
 function BannerSkeleton({ label }: { label: string }) {
   return (
-    <div className="flex min-h-[88px] items-center rounded-2xl border border-border/60 bg-card/30 px-5 py-4 text-sm text-muted-foreground">
+    <div className="flex min-h-[88px] items-center rounded-2xl border border-border/60 bg-card shadow-card px-5 py-4 text-sm text-muted-foreground">
       {label}
     </div>
   );
@@ -143,7 +143,7 @@ function MarketSkeleton({
   return (
     <article
       className={cn(
-        "flex flex-col gap-2 rounded-2xl border border-border/60 bg-card/30 px-6 py-5",
+        "flex flex-col gap-2 rounded-2xl border border-border/60 bg-card shadow-card px-6 py-5",
         h,
       )}
     >

@@ -33,7 +33,7 @@ export function ScrollToTop({ showAfter = 400 }: { showAfter?: number }) {
       aria-label="맨 위로"
       title="맨 위로"
       className={cn(
-        "fixed bottom-6 right-6 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-lg backdrop-blur transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary",
+        "fixed bottom-6 right-6 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card shadow-card text-foreground shadow-lg backdrop-blur transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary",
         visible
           ? "translate-y-0 opacity-100"
           : "pointer-events-none translate-y-4 opacity-0",

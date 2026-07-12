@@ -124,7 +124,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
   return (
     <div className="space-y-3">
       {/* Filters bar */}
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-card/40 p-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-card shadow-card p-3">
         {/* 코인 검색 */}
         <div className="relative flex min-w-[160px] flex-1 items-center">
           <Search className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -188,7 +188,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
 
       {/* Empty state */}
       {filtered.length === 0 ? (
-        <div className="rounded-lg border border-border/60 bg-card/40 p-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-lg border border-border/60 bg-card shadow-card p-10 text-center text-sm text-muted-foreground">
           {t("journal.table.empty")}
         </div>
       ) : (

@@ -195,12 +195,12 @@ export function SessionsClock() {
           ) : null}
         </div>
       ) : (
-        <div className="mb-2 rounded-xl border border-border/60 bg-card/30 px-3 py-2.5 text-xs text-muted-foreground">
+        <div className="mb-2 rounded-xl border border-border/60 bg-card shadow-card px-3 py-2.5 text-xs text-muted-foreground">
           {t("market.sessions.entryEvaluating")}
         </div>
       )}
 
-      <article className="rounded-2xl border border-border/60 bg-card/40 p-3">
+      <article className="rounded-2xl border border-border/60 bg-card shadow-card p-3">
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {SESSIONS.map((s) => {
             const open = mounted ? isOpen(s, time.h) : false;
@@ -212,7 +212,7 @@ export function SessionsClock() {
                   "rounded-lg border px-3 py-2.5 transition-colors",
                   open
                     ? "border-grade-a/40 bg-grade-a/[0.06]"
-                    : "border-border/60 bg-card/30",
+                    : "border-border/60 bg-card shadow-card",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">

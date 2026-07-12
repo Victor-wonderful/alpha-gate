@@ -36,9 +36,9 @@ function Scene() {
     <>
       {/* Lights */}
       <ambientLight intensity={0.25} />
-      <pointLight position={[3, 4, 4]} intensity={1.2} color="#d946ef" />
-      <pointLight position={[-3, -2, 3]} intensity={0.8} color="#a855f7" />
-      <pointLight position={[0, 0, 2]} intensity={0.6} color="#ec4899" />
+      <pointLight position={[3, 4, 4]} intensity={1.2} color="#2E8FFF" />
+      <pointLight position={[-3, -2, 3]} intensity={0.8} color="#7A5CFF" />
+      <pointLight position={[0, 0, 2]} intensity={0.6} color="#5AA9FF" />
       <directionalLight position={[2, 3, 5]} intensity={0.35} color="#ffffff" />
 
       {/* Top mesh platform (tilted to the back-left) */}
@@ -113,15 +113,15 @@ function HexPortal({ position }: { position: [number, number, number] }) {
       {/* Outer hex ring (thin metallic frame) */}
       <mesh>
         <extrudeGeometry args={[shape, extrudeSettings]} />
-        <meshStandardMaterial color="#1a0f25" metalness={0.95} roughness={0.18} />
+        <meshStandardMaterial color="#101A30" metalness={0.95} roughness={0.18} />
       </mesh>
 
       {/* Inner glowing hex (sits inside, emissive) */}
       <mesh ref={innerRef} position={[0, 0, 0.05]} scale={[0.78, 0.78, 1]}>
         <extrudeGeometry args={[shape, { ...extrudeSettings, depth: 0.04 }]} />
         <meshStandardMaterial
-          color="#fce7f3"
-          emissive="#e879f9"
+          color="#E6F2FF"
+          emissive="#38C6E0"
           emissiveIntensity={2.5}
           roughness={0.15}
           metalness={0.1}
@@ -129,7 +129,7 @@ function HexPortal({ position }: { position: [number, number, number] }) {
       </mesh>
 
       {/* Surrounding glow light */}
-      <pointLight ref={glowRef} position={[0, 0, 0.6]} intensity={3} color="#e879f9" distance={6} decay={1.6} />
+      <pointLight ref={glowRef} position={[0, 0, 0.6]} intensity={3} color="#38C6E0" distance={6} decay={1.6} />
     </group>
   );
 }
@@ -179,7 +179,7 @@ function FallingCoin({
         <cylinderGeometry args={[0.32, 0.32, 0.08, 48]} />
         <meshStandardMaterial
           ref={matRef}
-          color="#16101e"
+          color="#101A30"
           metalness={0.85}
           roughness={0.3}
           transparent
@@ -190,7 +190,7 @@ function FallingCoin({
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.32, 0.02, 16, 64]} />
         <meshStandardMaterial
-          color="#fce7f3"
+          color="#E6F2FF"
           emissive={new THREE.Color().setHSL(hue, 0.9, 0.65)}
           emissiveIntensity={2}
         />
@@ -199,8 +199,8 @@ function FallingCoin({
       <mesh position={[0, 0.041, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.18, 0.21, 32]} />
         <meshStandardMaterial
-          color="#fce7f3"
-          emissive="#e879f9"
+          color="#E6F2FF"
+          emissive="#38C6E0"
           emissiveIntensity={1.2}
           metalness={0.2}
           roughness={0.4}
@@ -209,7 +209,7 @@ function FallingCoin({
       {/* Tiny inner dot for symbol detail */}
       <mesh position={[0, 0.042, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[0.08, 32]} />
-        <meshStandardMaterial color="#fce7f3" emissive="#fbcfe8" emissiveIntensity={1.5} />
+        <meshStandardMaterial color="#E6F2FF" emissive="#CFE4FF" emissiveIntensity={1.5} />
       </mesh>
       {/* Tiny rotating light for sparkle */}
       <pointLight intensity={0.5} color={new THREE.Color().setHSL(hue, 0.95, 0.7)} distance={1.5} decay={2} />
@@ -237,19 +237,19 @@ function RingPortal({ position }: { position: [number, number, number] }) {
       {/* Outer dark casing */}
       <mesh>
         <torusGeometry args={[0.6, 0.18, 24, 60]} />
-        <meshStandardMaterial color="#1a0f25" metalness={0.9} roughness={0.2} />
+        <meshStandardMaterial color="#101A30" metalness={0.9} roughness={0.2} />
       </mesh>
       {/* Inner glow torus */}
       <mesh ref={ref}>
         <torusGeometry args={[0.6, 0.08, 16, 60]} />
         <meshStandardMaterial
           ref={matRef}
-          color="#fce7f3"
-          emissive="#e879f9"
+          color="#E6F2FF"
+          emissive="#38C6E0"
           emissiveIntensity={2}
         />
       </mesh>
-      <pointLight position={[0, 0, 0.3]} intensity={1.5} color="#e879f9" distance={3} decay={2} />
+      <pointLight position={[0, 0, 0.3]} intensity={1.5} color="#38C6E0" distance={3} decay={2} />
     </group>
   );
 }
@@ -271,7 +271,7 @@ function MeshPlatform({
       {/* Base platform */}
       <mesh>
         <boxGeometry args={[1.6, 0.08, 1.0]} />
-        <meshStandardMaterial color="#0d0716" metalness={0.85} roughness={0.4} />
+        <meshStandardMaterial color="#0A1020" metalness={0.85} roughness={0.4} />
       </mesh>
       {/* Top grid pattern — instanced cubes for mesh look */}
       <GridSurface />
@@ -279,8 +279,8 @@ function MeshPlatform({
       <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.55, 0.6, 32]} />
         <meshStandardMaterial
-          color="#fce7f3"
-          emissive="#a855f7"
+          color="#E6F2FF"
+          emissive="#7A5CFF"
           emissiveIntensity={1.5}
           side={THREE.DoubleSide}
         />
@@ -305,7 +305,7 @@ function GridSurface() {
       {bumps.map((p, idx) => (
         <mesh key={idx} position={p}>
           <boxGeometry args={[0.14, 0.02, 0.14]} />
-          <meshStandardMaterial color="#1a1226" metalness={0.6} roughness={0.55} />
+          <meshStandardMaterial color="#101A30" metalness={0.6} roughness={0.55} />
         </mesh>
       ))}
     </group>

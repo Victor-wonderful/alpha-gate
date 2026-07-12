@@ -56,3 +56,6 @@ next-env.d.ts
 .vercel
 
 .env*
+
+# local design scratch (pen/export)
+/design/alpha-gate

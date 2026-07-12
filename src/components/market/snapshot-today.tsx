@@ -82,7 +82,7 @@ export async function SnapshotToday() {
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/40">
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-sm">
             <thead>
@@ -163,7 +163,7 @@ export async function SnapshotToday() {
                   <td className="px-5 py-3 text-right">
                     <Link
                       href={`/app/analyze?symbol=${r.pair}`}
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-card/60 px-2.5 py-1 text-xs font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-card shadow-card px-2.5 py-1 text-xs font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
                     >
                       {t("market.snap.aiAnalyze")}
                       <ArrowRight className="h-3 w-3" />

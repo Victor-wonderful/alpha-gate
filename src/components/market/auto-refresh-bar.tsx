@@ -70,7 +70,7 @@ export function AutoRefreshBar({
       : `${Math.round(intervalMs / 1000)}${t("unit.sec")}`;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/30 px-4 py-2.5">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card shadow-card px-4 py-2.5">
       <div className="flex items-center gap-2 text-sm">
         <span
           className={cn(
@@ -90,7 +90,7 @@ export function AutoRefreshBar({
         type="button"
         onClick={handleManual}
         disabled={isPending}
-        className="group inline-flex items-center gap-1.5 rounded-md border border-border bg-card/60 px-2.5 py-1 text-xs font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+        className="group inline-flex items-center gap-1.5 rounded-md border border-border bg-card shadow-card px-2.5 py-1 text-xs font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
       >
         <RotateCw
           className={cn(

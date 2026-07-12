@@ -512,7 +512,7 @@ function OpenPositionCard({ p, t: tr }: { p: Position; t: TFunction }) {
     <Link
       href={`/app/journal/${t.id}`}
       className={cn(
-        "block overflow-hidden rounded-lg border bg-card/70 p-4 transition-colors hover:bg-card",
+        "block overflow-hidden rounded-lg border bg-card shadow-card p-4 transition-colors hover:bg-card",
         inProfit ? "border-grade-a/40" : noPrice ? "border-border" : "border-grade-d/40",
       )}
     >

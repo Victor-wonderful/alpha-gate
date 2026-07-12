@@ -16,7 +16,7 @@ export default async function GuideTradingPage() {
       {/* 시장가 vs 지정가 */}
       <GuideSection eyebrow="01" title={t("guide.trading.s1Title")}>
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-xl border border-border/60 bg-card/30 p-5">
+          <div className="rounded-xl border border-border/60 bg-card shadow-card p-5">
             <div className="text-sm font-semibold mb-2">{t("guide.trading.marketOrderTitle")}</div>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {t("guide.trading.marketOrderBody")}
@@ -25,7 +25,7 @@ export default async function GuideTradingPage() {
               <span className="font-medium text-foreground">{t("guide.trading.recommendLabel")}</span>{t("guide.trading.marketOrderRecommend")}
             </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/30 p-5">
+          <div className="rounded-xl border border-border/60 bg-card shadow-card p-5">
             <div className="text-sm font-semibold mb-2">{t("guide.trading.limitOrderTitle")}</div>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {t("guide.trading.limitOrderBody")}

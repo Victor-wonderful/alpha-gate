@@ -949,7 +949,7 @@
       },
       "runPending": "Analyzing... (10–20s)",
       "run": "Run Analysis",
-      "runNote": "The Alpha Gate analysis engine synthesizes Binance public API data. It presents scenarios and invalidation conditions, not specific buy/sell recommendations.",
+      "runNote": "The VECTA analysis engine synthesizes Binance public API data. It presents scenarios and invalidation conditions, not specific buy/sell recommendations.",
       "collectingAnalyzing": "Collecting data → AI analyzing...",
       "loadingSaved": "Loading saved analysis...",
       "savedBanner": "Showing saved analysis result — {symbol} · {time}",
@@ -1748,7 +1748,7 @@
         "stop": "Stop",
         "market": "Market"
       },
-      "entryActualTooltip": "Actual fill price (incl. slippage)",
+      "entryActualTooltip": "Actual fill price",
       "exitActualTooltip": "Actual exit price",
       "exitReason": {
         "target": "Target",
@@ -1773,7 +1773,7 @@
     }
   },
   "acct": {
-    "metaTitle": "My Account · Alpha Gate",
+    "metaTitle": "My Account",
     "title": "My Account",
     "activityTitle": "My Activity",
     "stat": {
@@ -2125,7 +2125,7 @@
     },
     "home": {
       "backHome": "Home",
-      "title": "How to Use Alpha Gate",
+      "title": "How to Use VECTA",
       "introLead": "A tool that answers not \"what should I buy\" but",
       "introEmphasis": "\"should I take this trade\"",
       "introTail": ". It runs as a 4-step cycle, from AI analysis through review.",
@@ -2441,11 +2441,11 @@
     "trading": {
       "category": "Paper Trading",
       "title": "Using Paper Trading",
-      "description": "Trade like a real exchange with vUSDT while learning the entry/exit flow. Experience the same fill prices, slippage, and fees as the real thing, without real money. Trade evaluation automatically aggregates money management and market context and reflects them in the grade.",
+      "description": "Trade like a real exchange with vUSDT while learning the entry/exit flow. Experience the same fill prices and fees as the real thing, without real money. Trade evaluation automatically aggregates money management and market context and reflects them in the grade.",
       "nextLabel": "Using My Results →",
       "s1Title": "Market orders vs limit orders",
       "marketOrderTitle": "Market order",
-      "marketOrderBody": "Filled immediately at the current price. About 0.05% slippage is applied automatically. Use it when you need a fast entry, but if the price has already passed the target or stop, the guard blocks it.",
+      "marketOrderBody": "Filled immediately at the fetched current price, as-is (no slippage). Use it when you need a fast entry, but if the price has already passed the target or stop, the guard blocks it.",
       "recommendLabel": "Recommended",
       "marketOrderRecommend": " · when the scenario is immediate",
       "limitOrderTitle": "Limit order",
@@ -2495,9 +2495,9 @@
       "faq1Q": "How is leverage applied?",
       "faq1A": "It does not affect R:R or the grade. Only the required margin (exposure ÷ leverage) changes. At 5x, only 1/5 of the exposure is used as margin.",
       "faq2Q": "How are fees calculated?",
-      "faq2A": "Round-trip fee of 0.075% (taker+maker combined, maximum). Slippage is applied separately to the fill price (market 0.05%/side). It's deducted automatically from the realized R.",
+      "faq2A": "Round-trip fee of 0.075% (taker+maker combined, maximum). No slippage is applied — fills use the fetched current market price. The fee is deducted automatically from the realized R.",
       "faq3Q": "Can I liquidate a position manually?",
-      "faq3A": "Yes. Use the \"Liquidate\" button in the position table of the exchange UI. Filled at the current price ± slippage."
+      "faq3A": "Yes. Use the \"Liquidate\" button in the position table of the exchange UI. Filled at the fetched current price, as-is."
     }
   },
   "landing": {
@@ -2551,7 +2551,7 @@
       "nextSettle": "Next Settlement"
     },
     "decision": {
-      "title": "Alpha Gate · Entry Verdict",
+      "title": "VECTA · Entry Verdict",
       "subtitle": "AI + Objective Data",
       "gradeLabel": "Grade",
       "recommend": "Entry Recommended",
@@ -2689,7 +2689,7 @@
     "whyCards": {
       "decision": {
         "title": "Decisions, not analysis",
-        "body": "TradingView shows you charts. Alpha Gate answers, with a score, whether to enter on that chart."
+        "body": "TradingView shows you charts. VECTA answers, with a score, whether to enter on that chart."
       },
       "data": {
         "title": "Built on objective data",
@@ -2697,7 +2697,7 @@
       },
       "auto": {
         "title": "Automatic grading and review",
-        "body": "Journal apps only record. Alpha Gate auto-generates both the entry grade and a post-exit coaching comment."
+        "body": "Journal apps only record. VECTA auto-generates both the entry grade and a post-exit coaching comment."
       }
     },
     "finalCta": {
@@ -2712,8 +2712,8 @@
   },
   "legal": {
     "faq": {
-      "metaTitle": "FAQ — Alpha Gate",
-      "metaDesc": "Frequently asked questions about Alpha Gate. Find answers about billing, refunds, AI analysis, and data security all in one place.",
+      "metaTitle": "FAQ",
+      "metaDesc": "Frequently asked questions about VECTA. Find answers about billing, refunds, AI analysis, and data security all in one place.",
       "eyebrow": "FAQ",
       "titlePre": "Frequently Asked ",
       "titleHighlight": "Questions",
@@ -2726,8 +2726,8 @@
       "ctaPricing": "View pricing"
     },
     "contact": {
-      "metaTitle": "Contact — Alpha Gate",
-      "metaDesc": "Contact the Alpha Gate team. We reply within 24 hours on business days.",
+      "metaTitle": "Contact",
+      "metaDesc": "Contact the VECTA team. We reply within 24 hours on business days.",
       "eyebrow": "Contact",
       "titlePre": "We'll get ",
       "titleHighlight": "right back to you",
@@ -2758,13 +2758,13 @@
       "directComposeEmail": "Compose email"
     },
     "terms": {
-      "metaTitle": "Terms of Service — Alpha Gate",
-      "metaDesc": "Alpha Gate Terms of Service. Please review them before using the service.",
+      "metaTitle": "Terms of Service",
+      "metaDesc": "VECTA Terms of Service. Please review them before using the service.",
       "title": "Terms of Service",
       "eyebrow": "Terms of Service",
       "effectiveDate": "May 20, 2026",
       "h1": "Article 1 (Purpose)",
-      "p1": "These Terms govern the rights, obligations, and responsibilities between the service and members in connection with the use of the trading decision-checking tool and ancillary services provided by Alpha Gate (the \"Service\").",
+      "p1": "These Terms govern the rights, obligations, and responsibilities between the service and members in connection with the use of the trading decision-checking tool and ancillary services provided by VECTA (the \"Service\").",
       "h2": "Article 2 (Definitions)",
       "p2li1": "\"Member\" means a person who agrees to these Terms and registers for and uses the Service.",
       "p2li2": "\"Content\" means all information generated and provided by the Service, including AI analysis results, scenarios, grades, and coaching comments.",
@@ -2772,7 +2772,7 @@
       "h3": "Article 3 (Effect and Amendment of Terms)",
       "p3": "These Terms take effect upon being posted on the Service's screen. The Service may amend these Terms where reasonable grounds exist, and will give notice from 7 days before the effective date (30 days before for changes unfavorable to members). A member who does not agree to the amended Terms may terminate the service agreement.",
       "h4": "Article 4 (Nature of the Service — Not Investment Advice)",
-      "p4a": "Alpha Gate does not constitute investment advisory business, financial investment business, or quasi-investment advisory business. The Service is a tool that helps members check, against objective data, the trading decisions they make on their own, and does not recommend the purchase or sale of any particular asset.",
+      "p4a": "VECTA does not constitute investment advisory business, financial investment business, or quasi-investment advisory business. The Service is a tool that helps members check, against objective data, the trading decisions they make on their own, and does not recommend the purchase or sale of any particular asset.",
       "p4b": "The scenarios, grades, and comments presented by the AI are for members' reference only and do not guarantee returns. All trading decisions and outcomes rest with the member's own judgment and responsibility.",
       "h5": "Article 5 (Provision and Change of the Service)",
       "p5li1": "The Service is, in principle, provided 24 hours a day, year-round.",
@@ -2814,12 +2814,12 @@
       "contactPost": " or hello@alphagate.app."
     },
     "privacy": {
-      "metaTitle": "Privacy Policy — Alpha Gate",
-      "metaDesc": "An overview of the types of personal data Alpha Gate collects, uses, and retains, and how it is processed.",
+      "metaTitle": "Privacy Policy",
+      "metaDesc": "An overview of the types of personal data VECTA collects, uses, and retains, and how it is processed.",
       "title": "Privacy Policy",
       "eyebrow": "Privacy Policy",
       "effectiveDate": "May 17, 2026",
-      "intro": "Alpha Gate (the \"Service\") values members' personal data and complies with applicable laws including the Personal Information Protection Act. This policy explains what personal data the Service collects, uses, retains, provides, and destroys.",
+      "intro": "VECTA (the \"Service\") values members' personal data and complies with applicable laws including the Personal Information Protection Act. This policy explains what personal data the Service collects, uses, retains, provides, and destroys.",
       "h1": "1. Personal Data Collected",
       "h1sub1": "Required items (at sign-up)",
       "h1sub1li1": "Email address",
@@ -2876,12 +2876,12 @@
       "h10p": "This policy may be revised in accordance with changes in law or the Service's policies, and notice will be given from 7 days before the effective date."
     },
     "refund": {
-      "metaTitle": "Refund Policy — Alpha Gate",
-      "metaDesc": "An overview of the refund criteria and procedures for Alpha Gate Paid Plans.",
+      "metaTitle": "Refund Policy",
+      "metaDesc": "An overview of the refund criteria and procedures for VECTA Paid Plans.",
       "title": "Refund Policy",
       "eyebrow": "Refund Policy",
       "effectiveDate": "May 17, 2026",
-      "intro": "Alpha Gate (the \"Service\") applies the following refund criteria to protect members' reasonable reliance. This policy complies with the Act on Consumer Protection in Electronic Commerce and the Content Industry Promotion Act.",
+      "intro": "VECTA (the \"Service\") applies the following refund criteria to protect members' reasonable reliance. This policy complies with the Act on Consumer Protection in Electronic Commerce and the Content Industry Promotion Act.",
       "h1": "1. 100% refund within 7 days (including simple change of mind)",
       "h1p": "If requested within 7 days of the payment date, the full payment amount is refunded without asking for a reason. The following cases are excluded, however.",
       "h1li1": "When 50% of the monthly AI analysis count has already been used",
@@ -2918,16 +2918,16 @@
       "contactPost": " or hello@alphagate.app. We reply within 24 hours on business days."
     },
     "disclaimer": {
-      "metaTitle": "Investment Disclaimer — Alpha Gate",
-      "metaDesc": "Alpha Gate is not investment advice. Please be sure to review this disclaimer.",
+      "metaTitle": "Investment Disclaimer",
+      "metaDesc": "VECTA is not investment advice. Please be sure to review this disclaimer.",
       "title": "Investment Disclaimer",
       "eyebrow": "Investment Disclaimer",
       "effectiveDate": "May 20, 2026",
       "hSummary": "Summary",
-      "summaryStrong": "Alpha Gate is not an investment advisory service. No content provided by the Service should be construed as a solicitation to trade, a recommendation of a particular asset, or a guarantee of returns.",
+      "summaryStrong": "VECTA is not an investment advisory service. No content provided by the Service should be construed as a solicitation to trade, a recommendation of a particular asset, or a guarantee of returns.",
       "summaryRest": "All trading decisions and their outcomes are the user's own judgment and responsibility.",
       "h1": "1. Nature of the Service",
-      "h1p": "Alpha Gate is a decision-support tool that helps users check the trading decisions they make on their own against objective market data. It does not constitute any of the following.",
+      "h1p": "VECTA is a decision-support tool that helps users check the trading decisions they make on their own against objective market data. It does not constitute any of the following.",
       "h1li1": "Investment advisory business, financial investment business, or discretionary investment business under the Capital Markets Act",
       "h1li2": "Quasi-investment advisory business",
       "h1li3": "An automated trading system or algorithmic trading system",
@@ -2942,7 +2942,7 @@
       "h3li2": "Users must assess their own financial situation and risk tolerance for themselves.",
       "h3li3": "Leveraged trading can result in losses exceeding 100% of the principal. The Service does not recommend the use of leverage.",
       "h4": "4. Limitation of Liability for Losses",
-      "h4p1": "Alpha Gate and its operators bear no responsibility for any direct or indirect loss (trading losses, opportunity losses, emotional distress, etc.) arising from trading in reliance on the Service's content.",
+      "h4p1": "VECTA and its operators bear no responsibility for any direct or indirect loss (trading losses, opportunity losses, emotional distress, etc.) arising from trading in reliance on the Service's content.",
       "h4p2": "Even where liability cannot be exempted under applicable law, liability for damages shall not exceed the amount the user paid to the Service over the preceding 12 months.",
       "h5": "5. General Market Risk Disclosure",
       "h5li1Strong": "The cryptocurrency market is highly volatile.",
@@ -2951,15 +2951,15 @@
       "h5li3": "Changes in the regulatory environment may restrict trading or cause asset values to change significantly.",
       "h5li4": "Past returns do not guarantee future returns.",
       "h6": "6. Disclosure Regarding Live Trading Integration",
-      "h6pPre": "Alpha Gate provides an ",
+      "h6pPre": "VECTA provides an ",
       "h6pStrong": "order-assistance tool",
       "h6pPost": " that uses an exchange API key voluntarily registered by the user to transmit the user's own orders to the exchange. This means the following.",
-      "h6li1": "Every live order is executed only when the user presses the \"Confirm — Send Actual Order\" button directly on screen. Alpha Gate does not trade automatically regardless of the user's intent.",
-      "h6li2Pre": "Alpha Gate stores the user's API key encrypted with AES-256-GCM and ",
+      "h6li1": "Every live order is executed only when the user presses the \"Confirm — Send Actual Order\" button directly on screen. VECTA does not trade automatically regardless of the user's intent.",
+      "h6li2Pre": "VECTA stores the user's API key encrypted with AES-256-GCM and ",
       "h6li2Strong": "refuses registration of keys that have withdrawal permission.",
       "h6li2Post": " Even so, the risk of key leakage cannot be zero, and the user is responsible for disabling withdrawals when issuing the API key and for performing security measures such as IP restrictions and periodic key rotation themselves.",
-      "h6li3": "Exchange API outages, network delays, partial fills, slippage, forced liquidation, and the like may produce results different from the intended price. Alpha Gate is not responsible for such losses.",
-      "h6li4": "Alpha Gate provides safeguards (blocking upon reaching a cumulative daily -2R, a 50% per-trade exposure limit, blocking duplicate entries on the same coin, etc.), but these are auxiliary measures only and cannot prevent all losses.",
+      "h6li3": "Exchange API outages, network delays, partial fills, slippage, forced liquidation, and the like may produce results different from the intended price. VECTA is not responsible for such losses.",
+      "h6li4": "VECTA provides safeguards (blocking upon reaching a cumulative daily -2R, a 50% per-trade exposure limit, blocking duplicate entries on the same coin, etc.), but these are auxiliary measures only and cannot prevent all losses.",
       "h6li5": "This Live Trading Integration feature may be restricted or discontinued without prior notice due to changes in domestic and international regulatory environments, including the Virtual Asset User Protection Act (effective July 19, 2024).",
       "h7": "7. Recommendations",
       "h7li1": "Trade only within a range of losses you can afford.",
@@ -2981,7 +2981,7 @@
     "heroTitlePre": "AI verifies your",
     "heroTitleHighlight": "pre-trade",
     "heroTitlePost": " decisions",
-    "heroDesc": "A single D-grade trade can wipe out a month of profit. Alpha Gate checks it in 5 minutes before you enter.",
+    "heroDesc": "A single D-grade trade can wipe out a month of profit. VECTA checks it in 5 minutes before you enter.",
     "bulletAi": "Auto-generated AI scenarios from 12+ real-time data sources",
     "bulletGrade": "A/B/C/D grading + auto-detection of chasing, unconfirmed, and exposure",
     "bulletPersist": "Permanent record of entry evaluation + AI review comments",
@@ -3100,7 +3100,7 @@
       "colProduct": "Product",
       "colSupport": "Support",
       "colLegal": "Legal",
-      "disclaimerPre": "Alpha Gate is",
+      "disclaimerPre": "VECTA is",
       "disclaimerStrong": "not investment advice",
       "disclaimerMid": ". This service is a trade decision-checking tool, and all trading decisions and outcomes are your own responsibility. For details, see the",
       "disclaimerPost": "."
@@ -3120,7 +3120,7 @@
       "signup": "Sign up free"
     },
     "pricing": {
-      "metaTitle": "Pricing · Alpha Gate",
+      "metaTitle": "Pricing",
       "metaDescription": "Three plans — Free / Standard / Pro. Start free and upgrade only when you need to.",
       "perMonth": "/ mo",
       "quotaNote": "AI analyses",
@@ -3187,7 +3187,7 @@
         },
         "q6": {
           "q": "Does the AI recommend buying or selling?",
-          "a": "No. Alpha Gate only lays out scenarios and invalidation conditions — it never recommends a specific buy or sell. All trading decisions and outcomes are your own responsibility."
+          "a": "No. VECTA only lays out scenarios and invalidation conditions — it never recommends a specific buy or sell. All trading decisions and outcomes are your own responsibility."
         },
         "q7": {
           "q": "Is my trading data safe?",
@@ -3200,8 +3200,8 @@
       "ctaBody": "Upgrade when you need to."
     },
     "features": {
-      "metaTitle": "Features · Alpha Gate",
-      "metaDescription": "AI analysis / trade execution / trading journal + AI review / performance analytics — take a closer look at Alpha Gate's four core features.",
+      "metaTitle": "Features",
+      "metaDescription": "AI analysis / trade execution / trading journal + AI review / performance analytics — take a closer look at VECTA's four core features.",
       "heroTitleBefore": "Built for your",
       "heroTitleAccent": "decisions",
       "heroTitleAfter": ", not the chart",
@@ -3214,7 +3214,7 @@
         "analyze": {
           "tag": "AI analysis",
           "title": "Read the market with objective data",
-          "body": "Just enter a symbol and style — Alpha Gate auto-collects 12+ data points from the public Binance API and presents 1–3 scenarios. The AI never invents prices; it only interprets real data.",
+          "body": "Just enter a symbol and style — VECTA auto-collects 12+ data points from the public Binance API and presents 1–3 scenarios. The AI never invents prices; it only interprets real data.",
           "bullet1": "3-stage pipeline: data collection (code) → strategy classification (LLM) → scenario generation (LLM)",
           "bullet2": "Per-style stop/target standards enforced (scalp / day / swing / position)",
           "bullet3": "Entry, stop, target, and trigger conditions auto-derived for each scenario",
@@ -3284,12 +3284,12 @@
       }
     },
     "how": {
-      "metaTitle": "How it works · Alpha Gate",
-      "metaDescription": "How Alpha Gate validates your entry decisions — a 4-step cycle of AI analysis → trade execution → trading journal → performance analytics.",
+      "metaTitle": "How it works",
+      "metaDescription": "How VECTA validates your entry decisions — a 4-step cycle of AI analysis → trade execution → trading journal → performance analytics.",
       "heroTitleBefore": "4 steps to",
       "heroTitleAccent": "systematize",
       "heroTitleAfter": "your decisions",
-      "heroBody": "Trade with the same flow every time and emotion has no room to creep in. Alpha Gate automates everything from entry to review in a 4-step cycle.",
+      "heroBody": "Trade with the same flow every time and emotion has no room to creep in. VECTA automates everything from entry to review in a 4-step cycle.",
       "cycleTitleAccent1": "Pre-entry",
       "cycleTitleMid": " through",
       "cycleTitleAccent2": "review",
@@ -3302,7 +3302,7 @@
       "dataEyebrow": "Data",
       "dataTitleAccent": "12+ real-time data",
       "dataTitleAfter": "sources combined",
-      "dataBody": "It's not just looking at the chart. Alpha Gate collects objective data simultaneously from Binance, CoinGecko, Yahoo Finance, and alternative.me for a comprehensive judgment.",
+      "dataBody": "It's not just looking at the chart. VECTA collects objective data simultaneously from Binance, CoinGecko, Yahoo Finance, and alternative.me for a comprehensive judgment.",
       "securityEyebrow": "Security · Trust",
       "securityTitleBefore": "My data is",
       "securityTitleAccent": "mine",
@@ -3520,7 +3520,7 @@
         "ipWhitelistPre": "If possible, set an",
         "ipWhitelist": "IP whitelist",
         "ipWhitelistPost": "(Vercel Seoul region)",
-        "encrypted": "Alpha Gate never accepts keys with withdrawal permission. All keys are encrypted and stored with AES-256-GCM, and the plaintext cannot be viewed again after registration."
+        "encrypted": "VECTA never accepts keys with withdrawal permission. All keys are encrypted and stored with AES-256-GCM, and the plaintext cannot be viewed again after registration."
       }
     }
   },

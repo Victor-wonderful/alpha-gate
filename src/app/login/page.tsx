@@ -17,7 +17,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
-import { Logo } from "@/components/app/logo";
+import { Wordmark } from "@/components/app/wordmark";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 
@@ -119,12 +119,9 @@ function LoginInner() {
         {/* Left — Brand panel */}
         <aside className="hidden flex-1 flex-col justify-between p-10 lg:flex xl:p-16">
           <Link href="/" className="flex items-center gap-2.5">
-            <Logo size={26} />
             <div>
-              <div className="font-mono text-sm font-bold tracking-[0.24em] text-white">
-                ALPHA GATE
-              </div>
-              <div className="text-[9px] font-medium tracking-[0.2em] text-white/40">
+              <Wordmark height={17} className="text-white" />
+              <div className="mt-1 text-[9px] font-medium tracking-[0.2em] text-white/40">
                 PRE-TRADE DECISION CHECK
               </div>
             </div>
@@ -154,7 +151,7 @@ function LoginInner() {
           </div>
 
           <div className="text-[11px] text-white/30">
-            © {new Date().getFullYear()} Alpha Gate · {t("login.footerDisclaimer")}
+            © {new Date().getFullYear()} VECTA · {t("login.footerDisclaimer")}
           </div>
         </aside>
 
@@ -163,10 +160,7 @@ function LoginInner() {
           <div className="w-full max-w-md">
             {/* Mobile logo */}
             <Link href="/" className="mb-10 flex items-center gap-2.5 lg:hidden">
-              <Logo size={22} />
-              <span className="font-mono text-sm font-bold tracking-[0.24em] text-white">
-                ALPHA GATE
-              </span>
+              <Wordmark height={16} className="text-white" />
             </Link>
 
             {/* Mode tabs */}

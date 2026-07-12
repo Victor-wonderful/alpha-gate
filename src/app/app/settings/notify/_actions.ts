@@ -103,7 +103,7 @@ export async function testNotifyAction(): Promise<{ error?: string }> {
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요합니다." };
   await dispatch(user.id, "test", {
-    title: "Alpha Gate 테스트 알림",
+    title: "VECTA 테스트 알림",
     body: "이 메시지가 보이면 알림 채널 설정이 정상입니다.",
   });
   return {};

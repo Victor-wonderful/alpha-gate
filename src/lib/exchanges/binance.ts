@@ -13,7 +13,7 @@ import { createHmac } from "node:crypto";
  * Docs: https://developers.binance.com/docs/derivatives/usds-margined-futures
  *
  * IMPORTANT: This adapter NEVER calls withdraw endpoints. If you ever need to,
- * audit the call site carefully. The whole point of Alpha Gate's positioning is
+ * audit the call site carefully. The whole point of VECTA's positioning is
  * "we cannot withdraw your funds."
  */
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
-import { Logo } from "@/components/app/logo";
+import { Wordmark } from "@/components/app/wordmark";
 import { getT } from "@/lib/i18n/server";
 
 export async function MarketingFooter() {
@@ -11,12 +11,9 @@ export async function MarketingFooter() {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2.5">
-              <Logo size={26} />
               <div>
-                <div className="font-mono text-sm font-bold leading-tight tracking-[0.24em] text-white">
-                  ALPHA GATE
-                </div>
-                <div className="text-[9px] font-medium tracking-[0.2em] text-white/40">
+                <Wordmark height={18} className="text-white" />
+                <div className="mt-1 text-[9px] font-medium tracking-[0.2em] text-white/40">
                   PRE-TRADE DECISION CHECK
                 </div>
               </div>
@@ -75,7 +72,7 @@ export async function MarketingFooter() {
             {t("mktc.footer.disclaimerPost")}
           </p>
           <div className="mt-4 text-center text-[10px] uppercase tracking-[0.2em] text-white/30">
-            © {new Date().getFullYear()} Alpha Gate · All rights reserved
+            © {new Date().getFullYear()} VECTA · All rights reserved
           </div>
         </div>
       </div>

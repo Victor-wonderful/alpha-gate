@@ -2,58 +2,68 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    /* VECTA — monochrome navy-blue system (Apple-style: one hue, saturation steps).
+       Only exception: gain=green / loss=red for P&L (grade-a / grade-d). */
+    --background: 45 20% 96%;        /* #F7F6F3 warm off-white canvas (warm bg × cool content) */
+    --foreground: 226 50% 8%;        /* #0A0F1E ink */
+    --card: 0 0% 100%;               /* #FFFFFF paper */
+    --card-foreground: 226 50% 8%;
+    --card-2: 221 43% 95%;           /* #ECF0F8 subtle */
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --grade-a: 142 71% 45%;
-    --grade-b: 199 89% 48%;
-    --grade-c: 38 92% 50%;
-    --grade-d: 0 84% 60%;
+    --popover-foreground: 226 50% 8%;
+    --primary: 222 74% 53%;          /* #2E63E0 mono accent */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 221 43% 95%;        /* #ECF0F8 */
+    --secondary-foreground: 226 50% 8%;
+    --muted: 221 43% 95%;            /* #ECF0F8 */
+    --muted-foreground: 223 16% 50%; /* #6D7690 mono slate */
+    --accent: 221 43% 95%;
+    --accent-foreground: 226 50% 8%;
+    --destructive: 354 82% 66%;      /* #F0616D red (delete/danger + loss) */
+    --destructive-foreground: 0 0% 100%;
+    --border: 221 40% 90%;           /* #DAE1EF mono hairline */
+    --input: 222 35% 81%;            /* #BFC9E0 mono */
+    --ring: 222 74% 53%;             /* #2E63E0 accent */
+    /* brand accents folded into the mono hue */
+    --brand-cyan: 222 74% 62%;       /* #4C7BE8 light accent */
+    --brand-violet: 222 66% 46%;     /* #2749C2 deep accent */
+    --sidebar: 219 41% 93%;          /* #E7ECF5 cool rail (distinct from warm canvas) */
+    --grade-a: 156 63% 49%;          /* #2ECC8F gain green (P&L exception) */
+    --grade-b: 222 74% 60%;          /* #4C7BE8 mono blue */
+    --grade-c: 221 28% 68%;          /* #98A4C0 mono faint */
+    --grade-d: 354 82% 66%;          /* #F0616D loss red (P&L exception) */
     --radius: 0.5rem;
   }
 
   .dark {
-    /* Alpha Gate dark — violet palette (디자인 시스템 pencil-new.pen 기준) */
-    --background: 240 30% 4%;        /* #07070D */
-    --foreground: 240 30% 96%;       /* #F2F2F8 */
-    --card: 240 24% 8%;              /* #10101A */
-    --card-foreground: 240 30% 96%;
-    --card-2: 240 19% 10%;           /* #15151F hover */
-    --popover: 240 27% 7%;           /* #0C0C15 */
-    --popover-foreground: 240 30% 96%;
-    --primary: 252 89% 86%;          /* #C9BCFB lavender */
-    --primary-foreground: 252 49% 12%; /* #16102F */
-    --secondary: 240 18% 13%;
-    --secondary-foreground: 240 30% 96%;
-    --muted: 240 18% 13%;
-    --muted-foreground: 240 11% 60%; /* #8E8EA5 */
-    --accent: 240 18% 13%;
-    --accent-foreground: 240 30% 96%;
-    --destructive: 347 80% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 19% 14%;           /* #1D1D2B */
-    --input: 240 17% 20%;            /* #2B2B3D */
-    --ring: 247 87% 73%;             /* #8B7CF6 */
-    --grade-a: 158 64% 52%;          /* #34D399 */
-    --grade-b: 199 89% 60%;          /* #38BDF8 */
-    --grade-c: 43 96% 56%;           /* #FBBF24 */
-    --grade-d: 347 95% 71%;          /* #FB6E8C */
+    /* VECTA dark — VECTA navy palette (vecta-website.pen dark sections) */
+    --background: 226 50% 8%;        /* #0A0F1E obsidian-navy */
+    --foreground: 213 47% 96%;       /* #EEF3FA cloud */
+    --card: 224 39% 13%;             /* #141B2E deep-panel */
+    --card-foreground: 213 47% 96%;
+    --card-2: 224 34% 17%;           /* #1B2438 hover */
+    --popover: 224 39% 13%;
+    --popover-foreground: 213 47% 96%;
+    --primary: 221 83% 67%;          /* #5B82F0 mono accent (light on navy) */
+    --primary-foreground: 226 50% 8%;
+    --secondary: 224 34% 17%;
+    --secondary-foreground: 213 47% 96%;
+    --muted: 224 34% 17%;
+    --muted-foreground: 221 18% 66%; /* mono slate on navy */
+    --accent: 224 34% 17%;
+    --accent-foreground: 213 47% 96%;
+    --destructive: 354 82% 66%;      /* #F0616D red (danger + loss) */
+    --destructive-foreground: 0 0% 100%;
+    --border: 223 28% 22%;           /* navy border */
+    --input: 223 24% 28%;
+    --ring: 221 83% 67%;             /* mono accent */
+    --brand-cyan: 221 83% 70%;       /* light mono accent */
+    --brand-violet: 221 70% 52%;     /* deep mono accent */
+    --sidebar: 225 40% 10%;          /* #0C1120 cool rail (darker than card) */
+    --grade-a: 156 63% 49%;          /* #2ECC8F gain green (P&L exception) */
+    --grade-b: 221 83% 67%;          /* mono blue */
+    --grade-c: 221 22% 58%;          /* mono faint */
+    --grade-d: 354 82% 66%;          /* #F0616D loss red (P&L exception) */
   }
 }
 
@@ -82,14 +92,29 @@
   --color-grade-b: hsl(var(--grade-b));
   --color-grade-c: hsl(var(--grade-c));
   --color-grade-d: hsl(var(--grade-d));
+  --color-brand-cyan: hsl(var(--brand-cyan));
+  --color-brand-violet: hsl(var(--brand-violet));
+  --color-sidebar: hsl(var(--sidebar));
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
 }
 
+/* Trendbit-style soft card elevation (Tailwind v4 custom utilities) */
+@utility shadow-card {
+  box-shadow:
+    0 1px 3px 0 hsl(222 47% 11% / 0.07),
+    0 4px 12px -2px hsl(222 47% 11% / 0.09);
+}
+@utility shadow-card-hover {
+  box-shadow:
+    0 10px 26px -6px hsl(222 47% 11% / 0.16),
+    0 4px 10px -4px hsl(222 47% 11% / 0.10);
+}
+
 @theme inline {
-  --font-sans: var(--font-geist-sans), "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "JetBrains Mono", "SF Mono", monospace;
+  --font-sans: var(--font-inter), var(--font-noto-kr), "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "JetBrains Mono", "SF Mono", monospace;
 }
 
 @layer base {
@@ -97,23 +122,19 @@
     border-color: hsl(var(--border));
   }
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
   body {
-    background:
-      radial-gradient(ellipse 1100px 560px at 50% -180px, hsl(247 87% 73% / 0.06), transparent 60%),
-      radial-gradient(ellipse 900px 500px at 100% 10%, hsl(280 60% 55% / 0.04), transparent 55%),
-      radial-gradient(ellipse 700px 500px at 0% 15%, hsl(252 50% 50% / 0.04), transparent 55%),
-      hsl(var(--background));
+    background: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: var(--font-geist-sans), "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    font-family: var(--font-inter), var(--font-noto-kr), "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
   .font-mono,
   .tabular-nums,
   [data-numeric="true"] {
-    font-family: var(--font-geist-mono), ui-monospace, "JetBrains Mono", "SF Mono", monospace;
+    font-family: var(--font-jetbrains), ui-monospace, "JetBrains Mono", "SF Mono", monospace;
     font-feature-settings: "tnum" 1, "cv09" 1;
   }
 }
@@ -167,26 +188,26 @@
 @keyframes hex-receive {
   0%, 100% {
     box-shadow:
-      0 0 60px rgba(217, 70, 239, 0.55),
-      inset 0 0 40px rgba(217, 70, 239, 0.5);
+      0 0 60px rgba(46, 143, 255, 0.55),
+      inset 0 0 40px rgba(46, 143, 255, 0.5);
   }
   48% {
     box-shadow:
-      0 0 140px rgba(232, 121, 249, 1),
-      inset 0 0 80px rgba(232, 121, 249, 0.9);
+      0 0 140px rgba(56, 198, 224, 1),
+      inset 0 0 80px rgba(56, 198, 224, 0.9);
   }
 }
 
 /* Legal documents prose styling */
 .legal-prose {
-  color: rgba(255, 255, 255, 0.72);
+  color: hsl(var(--muted-foreground));
   font-size: 0.9rem;
   line-height: 1.75;
 }
 .legal-prose h2 {
   margin-top: 2.5rem;
   margin-bottom: 1rem;
-  color: #fff;
+  color: hsl(var(--foreground));
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -197,7 +218,7 @@
 .legal-prose h3 {
   margin-top: 1.75rem;
   margin-bottom: 0.5rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: hsl(var(--foreground));
   font-size: 1rem;
   font-weight: 600;
 }
@@ -220,18 +241,18 @@
   list-style-type: decimal;
 }
 .legal-prose strong {
-  color: #fff;
+  color: hsl(var(--foreground));
   font-weight: 600;
 }
 .legal-prose a {
-  color: #22d3ee;
+  color: hsl(var(--primary));
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .legal-prose a:hover {
-  color: #67e8f9;
+  color: hsl(var(--brand-cyan));
 }
 .legal-prose hr {
   margin: 2rem 0;
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: hsl(var(--border));
 }

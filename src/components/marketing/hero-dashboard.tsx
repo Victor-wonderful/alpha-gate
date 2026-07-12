@@ -12,7 +12,7 @@ import {
   Gauge,
   Brain,
 } from "lucide-react";
-import { Logo } from "@/components/app/logo";
+import { Wordmark } from "@/components/app/wordmark";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 import type { TFunction } from "@/lib/i18n/messages";
@@ -62,10 +62,7 @@ export function HeroDashboard() {
         {/* Top nav inside frame */}
         <header className="relative z-20 flex items-center justify-between px-6 pb-2 pt-6 sm:px-10 sm:pt-8">
           <Link href="/" className="flex items-center gap-2.5">
-            <Logo size={22} />
-            <span className="font-mono text-sm font-bold tracking-[0.24em] text-white">
-              ALPHA GATE
-            </span>
+            <Wordmark height={16} className="text-white" />
           </Link>
           <nav className="hidden items-center gap-7 text-sm md:flex">
             {NAV.map((n) => {

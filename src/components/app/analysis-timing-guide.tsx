@@ -30,8 +30,8 @@ export function AnalysisTimingGuide({ defaultOpen = false, className }: Props) {
     <details
       open={defaultOpen}
       className={cn(
-        "group rounded-xl border border-border bg-card/50 backdrop-blur-sm transition-colors",
-        "open:bg-card/80",
+        "group rounded-xl border border-border bg-card shadow-card backdrop-blur-sm transition-colors",
+        "open:bg-card shadow-card",
         className,
       )}
     >

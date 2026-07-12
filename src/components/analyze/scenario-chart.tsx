@@ -25,11 +25,11 @@ interface Props {
   scenarioIndex: number;
 }
 
-const STOP_COLOR = "hsl(0 84% 60%)";
-const TARGET_COLOR = "hsl(142 71% 45%)";
-const ENTRY_COLOR = "hsl(199 89% 56%)";
-const POC_COLOR = "hsl(38 92% 50%)";
-const SWING_COLOR = "hsl(240 5% 64.9%)";
+const STOP_COLOR = "hsl(354 82% 66%)";   /* VECTA descend-red #F0616D */
+const TARGET_COLOR = "hsl(156 63% 49%)"; /* VECTA ascend-green #2ECC8F */
+const ENTRY_COLOR = "hsl(213 100% 59%)"; /* VECTA v4-blue #2E8FFF */
+const POC_COLOR = "hsl(38 92% 50%)";     /* amber */
+const SWING_COLOR = "hsl(223 12% 48%)";  /* VECTA slate #6B7488 */
 
 type ChartRole = "HTF" | "MTF" | "LTF";
 
@@ -60,24 +60,24 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
       autoSize: true,
       layout: {
         background: { color: "transparent" },
-        textColor: "hsl(220 9% 55%)",
+        textColor: "hsl(223 12% 48%)",
         fontFamily: "inherit",
       },
       grid: {
-        vertLines: { color: "hsl(222 12% 16%)" },
-        horzLines: { color: "hsl(222 12% 16%)" },
+        vertLines: { color: "hsl(218 30% 91%)" },
+        horzLines: { color: "hsl(218 30% 91%)" },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "hsl(222 12% 16%)" },
-      timeScale: { borderColor: "hsl(222 12% 16%)", timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: "hsl(218 30% 91%)" },
+      timeScale: { borderColor: "hsl(218 30% 91%)", timeVisible: true, secondsVisible: false },
     });
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: "hsl(142 71% 45%)",
-      downColor: "hsl(0 84% 60%)",
-      borderUpColor: "hsl(142 71% 45%)",
-      borderDownColor: "hsl(0 84% 60%)",
-      wickUpColor: "hsl(142 71% 45%)",
-      wickDownColor: "hsl(0 84% 60%)",
+      upColor: "hsl(156 63% 49%)",
+      downColor: "hsl(354 82% 66%)",
+      borderUpColor: "hsl(156 63% 49%)",
+      borderDownColor: "hsl(354 82% 66%)",
+      wickUpColor: "hsl(156 63% 49%)",
+      wickDownColor: "hsl(354 82% 66%)",
     });
     chartRef.current = chart;
     seriesRef.current = series;
@@ -180,7 +180,7 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
       const dataUrl = await toPng(captureRef.current, {
         cacheBust: true,
         pixelRatio: 2,
-        backgroundColor: "#0b0e14",
+        backgroundColor: "#FFFFFF",
       });
       const a = document.createElement("a");
       const scenarioLetter = String.fromCharCode(65 + scenarioIndex);
@@ -256,7 +256,7 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
         </Button>
       </div>
 
-      <div ref={captureRef} className="space-y-3 rounded-md bg-card/30 p-2">
+      <div ref={captureRef} className="space-y-3 rounded-md bg-card shadow-card p-2">
       <div className="relative">
         {/* Direction badge overlay — top-left */}
         {sc ? (
@@ -288,7 +288,7 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
 
         <div
           ref={containerRef}
-          className="h-[480px] w-full overflow-hidden rounded-md border border-border bg-card/30"
+          className="h-[480px] w-full overflow-hidden rounded-md border border-border bg-card shadow-card"
         />
       </div>
 
@@ -345,7 +345,7 @@ function SummaryCell({
   valueClass?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card/40 p-3">
+    <div className="rounded-lg border border-border bg-card shadow-card p-3">
       <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color }}>
         <span>{label}</span>
       </div>

@@ -26,11 +26,11 @@ export async function MacroCalendar() {
       </div>
 
       {events.length === 0 ? (
-        <div className="rounded-2xl border border-border/60 bg-card/40 px-6 py-8 text-center text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border/60 bg-card shadow-card px-6 py-8 text-center text-sm text-muted-foreground">
           {t("market.macroCal.empty")}
         </div>
       ) : (
-        <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card/40">
+        <ul className="divide-y divide-border/40 rounded-2xl border border-border/60 bg-card shadow-card">
           {events.map((e) => (
             <li
               key={e.startsAt}

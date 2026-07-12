@@ -17,7 +17,7 @@ export function HelpLink({
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border border-border bg-card/40 text-muted-foreground transition-colors hover:border-border/80 hover:bg-card/80 hover:text-foreground",
+        "inline-flex items-center gap-1 rounded-md border border-border bg-card shadow-card text-muted-foreground transition-colors hover:border-border/80 hover:shadow-card-hover hover:-translate-y-0.5 hover:text-foreground",
         size === "sm" ? "px-2 py-1 text-[11px]" : "px-2.5 py-1.5 text-xs",
       )}
       title="이 화면 사용 방법"

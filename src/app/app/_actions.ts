@@ -650,6 +650,7 @@ export async function resolveMyTradesAction(): Promise<{
 
   revalidatePath("/app/journal");
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/virtual-trade"); // 거래소 화면 포지션 목록도 갱신 (정산으로 닫힌 포지션이 남아 보이던 stale 버그)
 
   return { checked: openTrades.length, resolved, stale, pending };
 }

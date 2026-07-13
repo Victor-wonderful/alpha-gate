@@ -158,7 +158,11 @@ export default async function HomePage() {
 
   const recent = recentRes.data ?? [];
   const openRows = openRes.data ?? [];
-  const positions = openRows.filter((t) => t.order_status !== "pending");
+  // 진행 중 포지션 = 실제 진입(체결)된 것만. 미체결(pending)·취소(canceled)·만료(expired) 주문은
+  // 포지션이 아니다. (취소된 STOP 주문이 마진 $0 유령 포지션으로 잘못 표시되던 버그)
+  const positions = openRows.filter(
+    (t) => t.order_status === "filled" || t.order_status == null,
+  );
   const pendings = openRows.filter(
     (t) => t.order_status === "pending" && (t.order_type === "limit" || t.order_type === "stop"),
   );

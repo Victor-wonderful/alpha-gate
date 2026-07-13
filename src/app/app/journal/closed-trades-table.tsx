@@ -56,7 +56,9 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
   };
   const [symbolQuery, setSymbolQuery] = useState("");
   const [reason, setReason] = useState<ReasonFilter>("all");
-  const [period, setPeriod] = useState<PeriodFilter>("30d");
+  // 기본 "전체" — 섹션 헤더의 종료 거래 카운트(전체 기간)와 표에 보이는 행을 일치시킨다.
+  // (기본 30d면 30일 지난 거래가 숨겨져 "헤더 65인데 표는 비어 보임" 불일치가 생김.)
+  const [period, setPeriod] = useState<PeriodFilter>("all");
   const [page, setPage] = useState(1);
 
   // Filtered (sorted newest first already)

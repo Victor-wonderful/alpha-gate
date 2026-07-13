@@ -58,14 +58,26 @@ export default async function JournalListPage({
   const tradeMode: TradeMode = parseMode(sp.mode);
   const supabase = await getSupabaseServer();
 
-  const tradesRes = await supabase
-    .from("trades")
-    .select(
-      "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual, mode",
-    )
-    .order("created_at", { ascending: false })
-    .limit(100);
-  const tradesRaw = tradesRes.data;
+  const TRADE_COLS =
+    "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual, mode";
+  // 진행 중/미체결(closed_at null)은 건수가 적어 절대 잘리지 않게, 종료된 거래는 최근 청산 순으로
+  // 별도 캡을 둔다. (이전엔 open+pending+closed를 한 쿼리 .limit(100)로 묶어, 종료 거래가
+  // 100건을 넘으면 오래된 게 아예 안 불러와지고 탭/섹션 카운트도 틀어졌다.)
+  const [openRes, closedRes] = await Promise.all([
+    supabase
+      .from("trades")
+      .select(TRADE_COLS)
+      .is("closed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("trades")
+      .select(TRADE_COLS)
+      .not("closed_at", "is", null)
+      .order("closed_at", { ascending: false })
+      .limit(500), // 현재 65건 대비 넉넉. 수천 건 규모가 되면 서버 페이지네이션으로 전환.
+  ]);
+  const tradesRaw = [...(openRes.data ?? []), ...(closedRes.data ?? [])];
 
   const trades = (tradesRaw ?? []) as (TradeRow & {
     order_type?: "market" | "limit" | "stop" | null;

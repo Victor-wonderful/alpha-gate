@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Settings } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
+import { loadLatestRadar } from "@/lib/analysis/radar-persist";
 import { ExchangeUI } from "./exchange-ui";
 import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
@@ -25,6 +26,11 @@ export default async function VirtualTradePage({
   if (!user) return null;
 
   const wallet = await getOrCreateWallet(user.id);
+
+  // 심볼 선택기 소스 = AI 분석(후보 레이더)에 나오는 코인.
+  const radar = await loadLatestRadar().catch(() => ({ candidates: [], scannedAt: null }));
+  const radarSymbols = radar.candidates.map((c) => c.symbol);
+
   const sp = await searchParams;
   const symbol =
     sp.symbol && /^[A-Z0-9]{2,15}USDT$/i.test(sp.symbol) ? sp.symbol.toUpperCase() : "BTCUSDT";
@@ -43,9 +49,10 @@ export default async function VirtualTradePage({
 
   const positions = (openTrades ?? [])
     .filter((t) => {
-      // pending 지정가 주문은 포지션 탭에서 제외 (주문 탭에 따로 표시)
+      // 실제 진입(체결)된 포지션만. 미체결(pending)·취소(canceled)·만료(expired) 주문은 포지션이 아니다.
+      // (취소된 STOP 주문이 마진 $0·ROE 0% 유령 포지션으로 잘못 표시되던 버그 — 저널은 원래 제외 중이었음)
       const status = (t as { order_status?: string }).order_status;
-      return status !== "pending";
+      return status === "filled" || status == null;
     })
     .map((t) => {
       const ctx = (t.context_flags ?? {}) as { leverage?: number };
@@ -123,6 +130,7 @@ export default async function VirtualTradePage({
         }}
         positions={positions}
         pendingOrders={pendingOrders}
+        symbols={radarSymbols}
       />
     </div>
   );

@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChevronDown,
   RefreshCw,
+  Search,
   TrendingDown,
   TrendingUp,
   X,
@@ -91,11 +93,14 @@ export function ExchangeUI({
   wallet,
   positions,
   pendingOrders = [],
+  symbols = [],
 }: {
   initialSymbol: string;
   wallet: Wallet;
   positions: Position[];
   pendingOrders?: PendingOrder[];
+  /** AI 분석(후보 레이더)에 나오는 코인 목록 — 심볼 선택기 소스. */
+  symbols?: string[];
 }) {
   const [symbol, setSymbol] = useState<string>(initialSymbol);
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAMES)[number]>("1h");
@@ -105,7 +110,7 @@ export function ExchangeUI({
 
   return (
     <div className="space-y-3">
-      <ExchangeHeader symbol={symbol} onSymbolChange={setSymbol} wallet={wallet} positions={positions} />
+      <ExchangeHeader symbol={symbol} onSymbolChange={setSymbol} wallet={wallet} positions={positions} symbols={symbols} />
 
       {/* 시장 종류 토글 — Futures / Spot */}
       <div className="inline-flex gap-1 rounded-md border border-border bg-background/40 p-0.5">
@@ -160,17 +165,119 @@ export function ExchangeUI({
   );
 }
 
+// ─── Symbol picker (전체 USDT 무기한 코인 검색) ─────────────────────────────
+function SymbolPicker({
+  symbol,
+  onSymbolChange,
+  symbols,
+}: {
+  symbol: string;
+  onSymbolChange: (s: string) => void;
+  /** AI 분석(후보 레이더)에 나오는 코인 목록. 비면 기본 5개로 폴백. */
+  symbols: string[];
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // 목록 = AI 분석(후보 레이더)에 나오는 코인만. 고정 심볼(BTC/ETH/SOL/XRP/BNB)을 맨 앞,
+  // 현재 선택된 심볼은 목록에 없어도 항상 포함(분석에서 임의 코인을 들고 넘어온 경우 대비).
+  const base = symbols.length ? symbols : (SYMBOLS as unknown as string[]);
+  const pinned = (SYMBOLS as unknown as string[]).filter((p) => base.includes(p));
+  const rest = base.filter((s) => !pinned.includes(s));
+  const ordered = [...pinned, ...rest];
+  const all = ordered.includes(symbol) ? ordered : [symbol, ...ordered];
+
+  // 바깥 클릭 시 닫기
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const q = query.trim().toUpperCase();
+  const filtered = (q ? all.filter((s) => s.includes(q)) : all).slice(0, 80);
+
+  function select(s: string) {
+    onSymbolChange(s);
+    setOpen(false);
+    setQuery("");
+  }
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 font-mono text-sm font-semibold hover:bg-accent/50"
+      >
+        {symbol}
+        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-30 w-60 overflow-hidden rounded-lg border border-border bg-popover shadow-card-hover">
+          <div className="relative p-2">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && filtered[0]) select(filtered[0]);
+                if (e.key === "Escape") setOpen(false);
+              }}
+              placeholder={t("paper.exchange.symbolSearch")}
+              className="h-8 w-full rounded-md border border-border bg-background pl-7 pr-2.5 font-mono text-sm uppercase outline-none focus:border-ring"
+            />
+          </div>
+          <ul className="max-h-64 overflow-y-auto pb-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-xs text-muted-foreground">
+                {t("paper.exchange.symbolNone")}
+              </li>
+            ) : (
+              filtered.map((s) => (
+                <li key={s}>
+                  <button
+                    type="button"
+                    onClick={() => select(s)}
+                    className={cn(
+                      "flex w-full items-center px-3 py-1.5 text-left font-mono text-sm hover:bg-accent/50",
+                      s === symbol ? "font-semibold text-primary" : "text-foreground",
+                    )}
+                  >
+                    {s}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+          <div className="border-t border-border/60 px-3 py-1.5 text-[10px] text-muted-foreground">
+            {t("paper.exchange.symbolCount", { n: all.length })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Header ──────────────────────────────────────────────────────────────
 function ExchangeHeader({
   symbol,
   onSymbolChange,
   wallet,
   positions,
+  symbols,
 }: {
   symbol: string;
   onSymbolChange: (s: string) => void;
   wallet: Wallet;
   positions: Position[];
+  symbols: string[];
 }) {
   const t = useT();
   const [ticker, setTicker] = useState<{ last: number; change: number; high: number; low: number; volume: number } | null>(null);
@@ -206,18 +313,8 @@ function ExchangeHeader({
     <Card>
       <CardContent className="p-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {/* Symbol switcher */}
-          <select
-            value={symbol}
-            onChange={(e) => onSymbolChange(e.target.value)}
-            className="h-9 rounded-md border border-border bg-background px-3 font-mono text-sm font-semibold"
-          >
-            {SYMBOLS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          {/* Symbol switcher — AI 분석(후보 레이더)에 나오는 코인만 검색 */}
+          <SymbolPicker symbol={symbol} onSymbolChange={onSymbolChange} symbols={symbols} />
 
           {/* Price + 24h */}
           <div className="flex items-baseline gap-2">

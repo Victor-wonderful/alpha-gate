@@ -12,6 +12,7 @@ import { classifyTrendComposite } from "./trend";
 import { computeVolumeProfile } from "./volume-profile";
 import { simulateRange } from "./monte-carlo";
 import { PINNED_SYMBOLS } from "./radar-constants";
+import { STYLE_STANDARDS, MIN_STOP_PCT_VS_FEES } from "./standards";
 import type { TradingStyle } from "./style";
 
 /**
@@ -49,6 +50,9 @@ export interface RadarCandidate {
   /** 예상 변동 범위 콘 (다음 horizon봉 80% 구간, %). 방향 예측 아님. */
   rangeLowPct: number;
   rangeHighPct: number;
+  /** 진입 자리 근접도 — 현재가↔최근접 매물대 레벨(POC/VAH/VAL) 거리를 ATR 배수로.
+   *  스캔 시 랭킹용(가까울수록 손절 기준이 명확한 자리). 방향 신호 아님. DB 미영속. */
+  levelDistAtr?: number | null;
   price: number;
   change24hPct: number;
   fundingRate: number;
@@ -90,16 +94,38 @@ const STYLE_HANDICAP: Record<TradingStyle, number> = {
 };
 
 // 핸디캡 동점 시 더 짧은(실행 가능한) 스타일 우선.
-const STYLE_ORDER: TradingStyle[] = ["scalp", "day", "swing", "position"];
+// position 제외 (2026-07-13): UI에서 숨김(전패 검증)이라 스캔 best-style 후보에서도 제외 —
+// 보이지 않는 스타일 기준으로 게이트되는 후보가 생기지 않게. 복원 시 배열에 다시 추가.
+const STYLE_ORDER: TradingStyle[] = ["scalp", "day", "swing"];
 
 const SCAN_BARS = 200;
 const UNIVERSE_SIZE = 30;
-const MAX_CANDIDATES = 14;
-const MIN_SCORE = 2;
 
 const BLOCKLIST = new Set(["BTCDOMUSDT", "DEFIUSDT", "BLUEBIRDUSDT"]);
 
-const PINNED = new Set(PINNED_SYMBOLS);
+/** 시총 상위 15 대장주 (스테이블·랩드 제외, Binance USDT 무기한 존재분) — 2026-07 큐레이션.
+ *  시총 데이터는 Binance API에 없어 상수로 관리. 분기 1회 순위 확인·갱신 권장.
+ *  (근접 후순위 교체 후보: DOT, TON, SHIB) */
+const MEGA_CAP_UNIVERSE = [
+  "BTCUSDT", "ETHUSDT", "XRPUSDT", "BNBUSDT", "SOLUSDT",
+  "DOGEUSDT", "ADAUSDT", "TRXUSDT", "LINKUSDT", "AVAXUSDT",
+  "XLMUSDT", "SUIUSDT", "BCHUSDT", "HBARUSDT", "LTCUSDT",
+];
+
+/** 최종 후보 수 — BTC(항상 고정) + 게이트·랭킹 통과 4개. */
+const RADAR_TOP = 5;
+
+// ⚠ 값은 radar-panel.tsx의 STYLE_ATR_CAP/styleFloor와 동일하게 유지할 것
+// (패널은 클라이언트 번들이라 server-only인 이 파일에서 import 불가 → 중복 정의).
+const RADAR_ATR_CAP: Record<TradingStyle, number> = {
+  scalp: 2.5,
+  day: 4,
+  swing: 10,
+  position: 25,
+};
+function radarStyleFloor(style: TradingStyle): number {
+  return Math.max(MIN_STOP_PCT_VS_FEES, STYLE_STANDARDS[style].stopPct.min * 0.8);
+}
 
 /** 거래대금 상위 N개 USDT 무기한 (크립토만). */
 export async function fetchTopSymbolsByVolume(n = UNIVERSE_SIZE): Promise<
@@ -316,7 +342,6 @@ async function scanCoin(
   }
 
   if (!best) return null;
-  const isPinned = PINNED.has(meta.symbol);
 
   const refCandles = byTf["4h"] ?? byTf[STYLE_TF[best.style]];
   const price = refCandles[refCandles.length - 1].close || meta.lastPrice;
@@ -326,21 +351,28 @@ async function scanCoin(
   const trendStrength =
     bestCandles.length >= 30 ? classifyTrendComposite(bestCandles).composite.strength : "weak";
 
-  // ★ 추세 강도 보너스 — 백테스트 검증(scripts/backtest-trend-first.ts): "강한 추세 + 추세 방향"이
-  // 결정적 엣지(스윙 4h 강한추세 +0.409R·PF1.80, 워크포워드 전구간 양수). 구조신호보다 우선시해
-  // 강한 추세 코인을 상위로 선별·정렬한다. (손튜닝 아님 — 검증된 가중치)
+  // 강한 추세는 신호 칩으로 명시 (추세 강도 자체는 runRadarScan 랭킹에서 반영 — 검증된 엣지).
   const clearTrend = trend === "up" || trend === "down";
-  const trendBonus = clearTrend ? (trendStrength === "strong" ? 5 : trendStrength === "moderate" ? 1 : 0) : 0;
   const signals =
     clearTrend && trendStrength === "strong"
       ? [{ key: "trend", label: trend === "up" ? "강한 상승 추세" : "강한 하락 추세" }, ...best.signals]
       : best.signals;
-  const score = best.score + trendBonus;
+  const score = best.score;
   const suggestedDirection: "long" | "short" | null =
     clearTrend && trendStrength !== "weak" ? (trend === "up" ? "long" : "short") : null;
 
-  // 컷오프 — 추세 보너스 포함 점수 기준 (강한 추세는 구조신호 없어도 통과). 고정자산은 항상 포함.
-  if (!isPinned && (score < MIN_SCORE || signals.length === 0)) return null;
+  // 진입 자리 근접도 — 현재가↔최근접 VP 레벨(POC/VAH/VAL) 거리(%) ÷ ATR(%).
+  // "강한 추세라도 레벨에서 멀면(한복판) 들어갈 자리가 없다" 랭킹의 1순위 재료.
+  const bestAtr = styleAtr[best.style] ?? 0;
+  let levelDistAtr: number | null = null;
+  if (bestAtr > 0 && price > 0) {
+    const vp = computeVolumeProfile(bestCandles.slice(-120), 40, 0.7);
+    const levels = [vp.poc, vp.vah, vp.val].filter((l) => Number.isFinite(l) && l > 0);
+    if (levels.length) {
+      const distPct = Math.min(...levels.map((l) => (Math.abs(price - l) / price) * 100));
+      levelDistAtr = distPct / bestAtr;
+    }
+  }
 
   // 예상 변동 범위 콘 (드리프트 0 — 방향 예측 아님).
   const cone = simulateRange(bestCandles.map((c) => c.close), STYLE_HORIZON[best.style], 2000);
@@ -357,6 +389,7 @@ async function scanCoin(
     suggestedDirection,
     rangeLowPct: cone.insufficient ? 0 : cone.lowPct,
     rangeHighPct: cone.insufficient ? 0 : cone.highPct,
+    levelDistAtr,
     price,
     change24hPct: dayChangePct(refCandles, price) ?? meta.priceChangePercent,
     fundingRate,
@@ -378,12 +411,46 @@ async function mapChunked<T, R>(
   return out;
 }
 
-/** 전체 스캔 — 거래대금 상위 30개를 스타일별 구조신호로 점수화. */
+/** 하드 게이트 — 통과 못하면 후보 제외 (BTC는 기준 자산이라 면제).
+ *  ① 변동성 밴드: ATR이 손절 하한(수수료 이김) 이상 & 스타일 상한(이상 급변) 이하.
+ *  ② R:R 도달 가능성: 최소 R:R 목표폭이 예상 변동 콘 안에 있어야 함(못 닿는 목표 = 진입 가치 없음). */
+function passesGates(c: RadarCandidate): boolean {
+  const atr = c.styleAtr[c.bestStyle] ?? 0;
+  const floor = radarStyleFloor(c.bestStyle);
+  if (!(atr >= floor * 1.1 && atr <= RADAR_ATR_CAP[c.bestStyle])) return false;
+  const stopPct = Math.max(floor, atr);
+  const targetPct = stopPct * STYLE_STANDARDS[c.bestStyle].rr.min;
+  const maxMove = Math.max(Math.abs(c.rangeLowPct), Math.abs(c.rangeHighPct));
+  if (maxMove > 0 && maxMove < targetPct) return false;
+  return true;
+}
+
+/** 랭킹 점수 (사전식 가중 — 상위 기준이 하위를 항상 지배).
+ *  ① 진입 자리 근접 (레벨 ≤1.2 ATR=200 / ≤2.5=100 / 그 외 0) — 자리 없으면 강추세도 후순위
+ *  ② 추세 강도 (강=20 / 중=10) — 백테스트 검증된 유일한 방향 엣지
+ *  ③ BTC 레짐 정렬 (+5) — BTC와 같은 방향 우선(역행 시 등급 -2와 일관)
+ *  ④ 구조 신호 점수 (0~4 클램프) — 동점 타이브레이크 전용 */
+function rankScore(c: RadarCandidate, btcTrend: "up" | "down" | null): number {
+  const d = c.levelDistAtr;
+  const prox = d != null && d <= 1.2 ? 2 : d != null && d <= 2.5 ? 1 : 0;
+  const clear = c.trend === "up" || c.trend === "down";
+  const trendPts = clear ? (c.trendStrength === "strong" ? 2 : c.trendStrength === "moderate" ? 1 : 0) : 0;
+  const align = btcTrend && c.trend === btcTrend ? 1 : 0;
+  return prox * 100 + trendPts * 10 + align * 5 + Math.min(c.score, 4);
+}
+
+/** 전체 스캔 — 시총 상위 15 대장주를 게이트·랭킹으로 5개 선별 (BTC 고정 + 4).
+ *  score 컬럼에 랭킹 점수를 저장 — DB 로드(score desc)가 곧 선별 순서. */
 export async function runRadarScan(): Promise<RadarCandidate[]> {
-  const [universe, funding] = await Promise.all([
-    fetchTopSymbolsByVolume(UNIVERSE_SIZE),
+  const [tickers, funding] = await Promise.all([
+    fetchAllTickers24h(),
     fetchAllFunding().catch(() => ({}) as Record<string, number>),
   ]);
+  const bySymbol = new Map(tickers.map((t) => [t.symbol, t]));
+  const universe = MEGA_CAP_UNIVERSE.flatMap((s) => {
+    const m = bySymbol.get(s);
+    return m && m.lastPrice > 0 ? [m] : [];
+  });
 
   // 코인당 4 TF fetch → 동시성 12코인으로 제한 (속도 ↑, rate limit 안전).
   const results = await mapChunked(universe, 12, (meta) =>
@@ -395,16 +462,20 @@ export async function runRadarScan(): Promise<RadarCandidate[]> {
     if (r.status === "fulfilled" && r.value) candidates.push(r.value);
   }
 
-  const sorted = candidates.sort(
-    (a, b) => b.score - a.score || b.volume24hUsd - a.volume24hUsd,
-  );
-  const top = sorted.slice(0, MAX_CANDIDATES);
-  // 고정 자산(BTC/ETH/XRP/BNB)이 점수 컷오프에 밀려 잘렸으면 다시 추가 (항상 후보에 포함).
-  for (const sym of PINNED_SYMBOLS) {
-    if (!top.some((c) => c.symbol === sym)) {
-      const c = sorted.find((x) => x.symbol === sym);
-      if (c) top.push(c);
-    }
-  }
-  return top;
+  const btcCand = candidates.find((c) => c.symbol === "BTCUSDT") ?? null;
+  const btcTrend =
+    btcCand && (btcCand.trend === "up" || btcCand.trend === "down") && btcCand.trendStrength !== "weak"
+      ? btcCand.trend
+      : null;
+
+  // BTC 제외 나머지 4칸 — 게이트 통과 + 랭킹 점수 > 0 만 (억지 후보 없음: 4개 미만이면 그대로 적게).
+  const ranked = candidates
+    .filter((c) => c.symbol !== "BTCUSDT" && passesGates(c))
+    .map((c) => ({ ...c, score: rankScore(c, btcTrend) }))
+    .filter((c) => c.score > 0)
+    .sort((a, b) => b.score - a.score || b.volume24hUsd - a.volume24hUsd)
+    .slice(0, RADAR_TOP - 1);
+
+  // BTC는 항상 포함 + 최상단 (+1000 오프셋으로 score 정렬에서도 맨 앞 보존).
+  return btcCand ? [{ ...btcCand, score: 1000 + rankScore(btcCand, btcTrend) }, ...ranked] : ranked;
 }

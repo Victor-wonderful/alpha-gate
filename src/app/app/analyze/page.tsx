@@ -66,8 +66,10 @@ export default async function AnalyzePage() {
         currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
         money={money}
         radar={radar}
+        // 최근 분석 기록 — 우측 컬럼(분석 대상 아래) 빈 공간에 배치.
+        // 서버 컴포넌트라 클라이언트에 직접 못 넣고 ReactNode로 전달.
+        history={<AnalysisHistory limit={4} />}
       />
-      <AnalysisHistory />
     </div>
   );
 }

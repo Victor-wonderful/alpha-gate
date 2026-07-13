@@ -927,7 +927,7 @@ function RailVerdictCard({
         {warnings.length > 0 ? (
           <div className="space-y-1 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
             {warnings.map((w, i) => (
-              <div key={i} className="flex items-start gap-1.5 text-[11px] text-amber-300">
+              <div key={i} className="flex items-start gap-1.5 text-[11px] text-amber-700">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
                 <span>{w}</span>
               </div>
@@ -990,7 +990,7 @@ function MarketTrendBody({
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <TrendIndicator
                 name="ADX"
-                citation="Wilder 1978"
+                desc={t("analyze.result.indicator.descAdx")}
                 value={metrics.adx ? metrics.adx.value.toFixed(1) : "—"}
                 verdict={metrics.adx?.verdict}
                 thresholdLabel={t("analyze.result.indicator.adxThreshold")}
@@ -998,21 +998,30 @@ function MarketTrendBody({
               />
               <TrendIndicator
                 name="KER"
-                citation="Kaufman 1995"
+                desc={t("analyze.result.indicator.descKer")}
                 value={metrics.ker ? metrics.ker.value.toFixed(2) : "—"}
                 verdict={metrics.ker?.verdict}
                 thresholdLabel={t("analyze.result.indicator.kerThreshold")}
               />
               <TrendIndicator
-                name="Choppiness"
-                citation="Dreiss"
+                name="CHOP"
+                desc={t("analyze.result.indicator.descChop")}
                 value={metrics.choppiness ? metrics.choppiness.value.toFixed(1) : "—"}
                 verdict={metrics.choppiness?.verdict}
                 thresholdLabel={t("analyze.result.indicator.choppinessThreshold")}
               />
             </div>
-            <div className="text-[10px] text-muted-foreground">
-              {t("analyze.result.indicator.voteSummary", { trend: metrics.trendVotes, range: metrics.rangeVotes, tf: metrics.refTf })}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+              <span>
+                {t("analyze.result.indicator.voteSummary", {
+                  trend: metrics.trendVotes,
+                  range: metrics.rangeVotes,
+                  neutral: Math.max(0, 3 - metrics.trendVotes - metrics.rangeVotes),
+                })}
+              </span>
+              <span className="rounded border border-border/60 bg-background/60 px-1.5 py-0.5 font-mono text-[10px] uppercase">
+                {t("analyze.result.indicator.voteRefTf", { tf: metrics.refTf })}
+              </span>
             </div>
           </div>
         ) : null}
@@ -1024,7 +1033,7 @@ function MarketTrendBody({
                 "border",
                 dominance.regime === "alt_season" || dominance.regime === "risk_on" ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
                 : dominance.regime === "alt_panic" || dominance.regime === "risk_off" ? "border-grade-d/40 bg-grade-d/10 text-grade-d"
-                : "border-amber-500/40 bg-amber-500/10 text-amber-400",
+                : "border-amber-500/40 bg-amber-500/15 text-amber-700",
               )}>
                 {dominance.label}
               </Badge>
@@ -1039,14 +1048,15 @@ function MarketTrendBody({
 
 function TrendIndicator({
   name,
-  citation,
+  desc,
   value,
   verdict,
   thresholdLabel,
   extra,
 }: {
   name: string;
-  citation: string;
+  /** 지표가 무엇을 재는지 — 평범한 한국어 한 단어 (구 연도 표기 대체). */
+  desc: string;
   value: string;
   verdict?: "trend" | "developing" | "mixed" | "range";
   thresholdLabel: string;
@@ -1058,7 +1068,7 @@ function TrendIndicator({
       ? "border-grade-a/40 bg-grade-a/10 text-grade-a"
       : verdict === "range"
         ? "border-muted-foreground/40 bg-muted/30 text-muted-foreground"
-        : "border-amber-500/40 bg-amber-500/10 text-amber-400";
+        : "border-amber-500/40 bg-amber-500/15 text-amber-700";
   const verdictLabel =
     verdict === "trend"
       ? t("analyze.result.indicator.verdictTrend")
@@ -1070,17 +1080,19 @@ function TrendIndicator({
             ? t("analyze.result.indicator.verdictWeak")
             : "—";
   return (
-    <div className="rounded border border-border/60 bg-background/40 p-2.5">
+    <div className="flex flex-col rounded-lg border border-border/60 bg-background/40 p-2.5">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wider">{name}</span>
-        <span className="text-[9px] text-muted-foreground">{citation}</span>
+        <span className="text-[10px] text-muted-foreground">{desc}</span>
       </div>
-      <div className="mt-1 flex items-baseline gap-2">
-        <span className="font-mono text-lg font-bold tabular-nums">{value}</span>
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <span className="font-mono text-xl font-bold leading-none tabular-nums">{value}</span>
         <Badge className={cn("border text-[10px]", tone)}>{verdictLabel}</Badge>
       </div>
-      {extra ? <div className="mt-0.5 font-mono text-[10px] text-muted-foreground tabular-nums">{extra}</div> : null}
-      <div className="mt-1 text-[10px] text-muted-foreground">{thresholdLabel}</div>
+      <div className="mt-2 space-y-0.5 border-t border-border/40 pt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+        <div>{thresholdLabel}</div>
+        {extra ? <div className="font-mono tabular-nums">{extra}</div> : null}
+      </div>
     </div>
   );
 }

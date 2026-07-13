@@ -113,6 +113,50 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
     }
   }, [activeChart.candles]);
 
+  // 실시간 갱신 — 라이브 분석만. Binance kline을 20초 주기로 다시 받아 캔들을 교체한다
+  // (진입·손절·목표 라인은 시나리오 값 그대로 유지). 백테스트는 과거 시점 스냅샷 고정.
+  const isLiveMode = snapshot.mode !== "backtest";
+  const [liveTick, setLiveTick] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isLiveMode) return;
+    let alive = true;
+    const tf = activeChart.tf;
+    async function poll() {
+      try {
+        const r = await fetch(
+          `https://fapi.binance.com/fapi/v1/klines?symbol=${snapshot.symbol}&interval=${tf}&limit=250`,
+          { cache: "no-store" },
+        );
+        if (!r.ok || !alive) return;
+        const j = (await r.json()) as [number, string, string, string, string][];
+        if (!alive || !Array.isArray(j)) return;
+        const series = seriesRef.current;
+        if (!series) return;
+        const data = j.map((k) => ({
+          time: (k[0] / 1000) as Time,
+          open: parseFloat(k[1]),
+          high: parseFloat(k[2]),
+          low: parseFloat(k[3]),
+          close: parseFloat(k[4]),
+        }));
+        try {
+          series.setData(data); // fitContent는 안 함 — 사용자의 줌/스크롤 보존
+          setLiveTick(Date.now());
+        } catch {
+          // chart disposed mid-update
+        }
+      } catch {
+        // 네트워크 실패 — 스냅샷 캔들 유지 (다음 주기 재시도)
+      }
+    }
+    poll();
+    const id = setInterval(poll, 20_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [isLiveMode, snapshot.symbol, activeChart.tf]);
+
   // Manage overlays — context + scenario lines
   useEffect(() => {
     const series = seriesRef.current;
@@ -249,6 +293,12 @@ export function ScenarioChart({ snapshot, report, scenarioIndex }: Props) {
             </span>
           )}
           <span className="text-muted-foreground">{t("analyze.cmpC.candleCount", { n: activeChart.candles.length })}</span>
+          {isLiveMode && liveTick ? (
+            <span className="flex items-center gap-1 text-[11px] font-medium text-grade-a">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-grade-a" />
+              {t("analyze.cmpC.live")}
+            </span>
+          ) : null}
         </div>
         <Button variant="ghost" size="sm" onClick={downloadPng} disabled={downloading}>
           <Download className="h-3.5 w-3.5" />

@@ -17,8 +17,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RadarCandidate } from "@/lib/analysis/radar";
 import { PINNED_SYMBOLS } from "@/lib/analysis/radar-constants";
 import type { RadarSnapshot } from "@/lib/analysis/radar-persist";
-import type { TradingStyle } from "@/lib/analysis/style";
+import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
 import { STYLE_STANDARDS, MIN_STOP_PCT_VS_FEES } from "@/lib/analysis/standards";
+import { AnalysisTimingHint } from "./analysis-timing-hint";
 import { refreshRadarAction, getLiveQuotesAction } from "@/app/app/analyze/_radar-actions";
 
 const LIVE_INTERVAL_MS = 25_000;
@@ -59,21 +60,25 @@ const STYLE_DUR_KEY: Record<TradingStyle, string> = {
 };
 // 스타일별 색상 (빠름→느림: 앰버/스카이/바이올렛/에메랄드).
 const STYLE_RING: Record<TradingStyle, string> = {
-  scalp: "border-amber-500 bg-amber-500/10 text-amber-200",
-  day: "border-sky-500 bg-sky-500/10 text-sky-200",
-  swing: "border-violet-500 bg-violet-500/10 text-violet-200",
-  position: "border-emerald-500 bg-emerald-500/10 text-emerald-200",
+  scalp: "border-amber-500 bg-amber-500/15 text-amber-700",
+  day: "border-sky-500 bg-sky-500/15 text-sky-700",
+  swing: "border-violet-500 bg-violet-500/15 text-violet-700",
+  position: "border-emerald-500 bg-emerald-500/15 text-emerald-700",
 };
-const STYLE_ORDER: TradingStyle[] = ["scalp", "day", "swing", "position"];
+// position 숨김 (2026-07-13): 무기한 선물 × 수개월 보유는 구조 부적합(펀딩 출혈) +
+// scenario_outcomes 결정 13건 전패. 장기 투자는 현물 DCA 모드로 이관 예정(docs/DCA-모드-설계.md).
+// 코드·타입·데이터는 보존 — 배열에 다시 넣으면 복원.
+const STYLE_ORDER: TradingStyle[] = ["scalp", "day", "swing"];
 
 // 신호 종류별 색상 — "왜 볼 만한지"를 색으로 빠르게 구분.
+// 라이트 배경용 진한 텍스트(-700). 옅은 -300/-200은 다크 테마 잔재라 흰 카드에서 안 보였음.
 const SIGNAL_COLOR: Record<string, string> = {
-  sweep: "bg-sky-500/10 text-sky-300",
-  funding: "bg-amber-500/10 text-amber-300",
-  compression: "bg-violet-500/10 text-violet-300",
-  vah: "bg-rose-500/10 text-rose-300",
-  val: "bg-emerald-500/10 text-emerald-300",
-  volume: "bg-orange-500/10 text-orange-300",
+  sweep: "bg-sky-500/15 text-sky-700",
+  funding: "bg-amber-500/15 text-amber-700",
+  compression: "bg-violet-500/15 text-violet-700",
+  vah: "bg-rose-500/15 text-rose-700",
+  val: "bg-emerald-500/15 text-emerald-700",
+  volume: "bg-orange-500/15 text-orange-700",
   high24h: "bg-foreground/10 text-foreground/70",
   low24h: "bg-foreground/10 text-foreground/70",
 };
@@ -85,6 +90,7 @@ function styleFloor(style: TradingStyle): number {
 
 // ATR 상한 — 이보다 변동성이 크면 저유동성/급등 이상치로 보고 진입 가능에서 제외.
 // (5분봉 ATR 7%, 1분봉 20% 같은 micro-cap 펌핑 코인은 정상 셋업이 안 나옴.)
+// ⚠ radar.ts의 RADAR_ATR_CAP/radarStyleFloor와 값 동일 유지 (서버 스캔 게이트와 같은 기준).
 const STYLE_ATR_CAP: Record<TradingStyle, number> = {
   scalp: 2.5,
   day: 4,
@@ -139,7 +145,7 @@ function preview(c: RadarCandidate, style: TradingStyle, price: number): Preview
   const atr = c.styleAtr?.[style] ?? 0;
   const floor = styleFloor(style);
   const hasAtr = atr > 0;
-  // 고정 자산(BTC/ETH/XRP/BNB)은 기준 자산 — 항상 진입 가능 (분석도 항상 시나리오 생성).
+  // 고정 자산(BTC)은 기준 자산 — 항상 진입 가능 (분석도 항상 시나리오 생성).
   const isPinned = PINNED_SYMBOLS.includes(c.symbol);
   // 진입 가능 = ATR이 손절 하한 이상(LLM이 두는 구조 손절 ~0.8~1×ATR이 floor를 넘김 = 수수료/노이즈 이김)
   // 이고, ATR이 상한 이하(저유동성 이상치 제외). ×1.1로 약간의 여유.
@@ -198,6 +204,16 @@ function estScenarios(c: RadarCandidate): number {
 }
 
 /** 강한/중간 추세 강도 태그 — 방향이 있는(up/down) 후보에만. 강도가 검증된 엣지라 강조. */
+/** 스타일 표준 스펙 미니 항목 (멀티 TF · 손절폭 · 목표폭 · 최소 R:R). */
+function SpecItem({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="flex items-baseline gap-1.5">
+      <span className="text-[11px] text-muted-foreground/80">{label}</span>
+      <span className="font-mono text-xs font-semibold tabular-nums">{value}</span>
+    </span>
+  );
+}
+
 function StrengthTag({ strength }: { strength: "strong" | "moderate" | "weak" }) {
   const t = useT();
   if (strength === "strong")
@@ -310,7 +326,8 @@ export function RadarPanel({
     (c) => c.styleAtr && Object.keys(c.styleAtr).length > 0,
   );
 
-  // 선택 스타일로 진입 가능한 코인만. 고정 자산(BTC/ETH/XRP/BNB)을 지정 순서로 맨 앞, 그 다음 점수 높은 순.
+  // 선택 스타일로 진입 가능한 코인만. BTC(기준 자산) 맨 앞 →
+  // 스캔 랭킹(c.score = 진입자리 근접→추세강도→BTC정렬) → 스타일 신호 점수 순.
   const rows = candidates
     .map((c) => {
       const price = live[c.symbol] ?? c.price;
@@ -323,7 +340,7 @@ export function RadarPanel({
       const aPin = ap === -1 ? Number.MAX_SAFE_INTEGER : ap;
       const bPin = bp === -1 ? Number.MAX_SAFE_INTEGER : bp;
       if (aPin !== bPin) return aPin - bPin;
-      return b.p.score - a.p.score;
+      return b.c.score - a.c.score || b.p.score - a.p.score;
     });
 
   const hidden = Math.max(0, rows.length - COLLAPSED_COUNT);
@@ -379,6 +396,11 @@ export function RadarPanel({
                 }
               >
                 {t(STYLE_LABEL_KEY[s])}
+                {s === "swing" ? (
+                  <span className="ml-1 rounded bg-primary/15 px-1 py-0.5 align-middle text-[9px] font-medium text-primary">
+                    {t("analyze.client.recommended")}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -386,17 +408,40 @@ export function RadarPanel({
             {t("analyze.cmpC.tradeableCount", { style: t(STYLE_LABEL_KEY[style]), n: rows.length })}
           </span>
         </div>
+
+        {/* 선택 스타일 컨텍스트 — 분석 타이밍 적합도 + 표준 스펙 (구 '트레이딩 스타일' 카드 통합) */}
+        <div className="mt-3 space-y-2">
+          <AnalysisTimingHint style={style} />
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-md bg-muted/30 px-3 py-2">
+            <SpecItem
+              label={t("analyze.client.std.multiTf")}
+              value={`${STYLE_PRESETS[style].htf}/${STYLE_PRESETS[style].mtf}/${STYLE_PRESETS[style].ltf}`.toUpperCase()}
+            />
+            <SpecItem
+              label={t("analyze.client.std.stop")}
+              value={`${STYLE_STANDARDS[style].stopPct.min}~${STYLE_STANDARDS[style].stopPct.max}%`}
+            />
+            <SpecItem
+              label={t("analyze.client.std.target")}
+              value={`${STYLE_STANDARDS[style].targetPct.min}~${STYLE_STANDARDS[style].targetPct.max}%`}
+            />
+            <SpecItem
+              label={t("analyze.client.std.minRr")}
+              value={`${STYLE_STANDARDS[style].rr.min}+`}
+            />
+          </div>
+        </div>
       </CardHeader>
 
       <CardContent className="px-2 pb-2">
         {!hasAtrData ? (
-          <div className="mx-1 mb-1 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground">
+          <div className="mx-1 mb-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground xl:min-h-[352px]">
             {scannedAt
               ? t("analyze.cmpC.emptyStale")
               : t("analyze.cmpC.emptyReady")}
           </div>
         ) : rows.length === 0 ? (
-          <div className="mx-1 mb-1 whitespace-pre-line rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground">
+          <div className="mx-1 mb-1 flex flex-col items-center justify-center whitespace-pre-line rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground xl:min-h-[352px]">
             {t("analyze.cmpC.emptyNoRows", { style: t(STYLE_LABEL_KEY[style]) })}
           </div>
         ) : (
@@ -411,9 +456,10 @@ export function RadarPanel({
               <span className="hidden w-[120px] md:block">{t("analyze.cmpC.colStopTarget")}</span>
               <span className="hidden w-[56px] items-center justify-end gap-1 sm:flex">{t("analyze.cmpC.colRange")}</span>
               <span className="w-9 text-center">{t("analyze.cmpC.colScore")}</span>
-              <span className="w-[56px] text-center">{t("analyze.cmpC.colAnalyze")}</span>
+              <span className="w-[60px] text-center">{t("analyze.cmpC.colAnalyze")}</span>
             </div>
-            <ul className="divide-y divide-border/50">
+            {/* xl:min-h — 후보가 5개 미만이어도 카드 높이 고정(우측 컬럼과 하단 정렬 유지) */}
+            <ul className="divide-y divide-border/50 xl:min-h-[352px]">
               {visible.map((r, i) => (
                 <CandidateRow
                   key={r.c.symbol + i}
@@ -575,9 +621,9 @@ function CandidateRow({
         </span>
 
         {/* 분석 액션 */}
-        <span className="inline-flex w-[56px] shrink-0 items-center justify-center gap-0.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:bg-primary/10 group-hover:text-primary">
+        <span className="inline-flex w-[60px] shrink-0 items-center justify-center gap-0.5 whitespace-nowrap rounded-md border border-border px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:bg-primary/10 group-hover:text-primary">
           {t("analyze.cmpC.analyzeAction")}
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-3 w-3 shrink-0" />
         </span>
       </button>
     </li>

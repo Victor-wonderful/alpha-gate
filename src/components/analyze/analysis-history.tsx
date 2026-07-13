@@ -42,7 +42,8 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
   const analysisRows = (analyses ?? []) as AnalysisRow[];
 
   return (
-    <Card>
+    // h-full — 분석 페이지 우측 컬럼에서 flex-1 래퍼를 꽉 채워 레이더 하단과 정렬.
+    <Card className="flex h-full flex-col">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
           <Sparkles className="h-4 w-4 text-primary" />
@@ -55,7 +56,7 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
           {t("analyze.cmpA.allHistory")} <ArrowRight className="h-3 w-3" />
         </Link>
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent className="flex-1 p-0">
         {analysisRows.length === 0 ? (
           <div className="px-5 pb-5 text-sm text-muted-foreground">
             {t("analyze.cmpA.historyEmpty")}
@@ -69,7 +70,7 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
               return (
                 <li
                   key={a.id}
-                  className="group relative flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 text-sm transition-colors hover:bg-muted/30"
+                  className="group relative flex flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-2.5 text-sm transition-colors hover:bg-muted/30"
                 >
                   <Link
                     href={`/app/analyze?load=${a.id}`}
@@ -82,7 +83,7 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
                   </span>
                   {isBacktest ? (
                     <Badge
-                      className="relative border border-amber-500/40 bg-amber-500/10 text-amber-300"
+                      className="relative border border-amber-500/40 bg-amber-500/15 text-amber-700"
                       title={
                         a.historical_at
                           ? t("analyze.cmpA.backtestAt", {
@@ -128,15 +129,10 @@ export async function AnalysisHistory({ limit = 10 }: { limit?: number }) {
                           : t("analyze.cmpC.biasNeutral")}
                     </Badge>
                   ) : null}
-                  <span className="relative text-xs text-muted-foreground">
-                    {t("analyze.cmpA.scenarioCount", { n: a.scenarios_count })}
-                  </span>
-                  <span className="relative text-xs text-muted-foreground">
-                    {t("analyze.cmpA.confidence", { pct: Math.round(a.strategy_confidence * 100) })}
-                  </span>
-                  <span className="relative ml-auto text-xs text-muted-foreground">
+                  {/* 시나리오 개수·자신감%는 컴팩트 배치에서 생략 — 클릭해 복원하면 전부 보임 */}
+                  <span className="relative ml-auto whitespace-nowrap text-[11px] text-muted-foreground">
                     {new Date(a.created_at).toLocaleString("ko-KR", {
-                      month: "short",
+                      month: "numeric",
                       day: "numeric",
                       hour: "2-digit",
                       minute: "2-digit",

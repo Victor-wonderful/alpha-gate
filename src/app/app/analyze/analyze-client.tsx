@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState, useTransition } from "react";
+import { Suspense, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronDown, History } from "lucide-react";
 import { toast } from "sonner";
@@ -12,18 +12,11 @@ import type { ScenarioStats } from "@/lib/analysis/scenario-stats";
 import { AnalysisResult } from "./analysis-result";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STYLE_PRESETS, type TradingStyle } from "@/lib/analysis/style";
-import { STYLE_STANDARDS } from "@/lib/analysis/standards";
-import { AnalysisTimingHint } from "@/components/analyze/analysis-timing-hint";
 import { AnalysisInfo } from "@/components/analyze/analysis-info";
 import { RadarPanel } from "@/components/analyze/radar-panel";
 import type { RadarSnapshot } from "@/lib/analysis/radar-persist";
 import { kstStringAgo, kstStringToDate, randomKstStringWithin6Months } from "@/lib/analysis/kst";
 import { useT } from "@/lib/i18n/context";
-
-// 스타일 칩 — 짧은 이름 + 기간(각 1줄)으로 고정해 칩 높이를 균일하게.
-// (멀티 TF 등 상세는 바로 아래 표준 행에 표시되므로 칩에서는 생략)
-// 라벨/기간 텍스트는 i18n 키(analyze.client.styleChip.<id>.name/dur)로 렌더링 시점에 번역.
-const STYLE_CHIP_KEYS: TradingStyle[] = ["scalp", "day", "swing", "position"];
 
 // Top Binance USDT-Perp by recent volume — wide enough for most use cases.
 const PRESETS = [
@@ -65,6 +58,8 @@ export function AnalyzeClient(props: {
   currency: "USD" | "KRW";
   money: import("@/types/trade").MoneyContext;
   radar: RadarSnapshot;
+  /** 최근 분석 기록 (서버 컴포넌트) — 우측 컬럼 분석 대상 아래 배치. */
+  history?: ReactNode;
 }) {
   return (
     <Suspense fallback={null}>
@@ -79,12 +74,14 @@ function AnalyzeClientInner({
   currency,
   money,
   radar,
+  history,
 }: {
   accountSize: number;
   riskPct: number;
   currency: "USD" | "KRW";
   money: import("@/types/trade").MoneyContext;
   radar: RadarSnapshot;
+  history?: ReactNode;
 }) {
   const t = useT();
   const [pending, startTransition] = useTransition();
@@ -176,6 +173,12 @@ function AnalyzeClientInner({
     setForm({ style: v });
   }
 
+  // position 스타일 숨김 마이그레이션 — sessionStorage에 position이 남아있으면 기본(swing)으로.
+  // (선물 장기보유 부적합 + 시나리오 전패로 UI에서 제거됨. cf. docs/DCA-모드-설계.md)
+  useEffect(() => {
+    if (hydrated && style === "position") setForm({ style: "swing" });
+  }, [hydrated, style, setForm]);
+
   // 후보 레이더에서 코인 선택 → 심볼+추천스타일 prefill + 입력창 스크롤/포커스 (수동 실행).
   function pickCandidate(sym: string, pickedStyle: TradingStyle) {
     const target = sym.toUpperCase();
@@ -238,76 +241,14 @@ function AnalyzeClientInner({
   return (
     <div className="space-y-6">
       <AnalysisInfo />
-      <RadarPanel initial={radar} style={style} onStyleChange={setStyle} onPick={pickCandidate} />
 
-      {/* 분석 설정 — 좌: 트레이딩 스타일 / 우: 분석 대상 (시안 Setup Row) */}
-      <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <Card className="flex flex-col">
-          <CardHeader>
-            <CardTitle>{t("analyze.client.styleTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-4">
-              <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                {STYLE_CHIP_KEYS.map((s) => {
-                  const active = style === s;
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setStyle(s)}
-                      className={
-                        "rounded-lg border p-4 text-left transition-colors " +
-                        (active
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-background/40 hover:bg-accent/40")
-                      }
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base font-semibold">{t(`analyze.client.styleChip.${s}.name`)}</span>
-                        {s === "swing" ? (
-                          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                            {t("analyze.client.recommended")}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">{t(`analyze.client.styleChip.${s}.dur`)}</div>
-                    </button>
-                  );
-                })}
-              </div>
-              <AnalysisTimingHint style={style} />
-              {/* 선택 스타일의 표준 — 멀티 TF · 손절/목표폭 · 최소 R:R (standards.ts).
-                  mt-auto 로 카드 하단에 고정해 좌측 카드 빈 공간을 채운다. */}
-              <div className="mt-auto grid grid-cols-4 gap-3 rounded-lg bg-muted/30 px-4 py-3.5">
-                <div>
-                  <div className="text-xs text-muted-foreground/80">{t("analyze.client.std.multiTf")}</div>
-                  <div className="mt-1 font-mono text-sm font-semibold uppercase">
-                    {STYLE_PRESETS[style].htf}/{STYLE_PRESETS[style].mtf}/{STYLE_PRESETS[style].ltf}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground/80">{t("analyze.client.std.stop")}</div>
-                  <div className="mt-1 font-mono text-sm font-semibold">
-                    {STYLE_STANDARDS[style].stopPct.min}~{STYLE_STANDARDS[style].stopPct.max}%
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground/80">{t("analyze.client.std.target")}</div>
-                  <div className="mt-1 font-mono text-sm font-semibold">
-                    {STYLE_STANDARDS[style].targetPct.min}~{STYLE_STANDARDS[style].targetPct.max}%
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground/80">{t("analyze.client.std.minRr")}</div>
-                  <div className="mt-1 font-mono text-sm font-semibold">
-                    {STYLE_STANDARDS[style].rr.min}+
-                  </div>
-                </div>
-              </div>
-          </CardContent>
-        </Card>
+      {/* 좌: 후보 레이더(스타일·타이밍·스펙 통합) / 우: 분석 대상 — 넓은 화면 좌우, 좁으면 세로 스택.
+          items-start 없음 = 두 컬럼 stretch → 우측 기록 카드(flex-1)가 레이더 하단선까지 채움 */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <RadarPanel initial={radar} style={style} onStyleChange={setStyle} onPick={pickCandidate} />
 
-        {/* RIGHT — 분석 대상: 모드 토글 + 심볼 + 자금/리스크 + 실행 */}
+        {/* 우측 컬럼 — 분석 대상(자연 높이) + 최근 분석 기록(flex-1로 남는 높이 채움 → 하단 정렬) */}
+        <div className="flex min-w-0 flex-col gap-5">
         <Card className="flex flex-col">
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle>{t("analyze.client.targetTitle")}</CardTitle>
@@ -340,7 +281,7 @@ function AnalyzeClientInner({
               </button>
             </div>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-4">
+          <CardContent className="flex flex-1 flex-col gap-3">
               <div className="space-y-2">
                 <label
                   htmlFor="symbol-input"
@@ -425,6 +366,8 @@ function AnalyzeClientInner({
               </div>
           </CardContent>
         </Card>
+        <div className="min-h-0 flex-1">{history}</div>
+        </div>
       </div>
 
       {pending ? (

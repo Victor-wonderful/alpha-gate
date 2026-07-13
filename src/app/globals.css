@@ -16,7 +16,7 @@
     --secondary: 221 43% 95%;        /* #ECF0F8 */
     --secondary-foreground: 226 50% 8%;
     --muted: 221 43% 95%;            /* #ECF0F8 */
-    --muted-foreground: 223 16% 50%; /* #6D7690 mono slate */
+    --muted-foreground: 223 20% 40%; /* #525A70 mono slate (darkened for light-bg readability) */
     --accent: 221 43% 95%;
     --accent-foreground: 226 50% 8%;
     --destructive: 354 82% 66%;      /* #F0616D red (delete/danger + loss) */
@@ -30,7 +30,7 @@
     --sidebar: 219 41% 93%;          /* #E7ECF5 cool rail (distinct from warm canvas) */
     --grade-a: 156 63% 49%;          /* #2ECC8F gain green (P&L exception) */
     --grade-b: 222 74% 60%;          /* #4C7BE8 mono blue */
-    --grade-c: 221 28% 68%;          /* #98A4C0 mono faint */
+    --grade-c: 221 30% 54%;          /* #6579A3 mono faint (darkened for text readability) */
     --grade-d: 354 82% 66%;          /* #F0616D loss red (P&L exception) */
     --radius: 0.5rem;
   }

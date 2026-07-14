@@ -187,6 +187,8 @@ function evaluateScenario(
     confidence,
     stopPct,
     userPreferredRiskPct,
+    // 오픈+예약 포지션이 이미 쓴 위험을 뺀 남은 예산으로 권장 크기를 상한.
+    remainingRiskPct: input.money.remainingRiskPct,
   });
   const effectiveRiskPct = riskPctOverride !== null ? riskPctOverride : recommended.riskPct;
 

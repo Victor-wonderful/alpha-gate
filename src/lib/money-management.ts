@@ -1,6 +1,6 @@
 import "server-only";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import type { MoneyContext, Direction } from "@/types/trade";
+import { type MoneyContext, type Direction, TOTAL_RISK_BUDGET_PCT } from "@/types/trade";
 
 /**
  * 오늘 마감된 거래의 누적 R + 진행 중(미마감) 포지션 집계.
@@ -14,6 +14,9 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
     openExposurePct: 0,
     longExposurePct: 0,
     shortExposurePct: 0,
+    usedRiskPct: 0,
+    riskBudgetPct: TOTAL_RISK_BUDGET_PCT,
+    remainingRiskPct: TOTAL_RISK_BUDGET_PCT,
   };
 
   const supabase = await getSupabaseServer();
@@ -39,12 +42,19 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
 
   const { data: openRows } = await supabase
     .from("trades")
-    .select("id, symbol, direction, entry, position_quantity, order_status")
+    .select("id, symbol, direction, entry, stop, position_quantity, order_status")
     .eq("user_id", user.id)
     .neq("mode", "backtest")
     .is("closed_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
+
+  // 예약(pending) 지정가/역지정가 주문 — 아직 체결 전이지만 위험을 미리 예약(차감).
+  const { data: pendingRows } = await supabase
+    .from("pending_limit_orders")
+    .select("limit_price, stop, quantity, direction")
+    .eq("user_id", user.id)
+    .eq("status", "open");
 
   const todayCumulativeR = (closedToday ?? []).reduce(
     (s, r) => s + (Number(r.result_r) || 0),
@@ -73,6 +83,18 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
     .reduce((s, p) => s + p.positionSize, 0);
   const pct = (v: number) => (accountSize > 0 ? (v / accountSize) * 100 : 0);
 
+  // ── 위험 예산 ── 오픈+예약 포지션의 "손절 시 손실"을 합산해 예산에서 차감.
+  // 위험 = |진입 - 손절| × 수량 (계좌 대비 %). 노출(사이즈)이 아니라 실제 잃을 금액.
+  const openRisk = (openRows ?? [])
+    .filter((r) => !NON_POSITION.has((r.order_status as string | null) ?? ""))
+    .reduce((s, r) => s + Math.abs((Number(r.entry) || 0) - (Number(r.stop) || 0)) * (Number(r.position_quantity) || 0), 0);
+  const pendingRisk = (pendingRows ?? []).reduce(
+    (s, r) => s + Math.abs((Number(r.limit_price) || 0) - (Number(r.stop) || 0)) * (Number(r.quantity) || 0),
+    0,
+  );
+  const usedRiskPct = pct(openRisk + pendingRisk);
+  const remainingRiskPct = Math.max(0, TOTAL_RISK_BUDGET_PCT - usedRiskPct);
+
   return {
     todayCumulativeR,
     todayClosedCount,
@@ -80,5 +102,8 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
     openExposurePct: pct(totalExposure),
     longExposurePct: pct(longExposure),
     shortExposurePct: pct(shortExposure),
+    usedRiskPct,
+    riskBudgetPct: TOTAL_RISK_BUDGET_PCT,
+    remainingRiskPct,
   };
 }

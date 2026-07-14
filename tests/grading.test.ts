@@ -86,23 +86,28 @@ describe("gradeTrade", () => {
     expect(r.actions.some((a) => a.includes("어긋"))).toBe(true);
   });
 
-  it("상관 몰빵: 같은 방향(롱)에 이미 60%+ 쏠려 있으면 감점 + 경고", () => {
+  it("위험 예산 소진: 오픈+예약이 예산(6%)을 다 썼으면 감점 + 경고", () => {
     const r = gradeTrade({
       ...base,
-      direction: "long",
-      money: { ...base.money, longExposurePct: 70, shortExposurePct: 0, openExposurePct: 70 },
+      money: { ...base.money, usedRiskPct: 6.5, riskBudgetPct: 6, remainingRiskPct: 0 },
     });
-    expect(r.reasons.some((x) => x.code === "correlated_concentration")).toBe(true);
-    // 총 노출은 70%로 80% 미만 → overexposed 는 안 떠야 함(방향 몰빵만).
-    expect(r.reasons.some((x) => x.code === "overexposed")).toBe(false);
+    expect(r.reasons.some((x) => x.code === "risk_budget_exhausted")).toBe(true);
   });
 
-  it("상관 몰빵: 반대 방향(숏)이 쏠려 있으면 새 롱은 몰빵 아님", () => {
+  it("위험 예산 근접(75%+): 경고 -1점", () => {
     const r = gradeTrade({
       ...base,
-      direction: "long",
-      money: { ...base.money, longExposurePct: 0, shortExposurePct: 70, openExposurePct: 70 },
+      money: { ...base.money, usedRiskPct: 5, riskBudgetPct: 6, remainingRiskPct: 1 },
     });
-    expect(r.reasons.some((x) => x.code === "correlated_concentration")).toBe(false);
+    expect(r.reasons.some((x) => x.code === "risk_budget_near")).toBe(true);
+    expect(r.reasons.some((x) => x.code === "risk_budget_exhausted")).toBe(false);
+  });
+
+  it("위험 예산 여유: 예산 경고 안 뜸", () => {
+    const r = gradeTrade({
+      ...base,
+      money: { ...base.money, usedRiskPct: 1, riskBudgetPct: 6, remainingRiskPct: 5 },
+    });
+    expect(r.reasons.some((x) => x.code?.startsWith("risk_budget"))).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import type { ActionItem, GradeResult, ScoreReason, TradeInput } from "@/types/trade";
-import { DAILY_LOSS_LIMIT_R, SAME_DIRECTION_EXPOSURE_PCT, TOTAL_EXPOSURE_WARN_PCT } from "@/types/trade";
+import { DAILY_LOSS_LIMIT_R, TOTAL_EXPOSURE_WARN_PCT } from "@/types/trade";
 
 export function calcRR(entry: number, stop: number, target: number, direction: "long" | "short") {
   const risk = Math.abs(entry - stop);
@@ -53,7 +53,7 @@ export function gradeTrade(input: TradeInput): GradeResult {
     reasons.push({ code: "target_unrealistic", label: "목표가가 현실적이지 않음", points: -1 });
 
   // ─── 자금 관리 자동 감지 ──────────────────────────────
-  const { todayCumulativeR, openPositions, openExposurePct, longExposurePct, shortExposurePct } = input.money;
+  const { todayCumulativeR, openPositions, openExposurePct, usedRiskPct, riskBudgetPct } = input.money;
   // 일일 손실 한도 — 2단계:
   // - 한도 도달(≤ -2R): -2점 (강한 자제 신호)
   // - 한도 근접(≤ -1.5R, 한도 0.5R 이내): -1점 (경고)
@@ -90,15 +90,23 @@ export function gradeTrade(input: TradeInput): GradeResult {
       params: { pct: openExposurePct.toFixed(0) },
     });
   }
-  // 상관 몰빵 — 새 거래와 같은 방향에 이미 쏠려 있으면 경고.
-  // 알트는 BTC와 동조하므로 "다른 코인 여러 개 같은 방향" = 사실상 한 방향 몰빵 = 동시 손실 위험.
-  const sameSidePct = input.direction === "long" ? (longExposurePct ?? 0) : (shortExposurePct ?? 0);
-  if (sameSidePct >= SAME_DIRECTION_EXPOSURE_PCT) {
+  // 위험 예산 — 오픈+예약 포지션의 손절 손실 합이 예산을 넘었으면 신규 진입 자제.
+  // 크립토는 대부분 BTC와 동조하므로 방향 무관 합산(전체가 사실상 한 베팅).
+  const budget = riskBudgetPct ?? 0;
+  const used = usedRiskPct ?? 0;
+  if (budget > 0 && used >= budget) {
     reasons.push({
-      code: "correlated_concentration",
-      label: `이미 ${input.direction === "long" ? "롱" : "숏"} 방향에 노출 ${sameSidePct.toFixed(0)}% — 같은 방향 추가는 상관 몰빵(코인 동조 시 동시 손실)`,
+      code: "risk_budget_exhausted",
+      label: `위험 예산 소진 — 오픈·예약 포지션이 이미 ${used.toFixed(1)}% / 예산 ${budget}% 사용 중. 신규 진입은 예산 초과(동시 손절 시 한도 초과 손실).`,
       points: -2,
-      params: { pct: sameSidePct.toFixed(0), dir: input.direction },
+      params: { used: used.toFixed(1), budget: String(budget) },
+    });
+  } else if (budget > 0 && used >= budget * 0.75) {
+    reasons.push({
+      code: "risk_budget_near",
+      label: `위험 예산 ${used.toFixed(1)}% / ${budget}% 사용 — 남은 예산 부족, 신규 진입은 작게.`,
+      points: -1,
+      params: { used: used.toFixed(1), budget: String(budget) },
     });
   }
 

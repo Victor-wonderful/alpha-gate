@@ -20,7 +20,6 @@ import {
   TRIGGER_CHECK_LABELS,
   ENTRY_BAND_PCT,
   DAILY_LOSS_LIMIT_R,
-  SAME_DIRECTION_EXPOSURE_PCT,
   TOTAL_EXPOSURE_WARN_PCT,
   type Direction,
   type MarketContext,
@@ -1251,11 +1250,14 @@ function TradeFormInner({
                 tone={money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ? "bad" : money.todayCumulativeR < 0 ? undefined : "good"}
               />
               <StatCell
-                label={t("trade.form.openExposure")}
-                value={`${money.openExposurePct.toFixed(0)}%`}
-                sub={`롱 ${(money.longExposurePct ?? 0).toFixed(0)}% · 숏 ${(money.shortExposurePct ?? 0).toFixed(0)}%`}
-                tone={money.openExposurePct >= TOTAL_EXPOSURE_WARN_PCT ? "bad" : undefined}
+                label="위험 예산"
+                value={`${(money.usedRiskPct ?? 0).toFixed(1)}% / ${money.riskBudgetPct ?? 6}%`}
+                sub={`남음 ${(money.remainingRiskPct ?? 0).toFixed(1)}%`}
+                tone={(money.usedRiskPct ?? 0) >= (money.riskBudgetPct ?? 6) ? "bad" : (money.usedRiskPct ?? 0) >= (money.riskBudgetPct ?? 6) * 0.75 ? undefined : "good"}
               />
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              노출 {money.openExposurePct.toFixed(0)}% (롱 {(money.longExposurePct ?? 0).toFixed(0)}% · 숏 {(money.shortExposurePct ?? 0).toFixed(0)}%)
             </div>
             {money.openPositions.length > 0 ? (
               <div className="space-y-1">
@@ -1280,9 +1282,13 @@ function TradeFormInner({
             {money.openExposurePct >= TOTAL_EXPOSURE_WARN_PCT ? (
               <WarnBar text={t("trade.form.warnOverexposure", { pct: money.openExposurePct.toFixed(0) })} />
             ) : null}
-            {(direction === "long" ? (money.longExposurePct ?? 0) : (money.shortExposurePct ?? 0)) >= SAME_DIRECTION_EXPOSURE_PCT ? (
+            {(money.usedRiskPct ?? 0) >= (money.riskBudgetPct ?? 6) ? (
               <WarnBar
-                text={`이미 ${direction === "long" ? "롱" : "숏"} 방향에 계좌의 ${(direction === "long" ? (money.longExposurePct ?? 0) : (money.shortExposurePct ?? 0)).toFixed(0)}%가 몰려 있습니다. 코인은 대부분 같이 움직여 — 같은 방향 추가는 '한 방향 몰빵'이 되어 동시 손실·청산 위험이 커집니다.`}
+                text={`위험 예산 소진 — 오픈·예약 포지션이 이미 계좌의 ${(money.usedRiskPct ?? 0).toFixed(1)}%(예산 ${money.riskBudgetPct ?? 6}%)를 위험에 걸었습니다. 코인은 대부분 같이 움직여, 여기서 더 넣으면 동시 손절 시 예산 초과 손실·청산 위험. 기존 포지션 정리 후 진입을 권장합니다.`}
+              />
+            ) : (money.usedRiskPct ?? 0) >= (money.riskBudgetPct ?? 6) * 0.75 ? (
+              <WarnBar
+                text={`위험 예산 ${(money.usedRiskPct ?? 0).toFixed(1)}% / ${money.riskBudgetPct ?? 6}% 사용 — 남은 예산이 ${(money.remainingRiskPct ?? 0).toFixed(1)}%뿐입니다. 신규 진입은 작게.`}
               />
             ) : null}
           </div>

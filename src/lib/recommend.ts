@@ -22,6 +22,7 @@ export interface RecommendedTradeParams {
   riskPct: number; // % of account at risk per trade
   leverage: number; // suggested leverage (integer)
   reasoning: string; // 1-line explanation
+  budgetLimited?: boolean; // 남은 위험 예산에 의해 축소됐는지
 }
 
 /**
@@ -40,25 +41,38 @@ export function recommendTradeParams({
   confidence,
   stopPct,
   userPreferredRiskPct,
+  remainingRiskPct,
 }: {
   style: TradingStyle;
   grade: "A" | "B" | "C" | "D";
   confidence: number;
   stopPct: number;
   userPreferredRiskPct: number;
+  /** 남은 위험 예산(계좌 대비 %). 주어지면 이 안으로 상한. 오픈·예약 포지션 차감 후 남은 양. */
+  remainingRiskPct?: number;
 }): RecommendedTradeParams {
   // 1) Risk %
   const base = BASE_RISK_PCT[style] ?? 1.0;
   const gradeF = GRADE_FACTOR[grade] ?? 0.5;
   // 신뢰도 0~1 → 0.3~1.0 매핑. AI가 "전혀 모르겠다(0)"고 하면 30%까지 줄임.
   const confF = Math.max(0.3, Math.min(1.0, confidence));
-  let riskPct = base * gradeF * confF;
+  const idealRiskPct = base * gradeF * confF;
+  let riskPct = idealRiskPct;
   // Never exceed user's preference (treat as their personal cap)
   if (userPreferredRiskPct > 0) {
     riskPct = Math.min(riskPct, userPreferredRiskPct);
   }
-  // Clamp to safety band — minimum 0.1% so we never return 0 (blank UI is confusing).
-  riskPct = Math.max(0.1, Math.min(3, Number(riskPct.toFixed(2))));
+  // 위험 예산 상한 — 오픈+예약 포지션이 이미 쓴 위험을 뺀 "남은 예산" 안으로 축소.
+  let budgetLimited = false;
+  if (remainingRiskPct != null) {
+    if (riskPct > remainingRiskPct) budgetLimited = true;
+    riskPct = Math.min(riskPct, Math.max(0, remainingRiskPct));
+  }
+  // Clamp to safety band. 예산이 바닥이면(≈0) 0.1% floor를 두지 않고 실제 0으로 → "보류" 신호.
+  const budgetExhausted = remainingRiskPct != null && remainingRiskPct < 0.1;
+  riskPct = budgetExhausted
+    ? Number(Math.max(0, riskPct).toFixed(2))
+    : Math.max(0.1, Math.min(3, Number(riskPct.toFixed(2))));
 
   // 2) Leverage — 청산 가격이 손절 가격보다 8배수 이상 떨어진 곳에 오도록.
   //    레버리지 L에서 청산 ≈ 100/L% 적자.
@@ -74,7 +88,9 @@ export function recommendTradeParams({
   let lev = stopPct > 0 ? Math.floor(safetyFactor / stopPct) : 5;
   lev = Math.max(1, Math.min(styleLevCap[style] ?? 10, lev));
 
-  const reasoning = `기본 ${base.toFixed(2)}% × 등급 ${grade}(${(gradeF * 100).toFixed(0)}%) × 신뢰도 ${(confF * 100).toFixed(0)}% = ${riskPct.toFixed(2)}%, 손절폭 ${stopPct.toFixed(2)}%에 청산 안전 8배수 → ${lev}배`;
+  const reasoning = budgetLimited
+    ? `기본 ${base.toFixed(2)}% × 등급 ${grade} × 신뢰도 ${(confF * 100).toFixed(0)}% = ${idealRiskPct.toFixed(2)}% 이나, 남은 위험 예산 ${(remainingRiskPct ?? 0).toFixed(2)}%로 축소 → ${riskPct.toFixed(2)}% (레버리지 ${lev}배)`
+    : `기본 ${base.toFixed(2)}% × 등급 ${grade}(${(gradeF * 100).toFixed(0)}%) × 신뢰도 ${(confF * 100).toFixed(0)}% = ${riskPct.toFixed(2)}%, 손절폭 ${stopPct.toFixed(2)}%에 청산 안전 8배수 → ${lev}배`;
 
-  return { riskPct, leverage: lev, reasoning };
+  return { riskPct, leverage: lev, reasoning, budgetLimited };
 }

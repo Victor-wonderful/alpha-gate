@@ -36,9 +36,12 @@ export const TRIGGER_CHECK_LABELS: Record<TriggerCheckKey, string> = {
 export const DAILY_LOSS_LIMIT_R = -2;
 // 총 노출(방향 무관) 과다 경고 임계 (계좌 대비 %) — 마진/청산 관점.
 export const TOTAL_EXPOSURE_WARN_PCT = 80;
-// 같은 방향 상관 몰빵 경고 임계 (계좌 대비 %) — 새 거래와 같은 방향에 이미 이만큼 쏠려 있으면 경고.
-// 크립토는 대부분 BTC와 동조 → 같은 방향 여러 코인 = 사실상 한 방향 몰빵 = 동시 손실 위험.
+// 같은 방향 상관 몰빵 경고 임계 (계좌 대비 %) — 참고용(현재 경고 트리거 아님).
 export const SAME_DIRECTION_EXPOSURE_PCT = 60;
+// 총 위험 예산 (계좌 대비 %) — 동시에 열린 모든 포지션(오픈+예약)의 손절 손실 합 한도.
+// "다 틀려도 이 % 이상은 안 잃는다". 크립토는 대부분 동조하므로 방향 무관 합산.
+// 향후 profiles 컬럼으로 사용자 조절 가능하게 전환.
+export const TOTAL_RISK_BUDGET_PCT = 6;
 // 진입 구간 허용 슬리피지 (entry ± ENTRY_BAND_PCT %)
 export const ENTRY_BAND_PCT = 0.3;
 
@@ -81,10 +84,16 @@ export interface MoneyContext {
   }>;
   /** 진행 중 포지션의 노출 총합 (계좌 대비 %) */
   openExposurePct: number;
-  /** 롱 방향 노출 (계좌 대비 %) — 상관 몰빵 감지용. 알트는 BTC와 동조하므로 같은 방향은 한 덩어리. */
+  /** 롱 방향 노출 (계좌 대비 %) — 참고 정보. 알트는 BTC와 동조하므로 방향은 대개 한 덩어리. */
   longExposurePct?: number;
   /** 숏 방향 노출 (계좌 대비 %) */
   shortExposurePct?: number;
+  /** 이미 쓴 위험 예산 (오픈+예약 포지션의 손절 손실 합, 계좌 대비 %). */
+  usedRiskPct?: number;
+  /** 총 위험 예산 (계좌 대비 %). */
+  riskBudgetPct?: number;
+  /** 남은 위험 예산 (계좌 대비 %). max(0, budget - used). */
+  remainingRiskPct?: number;
 }
 
 export interface MarketContext {

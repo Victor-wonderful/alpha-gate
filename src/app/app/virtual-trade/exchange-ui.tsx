@@ -68,10 +68,10 @@ type Position = {
 
 // resolve-trades/route.ts 의 TIMEOUT_MS 와 반드시 일치.
 const POSITION_TIMEOUT_MS: Record<string, number> = {
-  "15m": 24 * 60 * 60_000, // 24h
-  "1h": 4 * 24 * 60 * 60_000, // 4d
-  "4h": 14 * 24 * 60 * 60_000, // 14d
-  "1D": 60 * 24 * 60 * 60_000, // 60d
+  "15m": 24 * 60 * 60_000, // 24h (스캘프)
+  "1h": 24 * 60 * 60_000, // 1d (데이 — 당일 청산 규율)
+  "4h": 5 * 24 * 60 * 60_000, // 5d (스윙)
+  "1D": 60 * 24 * 60 * 60_000, // 60d (포지션→DCA)
 };
 
 type PendingOrder = {

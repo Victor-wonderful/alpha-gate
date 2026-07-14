@@ -3,6 +3,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { getMoneyContext } from "@/lib/money-management";
+import { getEffectiveAccount } from "@/lib/account";
 import { getT } from "@/lib/i18n/server";
 
 export default async function TradePage({
@@ -24,13 +25,14 @@ export default async function TradePage({
     : { data: null };
 
   const sp = await searchParams;
-  // URL override > profile default. Guards against junk input.
+  // URL override > 활성 모드 유효 자금(실거래 배정/가상). Guards against junk input.
   const urlAccountSize = sp.accountSize ? Number(sp.accountSize) : NaN;
   const urlRiskPct = sp.riskPct ? Number(sp.riskPct) : NaN;
+  const effectiveSize = user ? (await getEffectiveAccount()).accountSize : 10000;
   const accountSize =
     Number.isFinite(urlAccountSize) && urlAccountSize > 0
       ? urlAccountSize
-      : Number(profile?.default_account_size) || 10000;
+      : effectiveSize;
   const riskPct =
     Number.isFinite(urlRiskPct) && urlRiskPct > 0 && urlRiskPct <= 10
       ? urlRiskPct

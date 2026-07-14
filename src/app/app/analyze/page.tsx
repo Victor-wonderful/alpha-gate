@@ -3,6 +3,7 @@ import { AnalyzeClient } from "./analyze-client";
 import { AnalysisHistory } from "@/components/analyze/analysis-history";
 import { HelpLink } from "@/components/app/help-link";
 import { getMoneyContext } from "@/lib/money-management";
+import { getEffectiveAccount } from "@/lib/account";
 import { loadLatestRadar, type RadarSnapshot } from "@/lib/analysis/radar-persist";
 import type { MoneyContext } from "@/types/trade";
 import { getT } from "@/lib/i18n/server";
@@ -23,7 +24,8 @@ export default async function AnalyzePage() {
         .maybeSingle()
     : { data: null };
 
-  const accountSize = Number(profile?.default_account_size) || 10000;
+  // 활성 모드(실거래 배정액 / 가상 자금) 기준 유효 자금 — 앱 전체 단일 기준.
+  const accountSize = user ? (await getEffectiveAccount()).accountSize : 10000;
 
   // grade 산정에 쓸 실제 자금 관리 컨텍스트 (오늘 누적 R, 진행 중 포지션, 노출 등).
   // 분석 페이지에서 미리 보여서 거래 평가 페이지와 등급이 일치하게 함.

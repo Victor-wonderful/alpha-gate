@@ -13,6 +13,7 @@ import {
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getT } from "@/lib/i18n/server";
 import { AccountForm } from "./account-form";
+import { CapitalForm } from "./capital-form";
 import { PasswordForm } from "./password-form";
 import { LogoutButton } from "./logout-button";
 
@@ -58,6 +59,22 @@ export default async function AccountPage() {
   ]);
 
   const profile = profileRes.data ?? null;
+
+  // 자금 필드는 별도 조회(마이그 0042 미적용 시 graceful — 실패해도 기본값으로 폼 렌더).
+  const { data: capital } = await supabase
+    .from("profiles")
+    .select(
+      "account_mode, default_account_size, real_alloc_type, real_alloc_amount, real_alloc_pct, real_balance_cached, real_balance_cached_at",
+    )
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const { count: binanceKeyCount } = await supabase
+    .from("exchange_api_keys")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("exchange", "binance");
+
   const analysisCount = analysesRes.count ?? 0;
   const tradeCount = tradesRes.count ?? 0;
   const cumulativeR = (tradesRes.data ?? []).reduce(
@@ -117,6 +134,22 @@ export default async function AccountPage() {
             unit={t("acct.unit.days")}
           />
         </div>
+      </section>
+
+      {/* 내 자금 (실거래 배정 / 가상) */}
+      <section>
+        <CapitalForm
+          initial={{
+            account_mode: (capital?.account_mode ?? "virtual") as "real" | "virtual",
+            virtual_capital: Number(capital?.default_account_size ?? 10000),
+            real_alloc_type: (capital?.real_alloc_type ?? "amount") as "amount" | "pct",
+            real_alloc_amount: capital?.real_alloc_amount != null ? Number(capital.real_alloc_amount) : null,
+            real_alloc_pct: capital?.real_alloc_pct != null ? Number(capital.real_alloc_pct) : null,
+            real_balance_cached: capital?.real_balance_cached != null ? Number(capital.real_balance_cached) : null,
+            real_balance_cached_at: capital?.real_balance_cached_at ?? null,
+            has_binance_key: (binanceKeyCount ?? 0) > 0,
+          }}
+        />
       </section>
 
       {/* Profile + trading defaults */}

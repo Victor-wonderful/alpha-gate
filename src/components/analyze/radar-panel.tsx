@@ -65,10 +65,12 @@ const STYLE_RING: Record<TradingStyle, string> = {
   swing: "border-violet-500 bg-violet-500/15 text-violet-700",
   position: "border-emerald-500 bg-emerald-500/15 text-emerald-700",
 };
-// position 숨김 (2026-07-13): 무기한 선물 × 수개월 보유는 구조 부적합(펀딩 출혈) +
-// scenario_outcomes 결정 13건 전패. 장기 투자는 현물 DCA 모드로 이관 예정(docs/DCA-모드-설계.md).
-// 코드·타입·데이터는 보존 — 배열에 다시 넣으면 복원.
-const STYLE_ORDER: TradingStyle[] = ["scalp", "day", "swing"];
+// position 숨김 (2026-07-13): 무기한 선물 × 수개월 보유는 구조 부적합(펀딩 출혈) + 13건 전패.
+// scalp 숨김 (2026-07-14): 4가지 접근(모멘텀·RR튜닝·평균회귀·추세필터 평균회귀) 백테스트
+//   전부 무엣지(승률 25~53%, 수수료 차감 후 마이너스). 지표 기반 스캘프 엣지 없음이 확정.
+//   리테일이 못 갖는 호가창·속도·리베이트에서만 나오는 엣지라 앱이 제공 불가.
+// 코드·타입·데이터는 보존 — 배열에 다시 넣으면 복원. 코어 = 데이·스윙.
+const STYLE_ORDER: TradingStyle[] = ["day", "swing"];
 
 // 신호 종류별 색상 — "왜 볼 만한지"를 색으로 빠르게 구분.
 // 라이트 배경용 진한 텍스트(-700). 옅은 -300/-200은 다크 테마 잔재라 흰 카드에서 안 보였음.

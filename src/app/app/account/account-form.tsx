@@ -15,12 +15,16 @@ type Initial = {
   default_leverage: number;
 };
 
-const STYLE_KEYS = ["scalp", "day", "swing", "position"] as const;
+// 선택지는 코어(데이·스윙)만. scalp(무엣지)·position(→DCA)은 숨김 — 타입은 보존.
+const STYLE_KEYS = ["day", "swing"] as const;
+// 저장된 값이 숨김 스타일이면 보이는 것으로 정규화.
+const visibleStyle = (s: Initial["default_style"]): "day" | "swing" =>
+  s === "scalp" ? "day" : s === "position" ? "swing" : s;
 
 export function AccountForm({ initial }: { initial: Initial }) {
   const t = useT();
   const [displayName, setDisplayName] = useState(initial.display_name ?? "");
-  const [style, setStyle] = useState(initial.default_style);
+  const [style, setStyle] = useState(visibleStyle(initial.default_style));
   const [riskPct, setRiskPct] = useState(initial.default_risk_pct);
   const [leverage, setLeverage] = useState(initial.default_leverage);
   const [pending, startTransition] = useTransition();
@@ -68,9 +72,7 @@ export function AccountForm({ initial }: { initial: Initial }) {
           <Select
             id="default_style"
             value={style}
-            onChange={(e) =>
-              setStyle(e.target.value as Initial["default_style"])
-            }
+            onChange={(e) => setStyle(e.target.value as "day" | "swing")}
           >
             {STYLE_KEYS.map((k) => (
               <option key={k} value={k}>

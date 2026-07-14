@@ -173,10 +173,11 @@ function AnalyzeClientInner({
     setForm({ style: v });
   }
 
-  // position 스타일 숨김 마이그레이션 — sessionStorage에 position이 남아있으면 기본(swing)으로.
-  // (선물 장기보유 부적합 + 시나리오 전패로 UI에서 제거됨. cf. docs/DCA-모드-설계.md)
+  // 숨김 스타일 마이그레이션 — sessionStorage에 남은 position→swing, scalp→day.
+  // (position=선물 장기보유 부적합, scalp=지표 기반 무엣지 확정. 둘 다 UI에서 제거됨.)
   useEffect(() => {
     if (hydrated && style === "position") setForm({ style: "swing" });
+    else if (hydrated && style === "scalp") setForm({ style: "day" });
   }, [hydrated, style, setForm]);
 
   // 후보 레이더에서 코인 선택 → 심볼+추천스타일 prefill + 입력창 스크롤/포커스 (수동 실행).

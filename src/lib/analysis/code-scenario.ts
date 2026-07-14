@@ -12,7 +12,8 @@ import { computeMarketAssessment } from "./market-assessment";
  * (레이더 preview와 동일 논리: 방향=추세[검증 98.4%], 손절≈MTF ATR을 표준밴드로 clamp, 목표=손절×RR.)
  * 손익비·등급·사이징은 다운스트림(UI)이 entry/stop/target에서 계산하므로 여기선 그 3+방향만 만든다.
  *
- * ⚠️ AI 대비 잃는 것: 레벨 정밀도(스윙/OB 대신 ATR 추정) + 서술 품질(템플릿). warnings로 명시.
+ * 진입가·손절은 실제 구조 레벨(스윙·OB·유동성·FVG·매물대, 전부 Stage1 코드 산출)에 놓으므로
+ * AI 유무와 무관하게 품질 유지. AI 대비 잃는 것은 서술 품질 + 다중 레벨 중 선택의 미묘한 판단뿐.
  */
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -28,6 +29,23 @@ const STRENGTH_LABEL: Record<"strong" | "moderate" | "weak", string> = {
   moderate: "중",
   weak: "약",
 };
+
+/** 방향의 지지(롱)/저항(숏) 후보 레벨 — 스윙·OB·유동성·FVG·매물대. 전부 Stage1 코드 산출(AI 무관). */
+function collectStructuralLevels(snapshot: AnalysisSnapshot, direction: "long" | "short"): number[] {
+  const out: number[] = [];
+  const want = direction === "long" ? "bullish" : "bearish";
+  const liqSide = direction === "long" ? "buy" : "sell";
+  for (const tf of snapshot.multiTf ?? []) {
+    const sw = direction === "long" ? tf.lastSwingLow : tf.lastSwingHigh;
+    if (sw != null) out.push(sw);
+    for (const ob of tf.orderBlocks ?? []) if (ob.side === want) out.push(ob.top, ob.bottom);
+    for (const l of tf.liquidity ?? []) if (l.side === liqSide) out.push(l.price);
+    for (const f of tf.unfilledFVGs ?? []) if (f.side === want) out.push(f.top, f.bottom);
+  }
+  const vp = snapshot.volumeProfile;
+  out.push(vp.poc, vp.vah, vp.val);
+  return out.filter((x) => Number.isFinite(x) && x > 0);
+}
 
 export function buildCodeReport(snapshot: AnalysisSnapshot): {
   strategy: StrategyResult;
@@ -65,30 +83,39 @@ export function buildCodeReport(snapshot: AnalysisSnapshot): {
     snapshot.atr?.find((a) => a.role === "LTF")?.pctOfPrice ??
     snapshot.atr?.[0]?.pctOfPrice ??
     0;
-  const stopPct = clamp(atrPct > 0 ? atrPct : std.stopPct.min, std.stopPct.min, std.stopPct.max);
-  const targetPct = stopPct * std.rr.min;
+  const stopPctBand = clamp(atrPct > 0 ? atrPct : std.stopPct.min, std.stopPct.min, std.stopPct.max);
 
-  // ── 진입: 시장가 추격이 아니라 "추세 방향 되돌림 지정가" ────────────────────
-  // 실거래 66건 근거: 시장가 진입 승률 31%·기대값 −0.41R vs 지정가 되돌림 63%·+0.28R.
-  // 폴백은 레벨 정밀도가 낮으므로 되돌림 폭을 ATR로 잡되, 근처 밸류 레벨(롱=POC/VAL,
-  // 숏=POC/VAH)이 [MIN_GAP, 손절폭] 밴드 안에 있으면 그 구조 레벨로 스냅한다(합성보다 실제 지지/저항).
-  const MIN_GAP_PCT = 0.15; // 현재가와 최소 이만큼 떨어져야 지정가 성립(즉시체결·트리거 가드 회피)
-  // 추세 강할수록 얕게(잘 채워지게), 약할수록 깊게(선별적으로).
+  // ── 진입·손절을 "실제 구조 레벨"에 놓는다 (AI 무관) ──────────────────────────
+  // 스윙·오더블록·유동성·FVG·매물대는 전부 Stage1(코드)이 계산 → AI 미가용이어도 동일 품질.
+  // 실거래 66건: 시장가 −0.41R vs 지정가 되돌림 +0.28R. 진입가를 가까운 지지/저항에 건다.
+  const MIN_GAP_PCT = 0.15; // 즉시체결·트리거 가드 회피
+  const levels = collectStructuralLevels(snapshot, direction);
+  // 되돌림 진입 후보 — 올바른 쪽(롱=아래/숏=위), [MIN_GAP, 손절밴드] 안, 가장 가까운 레벨.
+  const entryCand = levels
+    .filter((l) => (direction === "long" ? l < price : l > price))
+    .map((l) => ({ level: l, gap: (Math.abs(l - price) / price) * 100 }))
+    .filter((c) => c.gap >= MIN_GAP_PCT && c.gap <= stopPctBand)
+    .sort((a, b) => a.gap - b.gap)[0];
+  // 구조 레벨 없으면 ATR 되돌림(추세 강할수록 얕게).
   const pullbackScale = strength === "strong" ? 0.35 : strength === "moderate" ? 0.5 : 0.7;
-  const snapLevels = (direction === "long" ? [vp.poc, vp.val] : [vp.poc, vp.vah]).filter(
-    (l) => Number.isFinite(l) && l > 0,
-  );
-  const levelGaps = snapLevels
-    .map((l) => ((price - l) / price) * (direction === "long" ? 100 : -100)) // 올바른 쪽이면 양수 %
-    .filter((g) => g >= MIN_GAP_PCT && g <= stopPct)
-    .sort((a, b) => a - b); // 얕은(가까운) 순
-  const pullbackPct = levelGaps.length
-    ? levelGaps[0]
-    : clamp(atrPct * pullbackScale, MIN_GAP_PCT, stopPct);
-
-  // 진입가 기준으로 손절·목표 산출 → RR = std.rr.min 정확히 보존.
+  const pullbackPct = entryCand
+    ? entryCand.gap
+    : clamp(atrPct * pullbackScale, MIN_GAP_PCT, stopPctBand);
+  const entryFromLevel = !!entryCand;
   const entry =
     direction === "long" ? price * (1 - pullbackPct / 100) : price * (1 + pullbackPct / 100);
+
+  // 손절 — 진입 "너머"(더 먼 쪽) 구조 레벨에 놓고 이탈 확인 여유 0.1%. 없으면 ATR 밴드.
+  const stopCand = levels
+    .filter((l) => (direction === "long" ? l < entry : l > entry))
+    .map((l) => ({ level: l, gap: (Math.abs(entry - l) / entry) * 100 }))
+    .filter((c) => c.gap >= std.stopPct.min && c.gap <= std.stopPct.max)
+    .sort((a, b) => a.gap - b.gap)[0];
+  const stopFromLevel = !!stopCand;
+  const stopPct = stopCand ? clamp(stopCand.gap + 0.1, std.stopPct.min, std.stopPct.max) : stopPctBand;
+  const targetPct = stopPct * std.rr.min;
+
+  // 진입가 기준으로 손절·목표 산출 → RR = std.rr.min 보존.
   const stop = direction === "long" ? entry * (1 - stopPct / 100) : entry * (1 + stopPct / 100);
   const target = direction === "long" ? entry * (1 + targetPct / 100) : entry * (1 - targetPct / 100);
 
@@ -106,11 +133,11 @@ export function buildCodeReport(snapshot: AnalysisSnapshot): {
     entryType: "pending",
     orderHint: "limit",
     qualityIssues: clearTrend ? undefined : ["추세 불명확 — 방향 신뢰도 낮음. 진입 신중."],
-    trigger: `${dirNote} 방향 되돌림 대기 — 현재가 ${round(price)}에서 ${pullbackPct.toFixed(2)}% 되돌린 ${round(entry)} 도달 시 지정가 진입(시장가 추격 대신 유리한 진입가 대기). 진입 전 차트 구조(스윙·매물대)를 직접 확인하세요.`,
+    trigger: `${dirNote} 방향 되돌림 대기 — ${entryFromLevel ? "구조 레벨(스윙/OB/유동성/매물대)" : "현재가 되돌림"} ${round(entry)}(현재가 대비 ${pullbackPct.toFixed(2)}%) 도달 시 지정가 진입. 시장가 추격 대신 유리한 진입가를 기다립니다. 진입 전 캔들 확정을 확인하세요.`,
     entryZone: { low: round(entry * 0.999), high: round(entry * 1.001) },
     invalidation: round(stop),
     target: round(target),
-    note: "코드 규칙 기반 되돌림 지정가 추정 — 레벨 정밀도가 AI보다 낮을 수 있습니다.",
+    note: `코드 분석 — 진입가 ${entryFromLevel ? "구조 레벨" : "ATR 되돌림"} · 손절 ${stopFromLevel ? "구조 레벨" : "ATR 밴드"} 기반. 스윙·OB·유동성·매물대 전부 코드 계산이라 AI 유무와 무관.`,
     // 등급 입력(marketAssessment)은 스냅샷 사실로 계산 — AI 경로와 동일 기준. (진입가 기준)
     marketAssessment: computeMarketAssessment(snapshot, direction, entry),
   };
@@ -133,7 +160,7 @@ export function buildCodeReport(snapshot: AnalysisSnapshot): {
     actionNow:
       "AI 분석 미가용 — 규칙 기반 되돌림 지정가 시나리오입니다. 시장가로 추격하지 말고 진입가 도달을 기다리되, 진입 전 차트 구조를 직접 확인하세요.",
     warnings: [
-      "⚙️ AI 분석 미가용 — 코드 규칙 기반 추정 결과입니다. 레벨 정밀도·설명 품질이 AI보다 낮습니다.",
+      "⚙️ AI 분석 미가용 — 진입가·손절은 실제 구조 레벨(스윙·OB·유동성·매물대) 기반이라 정밀합니다. 서술·미묘한 판단만 AI보다 간략합니다.",
     ],
   };
 

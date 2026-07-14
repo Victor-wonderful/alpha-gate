@@ -75,11 +75,29 @@ describe("buildCodeReport (AI 폴백)", () => {
     expect(stopPct).toBeLessThanOrEqual(STYLE_STANDARDS.swing.stopPct.max + 0.01); // ≤ 5%
   });
 
-  it("ATR 없으면 밴드 최소값 (진입 기준)", () => {
+  it("ATR 없어도 손절은 스타일 밴드 안 (구조/밴드 기반)", () => {
     const { report } = buildCodeReport(mockSnap({ style: "day", atr: undefined }));
     const s = report.scenarios[0];
     const stopPct = stopPctOf(entryOf(s), s.invalidation);
-    expect(stopPct).toBeCloseTo(STYLE_STANDARDS.day.stopPct.min, 1); // 0.7%
+    expect(stopPct).toBeGreaterThanOrEqual(STYLE_STANDARDS.day.stopPct.min - 0.01);
+    expect(stopPct).toBeLessThanOrEqual(STYLE_STANDARDS.day.stopPct.max + 0.01);
+  });
+
+  it("구조 레벨(스윙 저점)이 밴드 안이면 진입가를 그 레벨에 스냅", () => {
+    // 현재가 100k, MTF 스윙 저점 99.5k(0.5% 아래). VP는 멀리 둬서 스윙이 최근접이 되게.
+    const { report } = buildCodeReport(
+      mockSnap({
+        style: "day",
+        atr: [{ role: "MTF", pctOfPrice: 1 }],
+        volumeProfile: { poc: 90_000, vah: 110_000, val: 85_000 },
+        multiTf: [
+          { role: "MTF", tf: "1h", trend: "up", lastSwingHigh: null, lastSwingLow: 99_500, unfilledFVGs: [], orderBlocks: [], liquidity: [] },
+        ],
+      }),
+    );
+    const entry = entryOf(report.scenarios[0]);
+    expect(entry).toBeGreaterThan(99_400);
+    expect(entry).toBeLessThan(99_600); // ≈ 스윙 저점 99.5k에 스냅
   });
 
   it("항상 최소 1개 시나리오 + AI 미가용 경고 포함", () => {

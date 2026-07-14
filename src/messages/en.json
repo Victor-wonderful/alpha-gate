@@ -898,11 +898,11 @@
           "dur": "Minutes–hours"
         },
         "day": {
-          "name": "Day",
+          "name": "Impulse",
           "dur": "Hours–a day"
         },
         "swing": {
-          "name": "Swing",
+          "name": "Momentum",
           "dur": "Days–weeks"
         },
         "position": {
@@ -985,8 +985,8 @@
       "historyEmpty": "No saved AI analyses yet. Run your first analysis above and it will be recorded here automatically.",
       "loadAnalysisAria": "Load {symbol} analysis",
       "styleScalp": "Scalp",
-      "styleDay": "Day",
-      "styleSwing": "Swing",
+      "styleDay": "Impulse",
+      "styleSwing": "Momentum",
       "stylePosition": "Position",
       "backtest": "Backtest",
       "backtestAt": "Backtest — as of {time} KST",
@@ -1044,8 +1044,8 @@
     },
     "cmpB": {
       "styleScalp": "Scalp",
-      "styleDay": "Day",
-      "styleSwing": "Swing",
+      "styleDay": "Impulse",
+      "styleSwing": "Momentum",
       "stylePosition": "Position",
       "levelOptimal": "Optimal",
       "levelGood": "Good",
@@ -1139,8 +1139,8 @@
       "timeHourAgo": "{n}h ago",
       "style": {
         "scalp": "Scalp",
-        "day": "Day",
-        "swing": "Swing",
+        "day": "Impulse",
+        "swing": "Momentum",
         "position": "Position"
       },
       "styleDur": {
@@ -1232,8 +1232,8 @@
       "deleteAria": "Delete {label} analysis",
       "style": {
         "scalp": "Scalp",
-        "day": "Day",
-        "swing": "Swing",
+        "day": "Impulse",
+        "swing": "Momentum",
         "position": "Position"
       },
       "strategy": {
@@ -1498,8 +1498,8 @@
     },
     "style": {
       "scalp": "Scalp",
-      "day": "Day",
-      "swing": "Swing",
+      "day": "Impulse",
+      "swing": "Momentum",
       "position": "Position"
     },
     "metric": {
@@ -1820,8 +1820,8 @@
       "style": "Default Trading Style",
       "styleOption": {
         "scalp": "Scalp (minutes~hours)",
-        "day": "Day (hours~a day)",
-        "swing": "Swing (days~weeks)",
+        "day": "Impulse (close within a day)",
+        "swing": "Momentum (days~1 week)",
         "position": "Position (weeks~months)"
       },
       "riskPct": "Risk per Trade %",
@@ -2185,10 +2185,10 @@
       "styleScalp": "Scalping",
       "styleScalpCycle": "Before every entry",
       "styleScalpWhen": "Right after the 5M / 15M candle close",
-      "styleDay": "Day",
+      "styleDay": "Impulse",
       "styleDayCycle": "2–3 times a day",
       "styleDayWhen": "At the 1H candle close · session transitions",
-      "styleSwing": "Swing",
+      "styleSwing": "Momentum",
       "styleSwingCycle": "2–3 times a week",
       "styleSwingWhen": "After the 4H / 1D candle close",
       "stylePosition": "Position",

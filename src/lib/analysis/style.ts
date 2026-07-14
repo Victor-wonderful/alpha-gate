@@ -30,8 +30,8 @@ export const STYLE_PRESETS: Record<TradingStyle, StylePreset> = {
   },
   day: {
     id: "day",
-    label: "데이 트레이딩 (수시간~하루)",
-    description: "4H / 1H / 15M — 하루 안에 청산하는 매매",
+    label: "임펄스 (하루 안 청산)",
+    description: "4H / 1H / 15M — 하루 안에 청산하는 매매 (구 데이)",
     htf: "4h",
     mtf: "1h",
     ltf: "15m",
@@ -41,8 +41,8 @@ export const STYLE_PRESETS: Record<TradingStyle, StylePreset> = {
   },
   swing: {
     id: "swing",
-    label: "스윙 (며칠~수주)",
-    description: "1D / 4H / 1H — 추세 추종 중심 (권장)",
+    label: "모멘텀 (며칠~1주)",
+    description: "1D / 4H / 1H — 추세 추종 중심 (권장, 구 스윙)",
     htf: "1d",
     mtf: "4h",
     ltf: "1h",

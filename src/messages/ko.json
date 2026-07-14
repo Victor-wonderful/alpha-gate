@@ -898,11 +898,11 @@
           "dur": "수분~수시간"
         },
         "day": {
-          "name": "데이",
+          "name": "임펄스",
           "dur": "수시간~하루"
         },
         "swing": {
-          "name": "스윙",
+          "name": "모멘텀",
           "dur": "며칠~수주"
         },
         "position": {
@@ -985,8 +985,8 @@
       "historyEmpty": "아직 저장된 AI 분석이 없습니다. 위에서 첫 분석을 실행하면 여기에 자동 기록됩니다.",
       "loadAnalysisAria": "{symbol} 분석 불러오기",
       "styleScalp": "스캘핑",
-      "styleDay": "데이",
-      "styleSwing": "스윙",
+      "styleDay": "임펄스",
+      "styleSwing": "모멘텀",
       "stylePosition": "포지션",
       "backtest": "백테스트",
       "backtestAt": "백테스트 — {time} KST 시점",
@@ -1044,8 +1044,8 @@
     },
     "cmpB": {
       "styleScalp": "스캘핑",
-      "styleDay": "데이",
-      "styleSwing": "스윙",
+      "styleDay": "임펄스",
+      "styleSwing": "모멘텀",
       "stylePosition": "포지션",
       "levelOptimal": "최적",
       "levelGood": "양호",
@@ -1139,8 +1139,8 @@
       "timeHourAgo": "{n}시간 전",
       "style": {
         "scalp": "스캘핑",
-        "day": "데이",
-        "swing": "스윙",
+        "day": "임펄스",
+        "swing": "모멘텀",
         "position": "포지션"
       },
       "styleDur": {
@@ -1232,8 +1232,8 @@
       "deleteAria": "{label} 분석 삭제",
       "style": {
         "scalp": "스캘핑",
-        "day": "데이",
-        "swing": "스윙",
+        "day": "임펄스",
+        "swing": "모멘텀",
         "position": "포지션"
       },
       "strategy": {
@@ -1498,8 +1498,8 @@
     },
     "style": {
       "scalp": "스캘핑",
-      "day": "데이",
-      "swing": "스윙",
+      "day": "임펄스",
+      "swing": "모멘텀",
       "position": "포지션"
     },
     "metric": {
@@ -1820,8 +1820,8 @@
       "style": "기본 트레이딩 스타일",
       "styleOption": {
         "scalp": "스캘핑 (수분~수시간)",
-        "day": "데이 (수시간~하루)",
-        "swing": "스윙 (며칠~수주)",
+        "day": "임펄스 (하루 안 청산)",
+        "swing": "모멘텀 (며칠~1주)",
         "position": "포지션 (수주~수개월)"
       },
       "riskPct": "거래당 리스크 %",
@@ -2185,10 +2185,10 @@
       "styleScalp": "스캘핑",
       "styleScalpCycle": "진입 직전 매번",
       "styleScalpWhen": "5M / 15M 캔들 마감 직후",
-      "styleDay": "데이",
+      "styleDay": "임펄스",
       "styleDayCycle": "하루 2~3회",
       "styleDayWhen": "1H 캔들 마감 · 세션 전환 시",
-      "styleSwing": "스윙",
+      "styleSwing": "모멘텀",
       "styleSwingCycle": "주 2~3회",
       "styleSwingWhen": "4H / 1D 캔들 마감 후",
       "stylePosition": "포지션",

@@ -85,4 +85,24 @@ describe("gradeTrade", () => {
     expect(r.rr).toBe(0);
     expect(r.actions.some((a) => a.includes("어긋"))).toBe(true);
   });
+
+  it("상관 몰빵: 같은 방향(롱)에 이미 60%+ 쏠려 있으면 감점 + 경고", () => {
+    const r = gradeTrade({
+      ...base,
+      direction: "long",
+      money: { ...base.money, longExposurePct: 70, shortExposurePct: 0, openExposurePct: 70 },
+    });
+    expect(r.reasons.some((x) => x.code === "correlated_concentration")).toBe(true);
+    // 총 노출은 70%로 80% 미만 → overexposed 는 안 떠야 함(방향 몰빵만).
+    expect(r.reasons.some((x) => x.code === "overexposed")).toBe(false);
+  });
+
+  it("상관 몰빵: 반대 방향(숏)이 쏠려 있으면 새 롱은 몰빵 아님", () => {
+    const r = gradeTrade({
+      ...base,
+      direction: "long",
+      money: { ...base.money, longExposurePct: 0, shortExposurePct: 70, openExposurePct: 70 },
+    });
+    expect(r.reasons.some((x) => x.code === "correlated_concentration")).toBe(false);
+  });
 });

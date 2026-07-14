@@ -21,6 +21,7 @@ import {
   ENTRY_BAND_PCT,
   DAILY_LOSS_LIMIT_R,
   SAME_DIRECTION_EXPOSURE_PCT,
+  TOTAL_EXPOSURE_WARN_PCT,
   type Direction,
   type MarketContext,
   type MoneyContext,
@@ -1252,8 +1253,8 @@ function TradeFormInner({
               <StatCell
                 label={t("trade.form.openExposure")}
                 value={`${money.openExposurePct.toFixed(0)}%`}
-                sub={t("trade.form.positionsCount", { n: money.openPositions.length })}
-                tone={money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? "bad" : undefined}
+                sub={`롱 ${(money.longExposurePct ?? 0).toFixed(0)}% · 숏 ${(money.shortExposurePct ?? 0).toFixed(0)}%`}
+                tone={money.openExposurePct >= TOTAL_EXPOSURE_WARN_PCT ? "bad" : undefined}
               />
             </div>
             {money.openPositions.length > 0 ? (
@@ -1276,8 +1277,13 @@ function TradeFormInner({
             {money.todayCumulativeR <= DAILY_LOSS_LIMIT_R + 0.5 ? (
               <WarnBar text={t("trade.form.warnDailyLimit", { r: money.todayCumulativeR.toFixed(2), limit: DAILY_LOSS_LIMIT_R })} />
             ) : null}
-            {money.openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT ? (
+            {money.openExposurePct >= TOTAL_EXPOSURE_WARN_PCT ? (
               <WarnBar text={t("trade.form.warnOverexposure", { pct: money.openExposurePct.toFixed(0) })} />
+            ) : null}
+            {(direction === "long" ? (money.longExposurePct ?? 0) : (money.shortExposurePct ?? 0)) >= SAME_DIRECTION_EXPOSURE_PCT ? (
+              <WarnBar
+                text={`이미 ${direction === "long" ? "롱" : "숏"} 방향에 계좌의 ${(direction === "long" ? (money.longExposurePct ?? 0) : (money.shortExposurePct ?? 0)).toFixed(0)}%가 몰려 있습니다. 코인은 대부분 같이 움직여 — 같은 방향 추가는 '한 방향 몰빵'이 되어 동시 손실·청산 위험이 커집니다.`}
+              />
             ) : null}
           </div>
 

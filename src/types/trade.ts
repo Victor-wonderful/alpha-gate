@@ -34,8 +34,11 @@ export const TRIGGER_CHECK_LABELS: Record<TriggerCheckKey, string> = {
 
 // 일일 손실 한도 (R 단위, 음수). 향후 profile 컬럼으로 전환 가능.
 export const DAILY_LOSS_LIMIT_R = -2;
-// 같은 방향 누적 노출 경고 임계 (계좌 대비 %)
-export const SAME_DIRECTION_EXPOSURE_PCT = 80;
+// 총 노출(방향 무관) 과다 경고 임계 (계좌 대비 %) — 마진/청산 관점.
+export const TOTAL_EXPOSURE_WARN_PCT = 80;
+// 같은 방향 상관 몰빵 경고 임계 (계좌 대비 %) — 새 거래와 같은 방향에 이미 이만큼 쏠려 있으면 경고.
+// 크립토는 대부분 BTC와 동조 → 같은 방향 여러 코인 = 사실상 한 방향 몰빵 = 동시 손실 위험.
+export const SAME_DIRECTION_EXPOSURE_PCT = 60;
 // 진입 구간 허용 슬리피지 (entry ± ENTRY_BAND_PCT %)
 export const ENTRY_BAND_PCT = 0.3;
 
@@ -78,6 +81,10 @@ export interface MoneyContext {
   }>;
   /** 진행 중 포지션의 노출 총합 (계좌 대비 %) */
   openExposurePct: number;
+  /** 롱 방향 노출 (계좌 대비 %) — 상관 몰빵 감지용. 알트는 BTC와 동조하므로 같은 방향은 한 덩어리. */
+  longExposurePct?: number;
+  /** 숏 방향 노출 (계좌 대비 %) */
+  shortExposurePct?: number;
 }
 
 export interface MarketContext {

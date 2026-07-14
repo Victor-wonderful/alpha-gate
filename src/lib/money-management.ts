@@ -12,6 +12,8 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
     todayClosedCount: 0,
     openPositions: [],
     openExposurePct: 0,
+    longExposurePct: 0,
+    shortExposurePct: 0,
   };
 
   const supabase = await getSupabaseServer();
@@ -63,12 +65,20 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
     }));
 
   const totalExposure = openPositions.reduce((s, p) => s + p.positionSize, 0);
-  const openExposurePct = accountSize > 0 ? (totalExposure / accountSize) * 100 : 0;
+  const longExposure = openPositions
+    .filter((p) => p.direction === "long")
+    .reduce((s, p) => s + p.positionSize, 0);
+  const shortExposure = openPositions
+    .filter((p) => p.direction === "short")
+    .reduce((s, p) => s + p.positionSize, 0);
+  const pct = (v: number) => (accountSize > 0 ? (v / accountSize) * 100 : 0);
 
   return {
     todayCumulativeR,
     todayClosedCount,
     openPositions,
-    openExposurePct,
+    openExposurePct: pct(totalExposure),
+    longExposurePct: pct(longExposure),
+    shortExposurePct: pct(shortExposure),
   };
 }

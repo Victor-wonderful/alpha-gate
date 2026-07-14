@@ -1,5 +1,5 @@
 import type { ActionItem, GradeResult, ScoreReason, TradeInput } from "@/types/trade";
-import { DAILY_LOSS_LIMIT_R, SAME_DIRECTION_EXPOSURE_PCT } from "@/types/trade";
+import { DAILY_LOSS_LIMIT_R, SAME_DIRECTION_EXPOSURE_PCT, TOTAL_EXPOSURE_WARN_PCT } from "@/types/trade";
 
 export function calcRR(entry: number, stop: number, target: number, direction: "long" | "short") {
   const risk = Math.abs(entry - stop);
@@ -53,7 +53,7 @@ export function gradeTrade(input: TradeInput): GradeResult {
     reasons.push({ code: "target_unrealistic", label: "목표가가 현실적이지 않음", points: -1 });
 
   // ─── 자금 관리 자동 감지 ──────────────────────────────
-  const { todayCumulativeR, openPositions, openExposurePct } = input.money;
+  const { todayCumulativeR, openPositions, openExposurePct, longExposurePct, shortExposurePct } = input.money;
   // 일일 손실 한도 — 2단계:
   // - 한도 도달(≤ -2R): -2점 (강한 자제 신호)
   // - 한도 근접(≤ -1.5R, 한도 0.5R 이내): -1점 (경고)
@@ -81,12 +81,24 @@ export function gradeTrade(input: TradeInput): GradeResult {
       params: { symbol: input.symbol },
     });
   }
-  if (openExposurePct >= SAME_DIRECTION_EXPOSURE_PCT) {
+  // 총 노출 과다 (방향 무관 — 마진/청산 관점)
+  if (openExposurePct >= TOTAL_EXPOSURE_WARN_PCT) {
     reasons.push({
       code: "overexposed",
-      label: `진행 중 포지션 노출 ${openExposurePct.toFixed(0)}% — 과노출`,
+      label: `진행 중 총 노출 ${openExposurePct.toFixed(0)}% — 과노출`,
       points: -2,
       params: { pct: openExposurePct.toFixed(0) },
+    });
+  }
+  // 상관 몰빵 — 새 거래와 같은 방향에 이미 쏠려 있으면 경고.
+  // 알트는 BTC와 동조하므로 "다른 코인 여러 개 같은 방향" = 사실상 한 방향 몰빵 = 동시 손실 위험.
+  const sameSidePct = input.direction === "long" ? (longExposurePct ?? 0) : (shortExposurePct ?? 0);
+  if (sameSidePct >= SAME_DIRECTION_EXPOSURE_PCT) {
+    reasons.push({
+      code: "correlated_concentration",
+      label: `이미 ${input.direction === "long" ? "롱" : "숏"} 방향에 노출 ${sameSidePct.toFixed(0)}% — 같은 방향 추가는 상관 몰빵(코인 동조 시 동시 손실)`,
+      points: -2,
+      params: { pct: sameSidePct.toFixed(0), dir: input.direction },
     });
   }
 

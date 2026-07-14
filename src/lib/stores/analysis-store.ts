@@ -67,14 +67,15 @@ export const useAnalysisStore = create<AnalysisStore>()(
       storage: createJSONStorage(() =>
         typeof window === "undefined" ? (undefined as never) : sessionStorage,
       ),
-      // Don't persist the image (it's transient, large, and re-supplied per run)
+      // Don't persist the image (it's transient, large, and re-supplied per run).
+      // accountSizeOverride/riskPctOverride 는 "이번 분석만" 임시값이므로 세션에 저장하지 않는다
+      // → 새로고침/재방문 시 항상 설정한 자금(getEffectiveAccount)이 기본으로 적용된다.
+      // (저장하면 옛 임시값이 남아 바뀐 설정을 조용히 가리는 함정이 생김.)
       partialize: (state) => ({
         result: state.result,
         symbol: state.symbol,
         custom: state.custom,
         style: state.style,
-        accountSizeOverride: state.accountSizeOverride,
-        riskPctOverride: state.riskPctOverride,
         mode: state.mode,
         historicalAtKst: state.historicalAtKst,
       }),

@@ -18,29 +18,39 @@ function mockSnap(over: Record<string, unknown> = {}): AnalysisSnapshot {
 }
 
 const stopPctOf = (price: number, stop: number) => (Math.abs(price - stop) / price) * 100;
+const entryOf = (s: { entryZone: { low: number; high: number } }) =>
+  (s.entryZone.low + s.entryZone.high) / 2;
 
 describe("buildCodeReport (AI 폴백)", () => {
-  it("상승 추세 → 롱: 손절은 진입 아래, 목표는 위, RR=스타일 최소", () => {
+  it("상승 추세 → 롱: 되돌림 지정가(진입<현재가), 손절은 진입 아래, RR=스타일 최소(진입 기준)", () => {
     const { strategy, report } = buildCodeReport(mockSnap({ style: "swing" }));
     const s = report.scenarios[0];
     expect(s.direction).toBe("long");
     expect(strategy.direction).toBe("long");
-    expect(s.invalidation).toBeLessThan(100_000); // 손절 아래
-    expect(s.target).toBeGreaterThan(100_000); // 목표 위
-    const stopPct = stopPctOf(100_000, s.invalidation);
-    const tgtPct = stopPctOf(100_000, s.target);
-    expect(tgtPct / stopPct).toBeCloseTo(STYLE_STANDARDS.swing.rr.min, 1); // RR=2
+    // 시장가 추격이 아니라 되돌림 지정가여야 한다.
+    expect(s.entryType).toBe("pending");
+    expect(s.orderHint).toBe("limit");
+    const entry = entryOf(s);
+    expect(entry).toBeLessThan(100_000); // 롱 되돌림 진입은 현재가 아래
+    expect(s.invalidation).toBeLessThan(entry); // 손절은 진입 아래
+    expect(s.target).toBeGreaterThan(entry); // 목표는 진입 위
+    const stopPct = stopPctOf(entry, s.invalidation);
+    const tgtPct = stopPctOf(entry, s.target);
+    expect(tgtPct / stopPct).toBeCloseTo(STYLE_STANDARDS.swing.rr.min, 1); // RR=2 (진입 기준)
   });
 
-  it("하락 추세 → 숏: 손절은 진입 위, 목표는 아래", () => {
+  it("하락 추세 → 숏: 되돌림 지정가(진입>현재가), 손절은 진입 위, 목표는 아래", () => {
     const { strategy, report } = buildCodeReport(
       mockSnap({ trendMetrics: { classification: "down", strength: "moderate" } }),
     );
     const s = report.scenarios[0];
     expect(s.direction).toBe("short");
     expect(strategy.direction).toBe("short");
-    expect(s.invalidation).toBeGreaterThan(100_000);
-    expect(s.target).toBeLessThan(100_000);
+    expect(s.orderHint).toBe("limit");
+    const entry = entryOf(s);
+    expect(entry).toBeGreaterThan(100_000); // 숏 되돌림 진입은 현재가 위
+    expect(s.invalidation).toBeGreaterThan(entry);
+    expect(s.target).toBeLessThan(entry);
   });
 
   it("횡보/혼조 → POC 대비 위치로 방향 추정 + 신뢰도 낮음(단, 방향은 시나리오와 일치)", () => {
@@ -56,17 +66,19 @@ describe("buildCodeReport (AI 폴백)", () => {
     expect(s.qualityIssues && s.qualityIssues.length).toBeGreaterThan(0);
   });
 
-  it("손절폭은 스타일 표준 밴드로 clamp — 과대 ATR", () => {
+  it("손절폭은 스타일 표준 밴드로 clamp — 과대 ATR (진입 기준)", () => {
     const { report } = buildCodeReport(
       mockSnap({ style: "swing", atr: [{ role: "MTF", pctOfPrice: 20 }] }),
     );
-    const stopPct = stopPctOf(100_000, report.scenarios[0].invalidation);
+    const s = report.scenarios[0];
+    const stopPct = stopPctOf(entryOf(s), s.invalidation);
     expect(stopPct).toBeLessThanOrEqual(STYLE_STANDARDS.swing.stopPct.max + 0.01); // ≤ 5%
   });
 
-  it("ATR 없으면 밴드 최소값", () => {
+  it("ATR 없으면 밴드 최소값 (진입 기준)", () => {
     const { report } = buildCodeReport(mockSnap({ style: "day", atr: undefined }));
-    const stopPct = stopPctOf(100_000, report.scenarios[0].invalidation);
+    const s = report.scenarios[0];
+    const stopPct = stopPctOf(entryOf(s), s.invalidation);
     expect(stopPct).toBeCloseTo(STYLE_STANDARDS.day.stopPct.min, 1); // 0.7%
   });
 

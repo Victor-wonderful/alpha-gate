@@ -4,9 +4,9 @@ import { fetchTicker24h } from "@/lib/analysis/binance";
 import { lockMargin } from "@/lib/paper-wallet";
 import { dispatch } from "@/lib/notify-dispatch";
 
-/** 지정가 1차 경고: 만료 D-4h (모든 지정가 공통 24h 유효이라 짧음) */
+/** 지정가 1차 경고: 만료 D-4h (유효기간은 스타일별 12h~1주로 가변 — 경고는 만료 기준 상대 시각) */
 const LIMIT_WARN_FIRST_MS = 4 * 60 * 60_000;
-/** 지정가 2차(마지막) 경고: 만료 D-1h (공통) */
+/** 지정가 2차(마지막) 경고: 만료 D-1h */
 const LIMIT_WARN_FINAL_MS = 60 * 60_000;
 
 /**
@@ -33,7 +33,7 @@ export async function checkAndFillLimitOrders(): Promise<number> {
     for (const o of expiringOrders) {
       await supabase
         .from("pending_limit_orders")
-        .update({ status: "expired" })
+        .update({ status: "expired", resolved_at: nowIso, resolve_reason: "expired_24h" })
         .eq("id", o.id);
       // trades order_status 도 갱신
       await supabase
@@ -43,7 +43,7 @@ export async function checkAndFillLimitOrders(): Promise<number> {
       try {
         await dispatch(o.user_id as string, "ai_coach_done", {
           title: "⏰ 지정가 주문 자동 취소 (응답 없음)",
-          body: `${o.symbol} ${o.direction === "long" ? "롱" : "숏"} @ ${o.limit_price} · 24시간 동안 도달 안 함 → 자동 취소`,
+          body: `${o.symbol} ${o.direction === "long" ? "롱" : "숏"} @ ${o.limit_price} · 유효기간 동안 진입가 미도달 → 자동 취소`,
           tradeId: o.trade_id as string,
         });
       } catch {
@@ -156,10 +156,14 @@ export async function checkAndFillLimitOrders(): Promise<number> {
     });
 
     if (!lockResult.ok) {
-      // 잔액 부족 등으로 lock 실패 → 주문 취소
+      // 잔액 부족 등으로 lock 실패 → 주문 취소 (사유 기록: 진단용)
       await supabase
         .from("pending_limit_orders")
-        .update({ status: "canceled" })
+        .update({
+          status: "canceled",
+          resolved_at: new Date().toISOString(),
+          resolve_reason: "margin_insufficient",
+        })
         .eq("id", order.id);
       await supabase
         .from("trades")
@@ -184,7 +188,7 @@ export async function checkAndFillLimitOrders(): Promise<number> {
     // pending_limit_orders 상태 변경
     await supabase
       .from("pending_limit_orders")
-      .update({ status: "filled" })
+      .update({ status: "filled", resolved_at: new Date().toISOString(), resolve_reason: "filled" })
       .eq("id", order.id);
 
     filled++;

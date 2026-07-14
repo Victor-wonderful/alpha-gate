@@ -408,7 +408,11 @@ export async function cancelLimitOrderAction(
   // pending_limit_orders 취소
   const { error: cancelErr } = await supabase
     .from("pending_limit_orders")
-    .update({ status: "canceled" })
+    .update({
+      status: "canceled",
+      resolved_at: new Date().toISOString(),
+      resolve_reason: "user_canceled_exchange_ui",
+    })
     .eq("id", orderId);
   if (cancelErr) return { ok: false, error: `주문 취소 실패: ${cancelErr.message}` };
 

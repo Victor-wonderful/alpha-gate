@@ -322,6 +322,19 @@ export async function saveTradeAction(args: {
 
     if (error || !data) return { error: error?.message ?? `${kindLabel} 주문 생성 실패` };
 
+    // 유효기간 — 스타일(타임프레임)별 차등. 24h 고정은 스윙/포지션엔 짧아 되돌림 전 만료 다수(만료율 26%),
+    // 스캘프엔 길어 셋업이 상해도 남음. 타임프레임으로 스타일을 역추정해 만료 시각을 정한다.
+    const EXPIRY_HOURS: Record<string, number> = {
+      "15m": 12, // 스캘프 — 빨리 상함
+      "1h": 24, // 데이
+      "4h": 72, // 스윙 — 되돌림 대기 여유 (3일)
+      "1D": 168, // 포지션 — 최대 1주
+      "1d": 168,
+    };
+    const expiresAt = new Date(
+      Date.now() + (EXPIRY_HOURS[input.timeframe] ?? 24) * 3_600_000,
+    ).toISOString();
+
     const { error: ploErr } = await supabase.from("pending_limit_orders").insert({
       user_id: user.id,
       trade_id: data.id,
@@ -333,6 +346,7 @@ export async function saveTradeAction(args: {
       stop: input.stop,
       target: input.target,
       order_kind: orderType,
+      expires_at: expiresAt,
     });
     if (ploErr) {
       await supabase.from("trades").delete().eq("id", data.id);

@@ -177,7 +177,7 @@ function evaluateScenario(
     money,
     marketCtx,
   };
-  const grade = gradeTrade(input);
+  const grade = gradeTrade(input, style, scenario.strategyHint);
 
   // AI 권장 리스크 산정: override 없으면 등급/신뢰도/손절폭 기반.
   const stopPct = (Math.abs(entry - scenario.invalidation) / entry) * 100;

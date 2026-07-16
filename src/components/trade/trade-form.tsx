@@ -323,7 +323,15 @@ function TradeFormInner({
     [symbol, direction, timeframe, entry, stop, target, accountSize, riskPct, market, trigger, effectiveMoney, effectiveMarketCtx],
   );
 
-  const grade = useMemo(() => gradeTrade(input), [input]);
+  const grade = useMemo(
+    () =>
+      gradeTrade(
+        input,
+        analysisResult?.snapshot.style ?? "swing",
+        activeScenario?.strategyHint ?? activeStrategy?.primary,
+      ),
+    [input, analysisResult, activeScenario, activeStrategy],
+  );
   const sizing = useMemo(
     () =>
       sizePosition({

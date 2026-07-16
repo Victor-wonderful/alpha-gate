@@ -111,3 +111,63 @@ describe("gradeTrade", () => {
     expect(r.reasons.some((x) => x.code?.startsWith("risk_budget"))).toBe(false);
   });
 });
+
+// 회귀: 손절/목표 현실성 판정이 스타일 표준(standards.ts)을 따르는지.
+// 예전엔 3%/15% 고정이라 모멘텀(swing) 정상 손절(2~5%)이 부당 감점됐다.
+describe("gradeTrade — 스타일별 손절/목표 상한", () => {
+  // 손절 4% (진입 100 → 손절 96), 목표 12% (→ 112)
+  const wideStop = { ...base, entry: 100, stop: 96, target: 112 };
+
+  it("모멘텀(swing): 손절 4%는 표준(2~5%) 안이라 감점 없음", () => {
+    const r = gradeTrade(wideStop, "swing");
+    expect(r.reasons.some((x) => x.code === "stop_too_wide")).toBe(false);
+    expect(r.reasons.some((x) => x.code === "target_unrealistic")).toBe(false);
+  });
+
+  it("임펄스(day): 손절 4%는 표준(0.7~1.5%) 초과라 감점", () => {
+    const r = gradeTrade(wideStop, "day");
+    expect(r.reasons.some((x) => x.code === "stop_too_wide")).toBe(true);
+  });
+
+  it("임펄스(day): 목표 12%는 표준(1.5~3%) 초과라 감점", () => {
+    const r = gradeTrade(wideStop, "day");
+    expect(r.reasons.some((x) => x.code === "target_unrealistic")).toBe(true);
+  });
+
+  it("기본 스타일 미지정 시 swing으로 간주 (하위호환)", () => {
+    const r = gradeTrade(wideStop);
+    expect(r.reasons.some((x) => x.code === "stop_too_wide")).toBe(false);
+  });
+
+  it("RR>4라도 목표가 스타일 표준 안이면 target_unrealistic 아님 (구 rr>4 오탐 제거)", () => {
+    // 손절 1% (→99), 목표 5% (→105), RR 5 — swing 목표 상한 15% 안.
+    const r = gradeTrade({ ...base, entry: 100, stop: 99, target: 105 }, "swing");
+    expect(r.rr).toBeGreaterThan(4);
+    expect(r.reasons.some((x) => x.code === "target_unrealistic")).toBe(false);
+  });
+});
+
+// 회귀: R:R 채점이 전략별 rrMin(standards.ts 예외)에 앵커되는지.
+describe("gradeTrade — 전략별 rrMin 반영", () => {
+  const rrCode = (r: ReturnType<typeof gradeTrade>) =>
+    r.reasons.find((x) => x.code.startsWith("rr_"))?.code;
+
+  it("liquidity_grab(rrMin 2.5): rr 2.3은 표준 미달이라 rr_fair (rr_good 아님)", () => {
+    // 손절 1%(→99), 목표 2.3%(→102.3), rr≈2.3.
+    const setup = { ...base, entry: 100, stop: 99, target: 102.3 };
+    expect(rrCode(gradeTrade(setup, "swing", "liquidity_grab"))).toBe("rr_fair");
+    // 전략 미지정(스윙 기본 rrMin 2)이면 같은 rr 2.3이 rr_good.
+    expect(rrCode(gradeTrade(setup, "swing"))).toBe("rr_good");
+  });
+
+  it("스윙 기본(rrMin 2): rr 3은 여전히 rr_great — 하위 동작 불변", () => {
+    // base(rr 3) — 예전 상수 ladder와 동일하게 rr_great.
+    expect(rrCode(gradeTrade(base, "swing"))).toBe("rr_great");
+  });
+
+  it("임펄스(day, rrMin 1.5): rr 2.7은 rr_great (표준 낮아 기준 하향)", () => {
+    // 손절 1%(→99), 목표 2.7%(→102.7, day 목표 상한 3% 안), rr≈2.7.
+    const setup = { ...base, entry: 100, stop: 99, target: 102.7 };
+    expect(rrCode(gradeTrade(setup, "day"))).toBe("rr_great");
+  });
+});

@@ -1,5 +1,8 @@
 import type { ActionItem, GradeResult, ScoreReason, TradeInput } from "@/types/trade";
 import { DAILY_LOSS_LIMIT_R, TOTAL_EXPOSURE_WARN_PCT } from "@/types/trade";
+import { resolveStandard } from "@/lib/analysis/standards";
+import type { TradingStyle } from "@/lib/analysis/style";
+import type { StrategyId } from "@/lib/analysis/strategy";
 
 export function calcRR(entry: number, stop: number, target: number, direction: "long" | "short") {
   const risk = Math.abs(entry - stop);
@@ -10,18 +13,28 @@ export function calcRR(entry: number, stop: number, target: number, direction: "
   return reward / risk;
 }
 
-export function gradeTrade(input: TradeInput): GradeResult {
+export function gradeTrade(
+  input: TradeInput,
+  style: TradingStyle = "swing",
+  strategy?: StrategyId,
+): GradeResult {
   const reasons: ScoreReason[] = [];
   const rr = calcRR(input.entry, input.stop, input.target, input.direction);
+  // 스타일 + 전략 예외를 반영한 표준(손절/목표 상한, 최소 R:R). 전략 미지정 시 스타일 기본.
+  const std = resolveStandard(style, strategy);
 
-  // ─── R:R ──────────────────────────────────────────────
+  // ─── R:R (스타일·전략 표준 대비) ──────────────────────────
+  // 절대 상수(3/2/1.5)가 아니라 standards.ts의 (스타일,전략) rrMin에 앵커한다.
+  // 스윙(rrMin 2)은 기존 상수와 동일 → 하위 동작 불변. 임펄스(1.5)·liquidity_grab(2.5) 등은
+  // 그 전략이 요구하는 손익비 기준에 맞춰 자동 이동한다.
   const rrStr = rr.toFixed(2);
-  if (rr >= 3) reasons.push({ code: "rr_great", label: `손익비 ${rrStr}R로 우수`, points: 3, params: { rr: rrStr } });
-  else if (rr >= 2) reasons.push({ code: "rr_good", label: `손익비 ${rrStr}R로 양호함`, points: 2, params: { rr: rrStr } });
-  // R:R 1.5~2.0 = 손익분기 + 마진 — 정당한 +1점 (수수료 차감해도 양수 기대값)
-  else if (rr >= 1.5) reasons.push({ code: "rr_fair", label: `손익비 ${rrStr}R로 보통`, points: 1, params: { rr: rrStr } });
-  else if (rr > 0) reasons.push({ code: "rr_low", label: `손익비 ${rrStr}R로 낮음`, points: 0, params: { rr: rrStr } });
-  else reasons.push({ code: "rr_invalid", label: "진입/손절/목표 구조가 잘못됨", points: -2 });
+  const rrMin = std.rrMin;
+  if (rr <= 0) reasons.push({ code: "rr_invalid", label: "진입/손절/목표 구조가 잘못됨", points: -2 });
+  else if (rr >= rrMin + 1) reasons.push({ code: "rr_great", label: `손익비 ${rrStr}R로 우수`, points: 3, params: { rr: rrStr } });
+  else if (rr >= rrMin) reasons.push({ code: "rr_good", label: `손익비 ${rrStr}R로 양호함`, points: 2, params: { rr: rrStr } });
+  // 표준 근접(rrMin의 75%~) = 손익분기 + 얇은 마진 — 정당한 +1점.
+  else if (rr >= rrMin * 0.75) reasons.push({ code: "rr_fair", label: `손익비 ${rrStr}R로 보통`, points: 1, params: { rr: rrStr } });
+  else reasons.push({ code: "rr_low", label: `손익비 ${rrStr}R로 낮음 (표준 ${rrMin}+ 미달)`, points: 0, params: { rr: rrStr, min: String(rrMin) } });
 
   // ─── 시장 구조 ────────────────────────────────────────
   const stopClear = input.market.near_key_level && input.market.higher_highs_lows;
@@ -39,18 +52,26 @@ export function gradeTrade(input: TradeInput): GradeResult {
   if (!input.market.not_box_middle)
     reasons.push({ code: "box_middle", label: "박스권 중간 진입", points: -2 });
 
-  // ─── 손절폭/목표 현실성 ───────────────────────────────
-  const stopPctOfEntry = input.entry > 0 ? Math.abs(input.entry - input.stop) / input.entry : 0;
-  if (stopPctOfEntry > 0.03)
+  // ─── 손절폭/목표 현실성 (스타일 표준 대비) ───────────────
+  // 스타일마다 정상 손절/목표 범위가 다르다(임펄스 vs 모멘텀). standards.ts의 표준 상한을
+  // 넘을 때만 감점 — 예전엔 3%/15% 고정이라 모멘텀(스윙) 정상 손절(2~5%)이 부당 감점됐다.
+  // (전략 예외는 손절/목표 하한과 rrMin만 조정하고 상한은 그대로라, 상한 기준 감점은 전략 무관.)
+  const stopPct = input.entry > 0 ? (Math.abs(input.entry - input.stop) / input.entry) * 100 : 0;
+  if (stopPct > std.stopPct.max)
     reasons.push({
       code: "stop_too_wide",
-      label: `진입가 대비 손절폭이 ${(stopPctOfEntry * 100).toFixed(1)}%로 큼`,
+      label: `진입가 대비 손절폭이 ${stopPct.toFixed(1)}%로 큼 (표준 ${std.stopPct.max}% 초과)`,
       points: -1,
-      params: { pct: (stopPctOfEntry * 100).toFixed(1) },
+      params: { pct: stopPct.toFixed(1), max: String(std.stopPct.max) },
     });
-  const targetPct = input.entry > 0 ? Math.abs(input.target - input.entry) / input.entry : 0;
-  if (targetPct > 0.15 || rr > 4)
-    reasons.push({ code: "target_unrealistic", label: "목표가가 현실적이지 않음", points: -1 });
+  const targetPct = input.entry > 0 ? (Math.abs(input.target - input.entry) / input.entry) * 100 : 0;
+  if (targetPct > std.targetPct.max)
+    reasons.push({
+      code: "target_unrealistic",
+      label: `목표폭이 ${targetPct.toFixed(1)}%로 과도함 (표준 ${std.targetPct.max}% 초과)`,
+      points: -1,
+      params: { pct: targetPct.toFixed(1), max: String(std.targetPct.max) },
+    });
 
   // ─── 자금 관리 자동 감지 ──────────────────────────────
   const { todayCumulativeR, openPositions, openExposurePct, usedRiskPct, riskBudgetPct } = input.money;

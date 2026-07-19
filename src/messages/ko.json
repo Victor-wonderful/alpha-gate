@@ -647,7 +647,12 @@
       "minutesUnit": "{n}분",
       "untilSettlement": "정산까지",
       "warnFundingSoon": "펀딩 정산이 10분 이내입니다. 정산 직전 진입은 슬리피지/펀딩비 부담이 큽니다.",
-      "marketStructure": "시장 구조 (AI 자동 확인)"
+      "marketStructure": "시장 구조 (AI 자동 확인)",
+      "ladderBtn": "{n}단 분할로 예약 (vUSDT)",
+      "ladderPlaced": "{n}단 분할 예약 완료 — 평균 진입가 {avg}",
+      "ladderFailed": "분할 예약에 실패했습니다.",
+      "ladderBtnImmediate": "{n}단 분할 — 1차 지금 + {rest}단 예약 (vUSDT)",
+      "ladderImmediateNote": "1차는 지금 시장가로 들어가고, 나머지 {rest}단은 되돌림 지정가로 예약됩니다. 위험은 세트 전체에 한 번만 잡힙니다."
     },
     "expiry": {
       "soonExpire": "곧 만료",
@@ -802,7 +807,25 @@
       "spotPerpetual": "현물 (영구)",
       "expiryTitle": "만료까지 {dur} 후 자동 청산",
       "expiryLabel": "만료 {dur}",
-      "closePosition": "청산"
+      "closePosition": "청산",
+      "orderTypeLadder": "분할",
+      "ladderHint": "되돌림 지정가 1~3차를 한 세트로 예약합니다. 손절·목표는 전 차수 공유이고, 위험은 그룹당 한 번만 잡습니다. 모든 진입가가 현재가보다 {dir} 진입에 유리한 쪽(되돌림)이어야 합니다.",
+      "ladderTierLabel": "{n}차 진입가",
+      "ladderTierOf": "{n} / {total}차",
+      "ladderRiskPct": "그룹 전체 위험 (계좌 대비)",
+      "ladderAvgEntry": "평균 진입가",
+      "ladderTotalQty": "총 수량",
+      "ladderTotalRisk": "최대 손실 (손절 시)",
+      "ladderSubmit": "{n}단 분할 예약",
+      "ladderBadge": "분할 {n}단",
+      "ladderCancelGroup": "세트 취소",
+      "ladderConfirmCancelGroup": "{sym} 분할 진입 {n}건을 모두 취소하시겠습니까?",
+      "ladderToastPlaced": "{sym} {n}단 분할 예약 완료 · 평균 진입가 {avg}",
+      "ladderToastGroupCanceled": "분할 주문 {n}건을 취소했습니다.",
+      "ladderErrStopTarget": "손절가와 목표가를 입력하세요.",
+      "ladderErrNoTier": "진입가를 최소 1개 입력하세요.",
+      "ladderErrInvalid": "분할 진입 조건이 맞지 않습니다.",
+      "ladderErrFailed": "분할 예약에 실패했습니다."
     },
     "vt": {
       "walletManage": "지갑 관리",
@@ -1416,7 +1439,11 @@
         "collapse": "접기",
         "expand": "자세히 보기"
       },
-      "disclaimer": "본 분석은 투자 자문이 아닙니다. 모든 거래 결정과 결과는 사용자 본인의 책임입니다."
+      "disclaimer": "본 분석은 투자 자문이 아닙니다. 모든 거래 결정과 결과는 사용자 본인의 책임입니다.",
+      "ladder": {
+        "title": "분할 진입 {n}단",
+        "sharedStop": "손절·목표 공유"
+      }
     }
   },
   "dashboard": {

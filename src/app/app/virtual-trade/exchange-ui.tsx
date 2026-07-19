@@ -33,10 +33,13 @@ import { Label } from "@/components/ui/label";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 import {
+  cancelLadderGroupAction,
   cancelLimitOrderAction,
   closeVirtualPositionAction,
+  placeLadderOrderAction,
   placeVirtualOrderAction,
 } from "./order-actions";
+import { buildLadder, DEFAULT_LADDER_WEIGHTS, MAX_LADDER_TIERS } from "@/lib/ladder";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT"] as const;
 const TIMEFRAMES = ["15m", "1h", "4h", "1d"] as const;
@@ -86,6 +89,10 @@ type PendingOrder = {
   kind: "limit" | "stop";
   expiresAt: string;
   createdAt: string;
+  /** 분할 진입 그룹. null 이면 단일 주문. */
+  groupId?: string | null;
+  /** 그룹 내 차수(1·2·3). */
+  tier?: number | null;
 };
 
 export function ExchangeUI({
@@ -1214,6 +1221,15 @@ function OrderPanel({
   const [accountPct, setAccountPct] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // ── 분할 진입(래더) ──────────────────────────────────────────────────
+  // 되돌림 지정가 1~3차를 한 세트로 예약. 위험은 그룹당 한 번만 차지한다.
+  // 비중은 v1에서 고정(40/35/25) — 사용자 조절은 v2. cf. docs/분할진입-설계.md
+  const [ladderOn, setLadderOn] = useState(false);
+  const [tierPrices, setTierPrices] = useState<string[]>(["", "", ""]);
+  const [riskPct, setRiskPct] = useState("1");
+  const setTierPrice = (i: number, v: string) =>
+    setTierPrices((prev) => prev.map((p, idx) => (idx === i ? v : p)));
+
   // Latest price (kept fresh by orderbook poll elsewhere, but we fetch our own to avoid prop drilling)
   const [lastPrice, setLastPrice] = useState<number | null>(null);
   useEffect(() => {
@@ -1317,6 +1333,83 @@ function OrderPanel({
     });
   }
 
+  // ── 래더 미리보기 (서버와 같은 buildLadder 를 그대로 써서 계산이 어긋나지 않게) ──
+  const ladderTiers = tierPrices
+    .map((p, i) => ({ tier: i + 1, price: Number(p), weight: DEFAULT_LADDER_WEIGHTS[i] ?? 0 }))
+    .filter((t) => Number.isFinite(t.price) && t.price > 0);
+
+  const ladderPreview =
+    ladderOn && ladderTiers.length > 0 && stop && target && lastPrice != null
+      ? buildLadder({
+          direction,
+          tiers: ladderTiers,
+          stop: Number(stop),
+          target: Number(target),
+          accountSize: wallet.available,
+          riskPct: Number(riskPct) || 0,
+          currentPrice: lastPrice,
+        })
+      : null;
+
+  const ladderNotional = ladderPreview?.ok
+    ? ladderPreview.tiers.reduce((s, t) => s + t.price * t.quantity, 0)
+    : 0;
+  const ladderMargin = leverage > 0 ? ladderNotional / leverage : 0;
+  // 전 tier 공유 손절이므로 그룹 총위험 = Σ |진입 − 손절| × 수량.
+  const ladderRiskUsd = ladderPreview?.ok
+    ? ladderPreview.tiers.reduce((s, t) => s + Math.abs(t.price - Number(stop)) * t.quantity, 0)
+    : 0;
+
+  function submitLadder() {
+    if (!stop || Number(stop) <= 0 || !target || Number(target) <= 0) {
+      toast.error(t("paper.exchange.ladderErrStopTarget"));
+      return;
+    }
+    if (ladderTiers.length === 0) {
+      toast.error(t("paper.exchange.ladderErrNoTier"));
+      return;
+    }
+    if (!ladderPreview?.ok) {
+      toast.error(ladderPreview?.error ?? t("paper.exchange.ladderErrInvalid"));
+      return;
+    }
+    if (ladderMargin > wallet.available) {
+      toast.error(
+        t("paper.exchange.errInsufficientBalance", {
+          need: ladderMargin.toFixed(2),
+          avail: wallet.available.toFixed(2),
+        }),
+      );
+      return;
+    }
+    startTransition(async () => {
+      const r = await placeLadderOrderAction({
+        symbol,
+        direction,
+        leverage,
+        stop: Number(stop),
+        target: Number(target),
+        accountSize: wallet.available,
+        riskPct: Number(riskPct) || 0,
+        tiers: ladderTiers,
+      });
+      if (!r.ok) {
+        toast.error(r.error ?? t("paper.exchange.ladderErrFailed"));
+        return;
+      }
+      toast.success(
+        t("paper.exchange.ladderToastPlaced", {
+          n: r.count ?? 0,
+          sym: symbol,
+          avg: formatNumber(r.weightedEntry ?? 0),
+        }),
+      );
+      setTierPrices(["", "", ""]);
+      setStop("");
+      setTarget("");
+    });
+  }
+
   // Effective price for calc (limit이면 입력가, market이면 lastPrice)
   const effectivePrice = (orderType === "limit" || orderType === "stop") && price ? Number(price) : lastPrice;
 
@@ -1395,34 +1488,45 @@ function OrderPanel({
 
         {/* 주문 유형 sub-tab */}
         <div className="flex items-center gap-4 border-b border-border/40 pb-1.5">
-          {(["limit", "market", "stop", "tpsl"] as const).map((ot) => (
-            <button
-              key={ot}
-              type="button"
-              onClick={() => {
-                if (ot === "tpsl") {
-                  setTpslEnabled(!tpslEnabled);
-                  return;
-                }
-                setOrderType(ot);
-              }}
-              className={cn(
-                "relative pb-1.5 text-xs font-medium transition-colors",
-                ot === "tpsl"
-                  ? tpslEnabled
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                  : orderType === ot
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {ot === "limit" ? t("paper.exchange.orderTypeLimit") : ot === "market" ? t("paper.exchange.orderTypeMarket") : ot === "stop" ? t("paper.exchange.orderTypeStop") : "TP/SL"}
-              {(ot === "tpsl" ? tpslEnabled : orderType === ot) ? (
-                <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-primary" />
-              ) : null}
-            </button>
-          ))}
+          {(["limit", "market", "stop", "ladder", "tpsl"] as const).map((ot) => {
+            // tpsl·ladder 는 orderType 이 아니라 별도 토글이다.
+            const active = ot === "tpsl" ? tpslEnabled : ot === "ladder" ? ladderOn : !ladderOn && orderType === ot;
+            // 현물은 분할 진입 대상 아님 (선물 되돌림 지정가 전용).
+            if (ot === "ladder" && isSpot) return null;
+            return (
+              <button
+                key={ot}
+                type="button"
+                onClick={() => {
+                  if (ot === "tpsl") {
+                    setTpslEnabled(!tpslEnabled);
+                    return;
+                  }
+                  if (ot === "ladder") {
+                    setLadderOn((v) => !v);
+                    return;
+                  }
+                  setLadderOn(false);
+                  setOrderType(ot);
+                }}
+                className={cn(
+                  "relative pb-1.5 text-xs font-medium transition-colors",
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {ot === "limit"
+                  ? t("paper.exchange.orderTypeLimit")
+                  : ot === "market"
+                    ? t("paper.exchange.orderTypeMarket")
+                    : ot === "stop"
+                      ? t("paper.exchange.orderTypeStop")
+                      : ot === "ladder"
+                        ? t("paper.exchange.orderTypeLadder")
+                        : "TP/SL"}
+                {active ? <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-primary" /> : null}
+              </button>
+            );
+          })}
         </div>
 
         {/* 잔액 표시 */}
@@ -1433,6 +1537,30 @@ function OrderPanel({
           </span>
         </div>
 
+        {ladderOn ? (
+          <LadderPanel
+            symbol={symbol}
+            direction={direction}
+            leverage={leverage}
+            lastPrice={lastPrice}
+            wallet={wallet}
+            tierPrices={tierPrices}
+            setTierPrice={setTierPrice}
+            stop={stop}
+            setStop={setStop}
+            target={target}
+            setTarget={setTarget}
+            riskPct={riskPct}
+            setRiskPct={setRiskPct}
+            preview={ladderPreview}
+            notional={ladderNotional}
+            margin={ladderMargin}
+            riskUsd={ladderRiskUsd}
+            pending={pending}
+            onSubmit={submitLadder}
+          />
+        ) : (
+          <>
         {/* Price — 지정가/역지정가는 입력, 시장가는 현재가 표시 */}
         {orderType === "limit" ? (
           <div>
@@ -1677,6 +1805,8 @@ function OrderPanel({
           <div className="my-1.5 border-t border-border/30" />
           <Row label={t("paper.exchange.feeTaker")} value="0.05%" mono />
         </div>
+          </>
+        )}
 
         {/* 지갑 영역 */}
         <div className="rounded-md border border-border/30 bg-background/20 p-2.5">
@@ -1703,6 +1833,201 @@ function OrderPanel({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** 분할 진입(래더) 입력 폼. 되돌림 지정가 1~3차를 한 세트로 예약한다.
+ *  위험은 그룹당 한 번만 차지하고, 손절·목표는 전 tier 공유.
+ *  cf. docs/분할진입-설계.md */
+function LadderPanel({
+  direction,
+  leverage,
+  lastPrice,
+  wallet,
+  tierPrices,
+  setTierPrice,
+  stop,
+  setStop,
+  target,
+  setTarget,
+  riskPct,
+  setRiskPct,
+  preview,
+  notional,
+  margin,
+  riskUsd,
+  pending,
+  onSubmit,
+}: {
+  symbol: string;
+  direction: "long" | "short";
+  leverage: number;
+  lastPrice: number | null;
+  wallet: Wallet;
+  tierPrices: string[];
+  setTierPrice: (i: number, v: string) => void;
+  stop: string;
+  setStop: (v: string) => void;
+  target: string;
+  setTarget: (v: string) => void;
+  riskPct: string;
+  setRiskPct: (v: string) => void;
+  preview: ReturnType<typeof buildLadder> | null;
+  notional: number;
+  margin: number;
+  riskUsd: number;
+  pending: boolean;
+  onSubmit: () => void;
+}) {
+  const t = useT();
+  const isLong = direction === "long";
+  const filled = preview?.ok ? preview.tiers : [];
+
+  return (
+    <div className="space-y-3">
+      <p className="rounded-md border border-border/30 bg-background/20 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground">
+        {t("paper.exchange.ladderHint", { dir: isLong ? t("common.long") : t("common.short") })}
+      </p>
+
+      {/* 차수별 진입가 — 비어 있는 차수는 건너뛴다 (1~3차) */}
+      <div className="space-y-2">
+        {Array.from({ length: MAX_LADDER_TIERS }, (_, i) => {
+          const weight = DEFAULT_LADDER_WEIGHTS[i] ?? 0;
+          const sized = filled.find((tr) => tr.tier === i + 1);
+          return (
+            <div key={i}>
+              <div className="mb-1 flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground">
+                  {t("paper.exchange.ladderTierLabel", { n: i + 1 })}
+                  <span className="ml-1.5 text-muted-foreground/60">{weight}%</span>
+                </span>
+                {sized ? (
+                  <span className="font-mono tabular-nums text-muted-foreground/80">
+                    {formatNumber(sized.quantity, { maximumFractionDigits: 4 })}
+                  </span>
+                ) : null}
+              </div>
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={tierPrices[i] ?? ""}
+                onChange={(e) => setTierPrice(i, e.target.value)}
+                placeholder={lastPrice ? formatNumber(lastPrice * (isLong ? 1 - 0.005 * (i + 1) : 1 + 0.005 * (i + 1))) : "—"}
+                className="font-mono tabular-nums"
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 공유 손절 / 목표 */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="mb-1 block text-[10px] text-muted-foreground">{t("paper.exchange.stopPrice")}</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={stop}
+            onChange={(e) => setStop(e.target.value)}
+            placeholder="—"
+            className="font-mono tabular-nums"
+          />
+        </div>
+        <div>
+          <Label className="mb-1 block text-[10px] text-muted-foreground">{t("paper.exchange.targetPrice")}</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            placeholder="—"
+            className="font-mono tabular-nums"
+          />
+        </div>
+      </div>
+
+      {/* 그룹 위험 % — 3개로 나눠도 위험은 한 번만 */}
+      <div>
+        <Label className="mb-1 block text-[10px] text-muted-foreground">
+          {t("paper.exchange.ladderRiskPct")}
+        </Label>
+        <div className="flex items-center gap-1.5">
+          {["0.5", "1", "2"].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setRiskPct(p)}
+              className={cn(
+                "rounded border px-2 py-1 text-[11px] font-medium transition-colors",
+                riskPct === p
+                  ? "border-primary/60 bg-primary/15 text-primary"
+                  : "border-border bg-background/30 text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {p}%
+            </button>
+          ))}
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={riskPct}
+            onChange={(e) => setRiskPct(e.target.value)}
+            className="h-7 flex-1 font-mono text-xs tabular-nums"
+          />
+        </div>
+      </div>
+
+      {/* 미리보기 — 계산이 안 되면 이유를 그대로 보여준다 */}
+      {preview && !preview.ok ? (
+        <p className="rounded-md border border-grade-d/30 bg-grade-d/5 px-2.5 py-2 text-[11px] text-grade-d">
+          {preview.error}
+        </p>
+      ) : null}
+
+      <Button
+        type="button"
+        onClick={onSubmit}
+        disabled={pending || !preview?.ok}
+        className={cn("w-full font-bold transition-all", isLong ? "bg-grade-a hover:bg-grade-a/90" : "bg-grade-d hover:bg-grade-d/90")}
+        size="lg"
+      >
+        {pending
+          ? "..."
+          : t("paper.exchange.ladderSubmit", { n: filled.length || 0 })}
+      </Button>
+
+      <div className="space-y-1 rounded-md border border-border/30 bg-background/20 p-2.5 text-[10px]">
+        <Row
+          label={t("paper.exchange.ladderAvgEntry")}
+          value={preview?.ok ? `${formatNumber(preview.weightedEntry)} vUSDT` : "—"}
+          mono
+        />
+        <Row
+          label={t("paper.exchange.ladderTotalQty")}
+          value={preview?.ok ? formatNumber(preview.totalQuantity, { maximumFractionDigits: 4 }) : "—"}
+          mono
+        />
+        <Row
+          label={t("paper.exchange.exposure")}
+          value={notional > 0 ? `${formatNumber(notional, { maximumFractionDigits: 2 })} vUSDT` : "—"}
+          mono
+        />
+        <Row
+          label={t("paper.exchange.requiredMargin")}
+          value={margin > 0 ? `${formatNumber(margin, { maximumFractionDigits: 2 })} vUSDT` : "—"}
+          tone={margin > wallet.available && margin > 0 ? "bad" : "default"}
+          mono
+        />
+        <div className="my-1.5 border-t border-border/30" />
+        <Row
+          label={t("paper.exchange.ladderTotalRisk")}
+          value={riskUsd > 0 ? `-${formatNumber(riskUsd, { maximumFractionDigits: 2 })} vUSDT` : "—"}
+          tone="bad"
+          mono
+        />
+        <Row label={t("paper.exchange.leverage")} value={`${leverage}x`} mono />
+      </div>
+    </div>
   );
 }
 
@@ -1793,16 +2118,133 @@ function PendingOrdersTable({ orders }: { orders: PendingOrder[] }) {
           </tr>
         </thead>
         <tbody>
-          {orders.map((o) => (
-            <PendingOrderRow key={o.id} order={o} />
-          ))}
+          {groupPendingOrders(orders).map((entry) =>
+            entry.kind === "single" ? (
+              <PendingOrderRow key={entry.order.id} order={entry.order} />
+            ) : (
+              <LadderGroupRows key={entry.groupId} groupId={entry.groupId} orders={entry.orders} />
+            ),
+          )}
         </tbody>
       </table>
     </div>
   );
 }
 
-function PendingOrderRow({ order }: { order: PendingOrder }) {
+/** 분할 진입 주문을 그룹 단위로 묶는다. 단일 주문은 그대로, 같은 groupId 는 한 세트로.
+ *  입력 순서(최신순)를 유지하되, 그룹은 첫 등장 위치에 놓는다. */
+type PendingEntry =
+  | { kind: "single"; order: PendingOrder }
+  | { kind: "group"; groupId: string; orders: PendingOrder[] };
+
+function groupPendingOrders(orders: PendingOrder[]): PendingEntry[] {
+  const out: PendingEntry[] = [];
+  const groupIndex = new Map<string, number>();
+  for (const o of orders) {
+    if (!o.groupId) {
+      out.push({ kind: "single", order: o });
+      continue;
+    }
+    const at = groupIndex.get(o.groupId);
+    if (at == null) {
+      groupIndex.set(o.groupId, out.length);
+      out.push({ kind: "group", groupId: o.groupId, orders: [o] });
+    } else {
+      (out[at] as { orders: PendingOrder[] }).orders.push(o);
+    }
+  }
+  // 그룹 안은 차수 순서로.
+  for (const e of out) if (e.kind === "group") e.orders.sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0));
+  return out;
+}
+
+/** 래더 그룹: 요약 행 + 차수별 행. 그룹 전체 취소 버튼을 요약 행에 둔다. */
+function LadderGroupRows({ groupId, orders }: { groupId: string; orders: PendingOrder[] }) {
+  const t = useT();
+  const [canceling, startCancelTransition] = useTransition();
+  const first = orders[0];
+  const isLong = first.direction === "long";
+  const totalQty = orders.reduce((s, o) => s + o.quantity, 0);
+  // 비중 = 수량 비율이므로 수량 가중평균이 곧 예정 평균 진입가.
+  const avgEntry = totalQty > 0 ? orders.reduce((s, o) => s + o.limitPrice * o.quantity, 0) / totalQty : 0;
+
+  function cancelGroup() {
+    if (!confirm(t("paper.exchange.ladderConfirmCancelGroup", { sym: first.symbol, n: orders.length }))) return;
+    startCancelTransition(async () => {
+      const r = await cancelLadderGroupAction(groupId);
+      if (!r.ok) {
+        toast.error(r.error ?? t("paper.exchange.errCancelFailed"));
+        return;
+      }
+      toast.success(t("paper.exchange.ladderToastGroupCanceled", { n: r.canceled ?? 0 }));
+    });
+  }
+
+  return (
+    <>
+      <tr className="border-b border-border/20 bg-muted/20">
+        <td className="px-2 py-2">
+          <div className="flex items-center gap-2">
+            <span aria-hidden className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")} />
+            <span className="font-mono text-xs font-semibold">{first.symbol}</span>
+            <span className="rounded bg-primary/15 px-1 py-px text-[9px] font-medium text-primary">
+              {t("paper.exchange.ladderBadge", { n: orders.length })}
+            </span>
+          </div>
+        </td>
+        <td className="px-2 py-2">
+          <Badge
+            className={cn(
+              "border text-[9px]",
+              isLong ? "border-grade-a/40 bg-grade-a/10 text-grade-a" : "border-grade-d/40 bg-grade-d/10 text-grade-d",
+            )}
+          >
+            {isLong ? t("common.long") : t("common.short")}
+          </Badge>
+        </td>
+        <td className="px-2 py-2 text-right">
+          <div className="font-mono text-xs tabular-nums">${formatNumber(avgEntry)}</div>
+          <div className="text-[9px] text-muted-foreground">{t("paper.exchange.ladderAvgEntry")}</div>
+        </td>
+        <td className="px-2 py-2 text-right font-mono text-xs tabular-nums">
+          {formatNumber(totalQty, { maximumFractionDigits: 4 })}
+        </td>
+        <td className="px-2 py-2 text-right">
+          <div className="flex items-center justify-end gap-1.5 font-mono text-[11px] tabular-nums">
+            {first.stop != null ? (
+              <span className="text-grade-d/80">${formatNumber(first.stop, { maximumFractionDigits: 2 })}</span>
+            ) : (
+              <span className="text-muted-foreground/40">—</span>
+            )}
+            <span className="text-muted-foreground/40">/</span>
+            {first.target != null ? (
+              <span className="text-grade-a/80">${formatNumber(first.target, { maximumFractionDigits: 2 })}</span>
+            ) : (
+              <span className="text-muted-foreground/40">—</span>
+            )}
+          </div>
+        </td>
+        <td className="px-2 py-2" />
+        <td className="px-2 py-2 text-right">
+          <button
+            type="button"
+            onClick={cancelGroup}
+            disabled={canceling}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-background/40 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-grade-d/40 hover:text-grade-d disabled:opacity-50"
+          >
+            <X className="h-3 w-3" />
+            {canceling ? "..." : t("paper.exchange.ladderCancelGroup")}
+          </button>
+        </td>
+      </tr>
+      {orders.map((o) => (
+        <PendingOrderRow key={o.id} order={o} tierOf={orders.length} />
+      ))}
+    </>
+  );
+}
+
+function PendingOrderRow({ order, tierOf }: { order: PendingOrder; tierOf?: number }) {
   const t = useT();
   const [canceling, startCancelTransition] = useTransition();
   const isLong = order.direction === "long";
@@ -1826,13 +2268,23 @@ function PendingOrderRow({ order }: { order: PendingOrder }) {
 
   return (
     <tr className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
-      <td className="px-2 py-2.5">
+      <td className={cn("px-2 py-2.5", tierOf ? "pl-6" : undefined)}>
         <div className="flex items-center gap-2">
-          <span aria-hidden className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")} />
-          <span className="font-mono text-xs font-semibold">{order.symbol}</span>
+          {tierOf ? (
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {t("paper.exchange.ladderTierOf", { n: order.tier ?? 0, total: tierOf })}
+            </span>
+          ) : (
+            <>
+              <span aria-hidden className={cn("h-6 w-0.5 rounded", isLong ? "bg-grade-a" : "bg-grade-d")} />
+              <span className="font-mono text-xs font-semibold">{order.symbol}</span>
+            </>
+          )}
           <span
             className={cn(
               "rounded px-1 py-px text-[9px] font-medium",
+              // 그룹 안의 차수 행은 종류 배지를 숨긴다 — 요약 행에 이미 나온다.
+              tierOf && "hidden",
               order.kind === "stop"
                 ? "bg-amber-500/15 text-amber-300"
                 : "bg-muted/50 text-muted-foreground",

@@ -647,7 +647,12 @@
       "minutesUnit": "{n} min",
       "untilSettlement": "until settlement",
       "warnFundingSoon": "Funding settlement is within 10 minutes. Entering right before settlement carries heavy slippage/funding cost.",
-      "marketStructure": "Market structure (AI auto-checked)"
+      "marketStructure": "Market structure (AI auto-checked)",
+      "ladderBtn": "Place {n}-tier ladder (vUSDT)",
+      "ladderPlaced": "{n}-tier ladder placed - avg entry {avg}",
+      "ladderFailed": "Failed to place the ladder.",
+      "ladderBtnImmediate": "{n}-tier ladder - 1st now + {rest} queued (vUSDT)",
+      "ladderImmediateNote": "The first tier fills at market now; the remaining {rest} wait as pullback limit orders. Risk is budgeted once for the whole set."
     },
     "expiry": {
       "soonExpire": "Expiring soon",
@@ -802,7 +807,25 @@
       "spotPerpetual": "Spot (perpetual)",
       "expiryTitle": "Auto-closed in {dur}",
       "expiryLabel": "Expires {dur}",
-      "closePosition": "Close"
+      "closePosition": "Close",
+      "orderTypeLadder": "Ladder",
+      "ladderHint": "Places 1-3 pullback limit orders as one set. Stop and target are shared across tiers, and risk is budgeted once per group. Every entry must sit on the pullback side of the current price for a {dir}.",
+      "ladderTierLabel": "Tier {n} entry",
+      "ladderTierOf": "{n} / {total}",
+      "ladderRiskPct": "Group risk (of account)",
+      "ladderAvgEntry": "Avg entry",
+      "ladderTotalQty": "Total qty",
+      "ladderTotalRisk": "Max loss (at stop)",
+      "ladderSubmit": "Place {n}-tier ladder",
+      "ladderBadge": "Ladder {n}",
+      "ladderCancelGroup": "Cancel set",
+      "ladderConfirmCancelGroup": "Cancel all {n} {sym} ladder orders?",
+      "ladderToastPlaced": "{sym} {n}-tier ladder placed - avg entry {avg}",
+      "ladderToastGroupCanceled": "Canceled {n} ladder orders.",
+      "ladderErrStopTarget": "Enter both stop and target.",
+      "ladderErrNoTier": "Enter at least one entry price.",
+      "ladderErrInvalid": "Ladder conditions are not met.",
+      "ladderErrFailed": "Failed to place the ladder."
     },
     "vt": {
       "walletManage": "Manage Wallet",
@@ -1416,7 +1439,11 @@
         "collapse": "Collapse",
         "expand": "Show details"
       },
-      "disclaimer": "This analysis is not investment advice. All trading decisions and outcomes are your own responsibility."
+      "disclaimer": "This analysis is not investment advice. All trading decisions and outcomes are your own responsibility.",
+      "ladder": {
+        "title": "{n}-tier ladder",
+        "sharedStop": "Shared stop & target"
+      }
     }
   },
   "dashboard": {

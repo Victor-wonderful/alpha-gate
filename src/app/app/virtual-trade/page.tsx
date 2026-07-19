@@ -77,13 +77,19 @@ export default async function VirtualTradePage({
     });
 
   // 미체결 지정가 주문 조회
-  const { data: openOrders } = await supabase
+  const { data: openOrders, error: openOrdersErr } = await supabase
     .from("pending_limit_orders")
-    .select("id, symbol, direction, limit_price, quantity, leverage, stop, target, expires_at, created_at, order_kind")
+    .select(
+      "id, symbol, direction, limit_price, quantity, leverage, stop, target, expires_at, created_at, order_kind, entry_group_id, entry_tier",
+    )
     .eq("user_id", user.id)
     .eq("status", "open")
     .order("created_at", { ascending: false })
     .limit(50);
+
+  // 조회가 깨지면 "미체결 주문 0건"으로 조용히 보인다 — 마이그레이션 미적용 등으로
+  // select 컬럼이 없을 때가 대표적. 빈 목록과 실패를 구분할 수 있게 로그를 남긴다.
+  if (openOrdersErr) console.error(`[virtual-trade] 미체결 주문 조회 실패: ${openOrdersErr.message}`);
 
   const pendingOrders = (openOrders ?? []).map((o) => ({
     id: o.id as string,
@@ -97,6 +103,9 @@ export default async function VirtualTradePage({
     kind: (o.order_kind === "stop" ? "stop" : "limit") as "limit" | "stop",
     expiresAt: o.expires_at as string,
     createdAt: o.created_at as string,
+    // 분할 진입(래더): 같은 groupId 를 가진 주문들은 한 포지션의 1·2·3차.
+    groupId: (o.entry_group_id as string | null) ?? null,
+    tier: o.entry_tier != null ? Number(o.entry_tier) : null,
   }));
 
   const cluster = clusters.trading({

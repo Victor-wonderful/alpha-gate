@@ -152,7 +152,12 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: true })
     .limit(200);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // 조회 자체가 깨지면 이 크론은 한 건도 청산하지 못한다(예: 마이그레이션 미적용으로
+    // select 목록의 컬럼이 DB에 없는 경우). 조용히 500 만 내보내지 않는다.
+    console.error(`[resolve-trades] 미청산 거래 조회 실패: ${error.message}`);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   if (!openTrades || openTrades.length === 0) return NextResponse.json({ checked: 0, resolved: 0 });
 
   let resolved = 0;
@@ -214,6 +219,10 @@ export async function GET(req: NextRequest) {
 
         if (upErr) {
           errors++;
+          // 로그로 남긴다 — 과거 exit_reason CHECK 제약에 'timeout' 이 빠져 있어
+          // 이 UPDATE 가 매 실행 조용히 거부되고, 포지션이 영구히 "진행 중" 으로
+          // 남았다(0044 마이그레이션에서 수정). 재발 시 즉시 드러나게 한다.
+          console.error(`[resolve-trades] 만료 청산 실패 trade=${t.id} ${t.symbol}: ${upErr.message}`);
           results.push({ id: t.id, note: `timeout close db error: ${upErr.message}` });
           continue;
         }
@@ -344,6 +353,7 @@ export async function GET(req: NextRequest) {
 
       if (upErr) {
         errors++;
+        console.error(`[resolve-trades] 정산 실패 trade=${t.id} ${t.symbol}: ${upErr.message}`);
         results.push({ id: t.id, note: `db error: ${upErr.message}` });
         continue;
       }

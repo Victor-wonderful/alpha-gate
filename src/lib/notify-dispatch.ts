@@ -9,6 +9,7 @@ export type NotifyEvent =
   | "daily_digest"
   | "scenario_alert"
   | "analysis_timing"
+  | "dca_value_zone"
   | "test";
 
 const EVENT_TOGGLES: Record<NotifyEvent, keyof Channels | null> = {
@@ -18,6 +19,9 @@ const EVENT_TOGGLES: Record<NotifyEvent, keyof Channels | null> = {
   daily_digest: "enable_daily_digest",
   scenario_alert: null, // 시나리오 알림은 사용자가 명시적으로 watch=true 등록한 것만 → 토글 없이 항상 발송
   analysis_timing: null, // 분석 시간 알림은 cron이 사용자 선택 시각으로 필터 → 토글 없이 발송
+  // 밸류존 알림은 사용자가 직접 만든 적립 플랜에 대해서만, 그것도 판정이 바뀔 때만
+  // 나가므로 토글 없이 발송(빈도가 낮아 소음이 되지 않는다).
+  dca_value_zone: null,
   test: null,
 };
 

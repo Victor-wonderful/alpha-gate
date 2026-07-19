@@ -1298,6 +1298,40 @@ function SimpleScenarioCard({
           <StatCell label={t("analyze.result.stat.rr")} value={grade.rr.toFixed(2)} delta={t("analyze.result.stat.effectiveRR", { rr: effRR.toFixed(2) })} />
         </div>
 
+        {/* 분할 진입 차수 — 위 "평균 진입가"가 무엇의 평균인지 그대로 펼쳐 보인다.
+            손절·목표는 전 차수 공유이므로 여기선 가격·비중·거리만. cf. docs/분할진입-설계.md §6 */}
+        {scenario.entries && scenario.entries.length > 1 ? (
+          <div className="rounded-md border border-border/40 bg-background/30 p-2.5">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {t("analyze.result.ladder.title", { n: scenario.entries.length })}
+              </span>
+              <span className="text-[10px] text-muted-foreground/70">
+                {t("analyze.result.ladder.sharedStop")}
+              </span>
+            </div>
+            <ul className="space-y-1">
+              {scenario.entries.map((e) => (
+                <li key={e.tier} className="flex items-center gap-2 text-[11px]">
+                  <span className="w-8 shrink-0 font-mono text-muted-foreground">{e.tier}차</span>
+                  <span className="font-mono font-semibold tabular-nums">{formatNumber(e.price)}</span>
+                  <span className="rounded bg-muted/50 px-1 py-px font-mono text-[10px] tabular-nums text-muted-foreground">
+                    {e.weight}%
+                  </span>
+                  {e.distancePct != null ? (
+                    <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
+                      {e.distancePct}%
+                    </span>
+                  ) : null}
+                  {e.note ? (
+                    <span className="truncate text-[10px] text-muted-foreground/70">{e.note}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         {/* 도달 확률 (몬테카를로) — 한 줄 */}
         <ScenarioProbability
           compact

@@ -32,6 +32,7 @@ import { sizePosition } from "@/lib/sizing";
 import { ResultPanel } from "./result-panel";
 import { saveTradeAction } from "@/app/app/_actions";
 import { placeLiveTradeAction } from "@/app/app/trade/_actions";
+import { placeLadderOrderAction } from "@/app/app/virtual-trade/order-actions";
 import { loadScenarioWatchStatesAction, toggleScenarioWatchAction } from "@/app/app/analyze/_actions";
 import { useAnalysisStore } from "@/lib/stores/analysis-store";
 import { STRATEGY_LABELS } from "@/lib/analysis/strategy";
@@ -356,6 +357,8 @@ function TradeFormInner({
   const [selectedKeyId, setSelectedKeyId] = useState<string>(() => tradableKeys[0]?.id ?? "");
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
   const [showDOverride, setShowDOverride] = useState(false);
+  // D등급 강행 모달을 띄운 주체 — 확인 시 원래 누른 버튼의 동작으로 이어져야 한다.
+  const [overrideTarget, setOverrideTarget] = useState<"single" | "ladder">("single");
   const [dConfirmText, setDConfirmText] = useState("");
   // 알림(가격 도달) — 이 시나리오에 해당하는 scenario_outcomes 행 id + 등록 상태.
   const analysisId = analysisResult?.analysisId;
@@ -461,6 +464,56 @@ function TradeFormInner({
     });
   }, [aiMode, analysisResult, entry, stop, target, direction]);
 
+  // ── 분할 진입(래더) 예약 ────────────────────────────────────────────────
+  // 시나리오의 1·2·3차를 각각 지정가로 걸어 한 세트로 묶는다. 위험은 그룹당 한 번,
+  // 손절·목표는 전 차수 공유. cf. docs/분할진입-설계.md
+  const ladderEntries = activeScenario?.entries ?? [];
+  const canLadder = ladderEntries.length >= 2 && Number(stop) > 0 && Number(target) > 0;
+
+  function saveLadder(gradeOverride = false) {
+    if (!canLadder) return;
+    if (grade.grade === "D" && !gradeOverride) {
+      setOverrideTarget("ladder");
+      setShowDOverride(true);
+      return;
+    }
+    startTransition(async () => {
+      const res = await placeLadderOrderAction({
+        symbol,
+        direction,
+        leverage,
+        stop: Number(stop),
+        target: Number(target),
+        accountSize: Number(accountSize) || 0,
+        riskPct: Number(riskPct) || 0,
+        timeframe,
+        tiers: ladderEntries.map((e) => ({ tier: e.tier, price: e.price, weight: e.weight ?? 0 })),
+        // "지금 바로"면 1차는 시장가로 채우고 2차 이후만 되돌림 예약.
+        immediateFirst: !isScheduled,
+        evaluation: {
+          grade: grade.grade,
+          score: grade.score,
+          scoreBreakdown: grade.reasons,
+          actions: grade.actions,
+          marketChecks: market,
+          gradeOverride,
+        },
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? t("trade.form.ladderFailed"), { duration: 8000 });
+        return;
+      }
+      toast.success(
+        t("trade.form.ladderPlaced", {
+          n: res.count ?? 0,
+          avg: formatNumber(res.weightedEntry ?? 0),
+        }),
+        { duration: 6000 },
+      );
+      router.push("/app/virtual-trade");
+    });
+  }
+
   function save(gradeOverride = false) {
     if (!sizing.valid) {
       toast.error(t("trade.form.toastSizingInvalidCheck"));
@@ -468,6 +521,7 @@ function TradeFormInner({
     }
     // D 등급은 모달 통과 없이는 진행 불가
     if (grade.grade === "D" && !gradeOverride) {
+      setOverrideTarget("single");
       setShowDOverride(true);
       return;
     }
@@ -1118,6 +1172,30 @@ function TradeFormInner({
               >
                 🖥 {pending ? t("trade.form.processing") : isScheduled ? t("trade.form.paperScheduleBtn") : t("trade.form.paperExecuteBtn")}
               </button>
+              {/* 분할 예약 — 시나리오가 2차수 이상을 줄 때만.
+                  분할은 되돌림 지정가 전용이라 위 "주문 방식" 토글과 무관하게 항상 예약으로
+                  나간다(설계 D7). "지금 바로"를 켜둔 상태에서 오해하지 않도록 명시한다. */}
+              {canLadder ? (
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => saveLadder()}
+                    disabled={pending}
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-primary/40 bg-background/40 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ⑃ {pending
+                      ? t("trade.form.processing")
+                      : isScheduled
+                        ? t("trade.form.ladderBtn", { n: ladderEntries.length })
+                        : t("trade.form.ladderBtnImmediate", { n: ladderEntries.length, rest: ladderEntries.length - 1 })}
+                  </button>
+                  {!isScheduled ? (
+                    <p className="text-[10px] leading-relaxed text-muted-foreground">
+                      {t("trade.form.ladderImmediateNote", { rest: ladderEntries.length - 1 })}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={registerAlert}
@@ -1199,7 +1277,7 @@ function TradeFormInner({
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => { setShowDOverride(false); setDConfirmText(""); }} disabled={pending}>{t("trade.form.cancelRecommended")}</Button>
-                  <Button className="flex-1 bg-grade-d hover:bg-grade-d/90" onClick={() => { setShowDOverride(false); setDConfirmText(""); save(true); }} disabled={pending || dConfirmText.trim() !== "D 진입"}>{t("trade.form.proceedOverride")}</Button>
+                  <Button className="flex-1 bg-grade-d hover:bg-grade-d/90" onClick={() => { setShowDOverride(false); setDConfirmText(""); if (overrideTarget === "ladder") saveLadder(true); else save(true); }} disabled={pending || dConfirmText.trim() !== "D 진입"}>{t("trade.form.proceedOverride")}</Button>
                 </div>
               </CardContent>
             </Card>

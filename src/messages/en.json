@@ -9,7 +9,8 @@
     "performance": "Performance",
     "guide": "Guide",
     "settings": "Settings",
-    "blog": "Victor Alpha Blog"
+    "blog": "Victor Alpha Blog",
+    "dca": "DCA"
   },
   "topbar": {
     "newAnalysis": "New Analysis",
@@ -44,7 +45,8 @@
     "processing": "Processing...",
     "error": {
       "network": "Network error. Please try again."
-    }
+    },
+    "delete": "Delete"
   },
   "refresh": {
     "last": "Last updated",
@@ -3632,5 +3634,55 @@
       "friday": "Friday — positions wind down from the afternoon; be cautious with new swings",
       "weekend": "Weekend — low liquidity; watch for Sunday-night spikes"
     }
+  },
+  "dca": {
+    "title": "Spot DCA",
+    "subtitle": "Should you be accumulating - asset, value zone and plan, checked in code",
+    "asset": "Asset",
+    "universeNote": "Only large-cap majors can be accumulated. Buying more on the way down only works on assets that survive.",
+    "loading": "Checking...",
+    "valueZone": "Value zone",
+    "verdict": {
+      "cheap": "Cheap",
+      "neutral": "Neutral",
+      "expensive": "Expensive"
+    },
+    "tiltNote": "Always buy, but tilted - 2x when cheap, 1x neutral, 0.5x expensive. Waiting for cheap only meant up to 2.6 years without a buy, which no one sustains.",
+    "myPlans": "My plans ({n})",
+    "noPlans": "No plans yet. Pick an asset on the left to create one.",
+    "newPlan": "New plan",
+    "totalBudget": "Total budget (vUSDT)",
+    "createBtn": "Create plan",
+    "executeBtn": "Buy this tranche - {amount} ({mult}x)",
+    "budgetDone": "Budget spent - plan complete",
+    "selectAssetFirst": "Select this asset to execute",
+    "pause": "Pause",
+    "resume": "Resume",
+    "progress": "{spent} / {total} vUSDT",
+    "executions": "Tranches done",
+    "avgPrice": "Avg price",
+    "pnl": "vs avg",
+    "summaryPeriodic": "every {days}d - {n} tranches",
+    "status": {
+      "active": "Active",
+      "paused": "Paused",
+      "completed": "Done"
+    },
+    "confirmDelete": "Delete the {sym} plan? Executed buys stay in your journal.",
+    "toastCreated": "Plan created.",
+    "toastExecuted": "Bought {amount} vUSDT ({mult}x)",
+    "errAssess": "Could not evaluate the value zone.",
+    "errCreate": "Failed to create the plan.",
+    "errExecute": "Failed to execute the tranche.",
+    "how1": "Buy in small pieces over months instead of all at once at the top.",
+    "how2": "Only the size tilts: 2x when cheap, 1x neutral, 0.5x expensive. You never stop buying.",
+    "how3": "Large-cap majors only - buying more on the way down needs an asset that survives.",
+    "sentenceBudgetPre": "-",
+    "sentenceBudgetPost": "vUSDT worth",
+    "sentenceMonths": "months to accumulate",
+    "planPreview": "Once a week - {n} buys - about {base} vUSDT each",
+    "planPreviewNow": "It is {verdict} right now, so this one is {mult}x - about {amount} vUSDT",
+    "summaryWeekly": "weekly - {n} tranches",
+    "how4": "You get an alert when it enters the cheap zone - whether to add beyond the schedule is your call."
   }
 }

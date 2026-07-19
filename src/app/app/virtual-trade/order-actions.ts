@@ -24,6 +24,9 @@ export interface PlaceOrderInput {
   /** 'futures' (default, USDT-M Futures) or 'spot' (현물). Spot은 자동으로
    *  leverage=1, direction=long, 수수료 0.2% 적용. */
   marketType?: "futures" | "spot";
+  /** 현물 적립 플랜의 회차 실행일 때 그 플랜 id. trades.context_flags 에 남겨
+   *  진행률·평단 집계에 쓴다(별도 체결 테이블을 만들지 않는 이유). */
+  dcaPlanId?: string;
 }
 
 export interface PlaceOrderResult {
@@ -333,6 +336,7 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
       context_flags: {
         leverage: input.leverage,
         directOrder: true,
+        ...(input.dcaPlanId ? { dcaPlanId: input.dcaPlanId } : {}),
       },
       pre_grade: "B", // direct orders default to B
       pre_score: 5,

@@ -9,7 +9,8 @@
     "performance": "성과 분석",
     "guide": "가이드",
     "settings": "설정",
-    "blog": "Victor Alpha 블로그"
+    "blog": "Victor Alpha 블로그",
+    "dca": "적립"
   },
   "topbar": {
     "newAnalysis": "새 분석",
@@ -44,7 +45,8 @@
     "processing": "처리 중...",
     "error": {
       "network": "네트워크 오류. 다시 시도하세요."
-    }
+    },
+    "delete": "삭제"
   },
   "refresh": {
     "last": "마지막 갱신",
@@ -3632,5 +3634,55 @@
       "friday": "금요일 — 오후부터 포지션 정리, 신규 스윙은 신중",
       "weekend": "주말 — 유동성 낮음, 일요일 밤 스파이크 주의"
     }
+  },
+  "dca": {
+    "title": "현물 적립 (DCA)",
+    "subtitle": "이 매집을 해도 되는가 — 자산·밸류 존·계획을 코드로 점검합니다",
+    "asset": "적립 자산",
+    "universeNote": "시총 상위 대장주만 적립할 수 있습니다. 내려갈 때 더 사는 전략이라 살아남을 자산에만 씁니다.",
+    "loading": "확인 중...",
+    "valueZone": "밸류 존",
+    "verdict": {
+      "cheap": "싼 구간",
+      "neutral": "보통",
+      "expensive": "비싼 구간"
+    },
+    "tiltNote": "항상 사되 기울입니다 — 쌀 때 2배, 보통 1배, 비쌀 때 0.5배. 안 사고 기다리는 방식은 최장 2.6년 무매수가 나와 규율 유지가 어려웠습니다.",
+    "myPlans": "내 적립 플랜 ({n})",
+    "noPlans": "아직 적립 플랜이 없습니다. 왼쪽에서 자산을 고르고 만들어보세요.",
+    "newPlan": "새 적립 플랜",
+    "totalBudget": "총 예산 (vUSDT)",
+    "createBtn": "적립 플랜 만들기",
+    "executeBtn": "이번 회차 {amount} 적립 ({mult}배)",
+    "budgetDone": "예산 소진 — 플랜 완료",
+    "selectAssetFirst": "이 자산을 선택하면 실행할 수 있습니다",
+    "pause": "일시 중지",
+    "resume": "다시 시작",
+    "progress": "{spent} / {total} vUSDT",
+    "executions": "실행 회차",
+    "avgPrice": "평단",
+    "pnl": "평단 대비",
+    "summaryPeriodic": "{days}일마다 · {n}회 분할",
+    "status": {
+      "active": "진행 중",
+      "paused": "중지",
+      "completed": "완료"
+    },
+    "confirmDelete": "{sym} 적립 플랜을 삭제할까요? 이미 매수한 기록은 남습니다.",
+    "toastCreated": "적립 플랜을 만들었습니다.",
+    "toastExecuted": "{amount} vUSDT 적립 완료 ({mult}배)",
+    "errAssess": "밸류 존을 확인하지 못했습니다.",
+    "errCreate": "플랜 생성에 실패했습니다.",
+    "errExecute": "적립 실행에 실패했습니다.",
+    "how1": "몇 달에 걸쳐 조금씩 나눠 삽니다 — 한 번에 사서 고점에 물리는 걸 막습니다.",
+    "how2": "쌀 때 2배, 보통 1배, 비쌀 때 0.5배로 금액만 기울입니다. 안 사고 기다리진 않습니다.",
+    "how3": "시총 상위 대장주만 됩니다 — 내려갈 때 더 사는 전략이라 죽을 수 있는 자산엔 씁니다.",
+    "sentenceBudgetPre": "를",
+    "sentenceBudgetPost": "vUSDT 어치",
+    "sentenceMonths": "개월에 걸쳐 모으겠습니다",
+    "planPreview": "매주 1번씩 · 총 {n}번 · 회당 약 {base} vUSDT",
+    "planPreviewNow": "지금은 {verdict}이라 이번 회차는 {mult}배 — 약 {amount} vUSDT",
+    "summaryWeekly": "매주 · {n}회 분할",
+    "how4": "싼 구간에 들어가면 알림을 보냅니다 — 정기 회차 외에 더 담을지는 직접 정하세요."
   }
 }

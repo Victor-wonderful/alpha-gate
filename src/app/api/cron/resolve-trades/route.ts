@@ -67,6 +67,8 @@ interface OpenTrade {
   expiry_warned_first_at: string | null;
   expiry_warned_final_at: string | null;
   market_type: "futures" | "spot" | null;
+  /** 진입 맥락. 적립(DCA) 회차인지 판별하는 데 쓴다. */
+  context_flags: { dcaPlanId?: string } | null;
 }
 
 interface Resolution {
@@ -141,7 +143,7 @@ export async function GET(req: NextRequest) {
   const { data: openTrades, error } = await svc
     .from("trades")
     .select(
-      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, filled_at, mode, extended_until, expiry_warned_first_at, expiry_warned_final_at, market_type",
+      "id, user_id, symbol, direction, timeframe, entry, entry_actual, stop, target, fees_pct, position_quantity, paper_margin, is_paper, created_at, filled_at, mode, extended_until, expiry_warned_first_at, expiry_warned_final_at, market_type, context_flags",
     )
     .is("closed_at", null)
     .neq("mode", "backtest")
@@ -170,6 +172,11 @@ export async function GET(req: NextRequest) {
     const t = raw as OpenTrade & { mode?: string | null };
     const tf = t.timeframe as TF;
     if (!INTERVAL_MAP[tf]) continue;
+
+    // 적립(DCA) 회차는 청산 대상이 아니다 — 손절도 목표도 만료도 없는 "모으는" 매수다.
+    // 주문 경로가 손절/목표를 기본값(±2%/+4%)으로 채워 넣으므로, 여기서 걸러내지 않으면
+    // 적립분이 2% 하락에 손절돼 전략 자체가 무너진다. 매도 규율은 별도 설계 대상.
+    if (t.context_flags?.dcaPlanId) continue;
 
     const createdMs = new Date(t.created_at).getTime();
     const now = Date.now();

@@ -55,7 +55,7 @@ export default async function VirtualTradePage({
       return status === "filled" || status == null;
     })
     .map((t) => {
-      const ctx = (t.context_flags ?? {}) as { leverage?: number };
+      const ctx = (t.context_flags ?? {}) as { leverage?: number; dcaPlanId?: string };
       return {
         id: t.id as string,
         symbol: t.symbol as string,
@@ -73,6 +73,8 @@ export default async function VirtualTradePage({
         marketType: ((t.market_type as string | null) ?? "futures") as
           | "futures"
           | "spot",
+        // 적립 회차는 손절·목표·만료가 없는 "모으는" 매수라 표시가 달라야 한다.
+        isDca: !!ctx.dcaPlanId,
       };
     });
 

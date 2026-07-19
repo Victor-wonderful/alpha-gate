@@ -67,6 +67,8 @@ type Position = {
   timeframe: string;
   extendedUntil: string | null;
   marketType: "futures" | "spot";
+  /** 적립(DCA) 회차 — 손절·목표·만료 개념이 없다. */
+  isDca?: boolean;
 };
 
 // resolve-trades/route.ts 의 TIMEOUT_MS 와 반드시 일치.
@@ -2495,6 +2497,11 @@ function PositionRow({ pos }: { pos: Position }) {
                 {t("paper.exchange.spotBadge")}
               </span>
             ) : null}
+            {pos.isDca ? (
+              <span className="ml-1.5 rounded bg-primary/15 px-1 py-0.5 text-[9px] font-semibold text-primary">
+                {t("paper.exchange.dcaBadge")}
+              </span>
+            ) : null}
           </div>
         </div>
       </td>
@@ -2552,14 +2559,18 @@ function PositionRow({ pos }: { pos: Position }) {
       <td className="px-2 py-2.5 text-right font-mono text-xs font-semibold tabular-nums">
         {last != null ? `$${formatNumber(last)}` : "—"}
       </td>
-      {/* 손절 / 목표 + 진행 바 */}
+      {/* 손절 / 목표 + 진행 바 — 적립분은 둘 다 없다(주문 경로가 채운 기본값은 표시하지 않는다) */}
       <td className="px-2 py-2.5 text-right">
+        {pos.isDca ? (
+          <span className="text-[10px] text-muted-foreground">{t("paper.exchange.dcaNoExit")}</span>
+        ) : (
         <div className="flex items-center justify-end gap-1.5 font-mono text-[11px] tabular-nums">
           <span className="text-grade-d/80">${formatNumber(pos.stop, { maximumFractionDigits: 2 })}</span>
           <span className="text-muted-foreground/40">/</span>
           <span className="text-grade-a/80">${formatNumber(pos.target, { maximumFractionDigits: 2 })}</span>
         </div>
-        {last != null ? (
+        )}
+        {last != null && !pos.isDca ? (
           <div className="mt-1 flex items-center gap-1">
             <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted/30">
               <div className="h-full bg-grade-d/60" style={{ width: `${stopProgress}%` }} />

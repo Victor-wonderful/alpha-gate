@@ -827,7 +827,9 @@
       "ladderErrStopTarget": "Enter both stop and target.",
       "ladderErrNoTier": "Enter at least one entry price.",
       "ladderErrInvalid": "Ladder conditions are not met.",
-      "ladderErrFailed": "Failed to place the ladder."
+      "ladderErrFailed": "Failed to place the ladder.",
+      "dcaBadge": "DCA",
+      "dcaNoExit": "no stop / target"
     },
     "vt": {
       "walletManage": "Manage Wallet",

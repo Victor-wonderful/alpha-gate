@@ -827,7 +827,9 @@
       "ladderErrStopTarget": "손절가와 목표가를 입력하세요.",
       "ladderErrNoTier": "진입가를 최소 1개 입력하세요.",
       "ladderErrInvalid": "분할 진입 조건이 맞지 않습니다.",
-      "ladderErrFailed": "분할 예약에 실패했습니다."
+      "ladderErrFailed": "분할 예약에 실패했습니다.",
+      "dcaBadge": "적립",
+      "dcaNoExit": "손절·목표 없음"
     },
     "vt": {
       "walletManage": "지갑 관리",

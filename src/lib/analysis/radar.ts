@@ -11,7 +11,7 @@ import { findSwings, detectLiquiditySweeps, classifyTrend } from "./smc";
 import { classifyTrendComposite } from "./trend";
 import { computeVolumeProfile } from "./volume-profile";
 import { simulateRange } from "./monte-carlo";
-import { PINNED_SYMBOLS } from "./radar-constants";
+import { MEGA_CAP_UNIVERSE, PINNED_SYMBOLS } from "./radar-constants";
 import { STYLE_STANDARDS, MIN_STOP_PCT_VS_FEES } from "./standards";
 import type { TradingStyle } from "./style";
 
@@ -103,14 +103,8 @@ const UNIVERSE_SIZE = 30;
 
 const BLOCKLIST = new Set(["BTCDOMUSDT", "DEFIUSDT", "BLUEBIRDUSDT"]);
 
-/** 시총 상위 15 대장주 (스테이블·랩드 제외, Binance USDT 무기한 존재분) — 2026-07 큐레이션.
- *  시총 데이터는 Binance API에 없어 상수로 관리. 분기 1회 순위 확인·갱신 권장.
- *  (근접 후순위 교체 후보: DOT, TON, SHIB) */
-const MEGA_CAP_UNIVERSE = [
-  "BTCUSDT", "ETHUSDT", "XRPUSDT", "BNBUSDT", "SOLUSDT",
-  "DOGEUSDT", "ADAUSDT", "TRXUSDT", "LINKUSDT", "AVAXUSDT",
-  "XLMUSDT", "SUIUSDT", "BCHUSDT", "HBARUSDT", "LTCUSDT",
-];
+// 유니버스 상수는 radar-constants.ts(클라이언트 공용)로 이관 — DCA 자산 게이트가
+// 같은 목록을 써야 해서 server-only 인 이 파일에 둘 수 없다.
 
 /** 최종 후보 수 — BTC(항상 고정) + 게이트·랭킹 통과 4개. */
 const RADAR_TOP = 5;

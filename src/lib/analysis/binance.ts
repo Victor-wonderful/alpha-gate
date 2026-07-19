@@ -45,6 +45,28 @@ export async function fetchKlines(
   }));
 }
 
+/** 현물(SPOT) 일봉. DCA는 현물 적립이라 선물이 아니라 현물 시세·상장 이력을 봐야 한다.
+ *  현물 마켓이 없으면 Binance가 400을 주므로, 그 자체가 자산 게이트의 판정 근거가 된다.
+ *  cf. docs/DCA-모드-설계.md G1 */
+export async function fetchSpotKlines(
+  symbol: string,
+  interval: Interval = "1d",
+  limit = 1000,
+): Promise<Candle[]> {
+  const params = new URLSearchParams({ symbol, interval, limit: String(limit) });
+  const raw = await jget<unknown[][]>(`${SPOT}/api/v3/klines?${params.toString()}`);
+  return raw.map((r) => ({
+    openTime: Number(r[0]),
+    open: Number(r[1]),
+    high: Number(r[2]),
+    low: Number(r[3]),
+    close: Number(r[4]),
+    volume: Number(r[5]),
+    closeTime: Number(r[6]),
+    buyVolume: Number(r[9]),
+  }));
+}
+
 export type Depth = {
   bids: [number, number][];
   asks: [number, number][];

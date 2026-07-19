@@ -196,6 +196,7 @@ export async function executeDcaTrancheAction(
 
   revalidatePath("/app/dca");
   revalidatePath("/app/virtual-trade");
+  revalidatePath("/app");
   return {
     ok: true,
     spent,

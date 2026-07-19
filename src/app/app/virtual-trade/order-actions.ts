@@ -164,6 +164,7 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
     }
 
     revalidatePath("/app/virtual-trade");
+    revalidatePath("/app");
     return {
       ok: true,
       tradeId: trade.id,
@@ -262,6 +263,7 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
     }
 
     revalidatePath("/app/virtual-trade");
+    revalidatePath("/app");
     return {
       ok: true,
       tradeId: trade.id,
@@ -377,6 +379,7 @@ export async function placeVirtualOrderAction(input: PlaceOrderInput): Promise<P
   }
 
   revalidatePath("/app/virtual-trade");
+  revalidatePath("/app");
   revalidatePath("/app/journal");
   return {
     ok: true,
@@ -598,6 +601,7 @@ export async function placeLadderOrderAction(input: PlaceLadderInput): Promise<P
   }
 
   revalidatePath("/app/virtual-trade");
+  revalidatePath("/app");
   return {
     ok: true,
     groupId,
@@ -646,6 +650,7 @@ export async function cancelLadderGroupAction(
     .eq("order_status", "pending");
 
   revalidatePath("/app/virtual-trade");
+  revalidatePath("/app");
   return { ok: true, canceled: canceledOrders?.length ?? 0 };
 }
 
@@ -689,6 +694,7 @@ export async function cancelLimitOrderAction(
     .eq("id", order.trade_id);
 
   revalidatePath("/app/virtual-trade");
+  revalidatePath("/app");
   return { ok: true };
 }
 
@@ -764,6 +770,7 @@ export async function closeVirtualPositionAction(
   }
 
   revalidatePath("/app/virtual-trade");
+  revalidatePath("/app");
   revalidatePath("/app/journal");
   return { ok: true, pnl: realizedPnl };
 }

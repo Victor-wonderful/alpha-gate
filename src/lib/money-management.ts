@@ -42,7 +42,7 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
 
   const { data: openRows } = await supabase
     .from("trades")
-    .select("id, symbol, direction, entry, stop, position_quantity, order_status")
+    .select("id, symbol, direction, entry, stop, position_quantity, order_status, context_flags")
     .eq("user_id", user.id)
     .neq("mode", "backtest")
     .is("closed_at", null)
@@ -67,6 +67,10 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
   const NON_POSITION = new Set(["pending", "canceled", "expired"]);
   const openPositions = (openRows ?? [])
     .filter((r) => !NON_POSITION.has((r.order_status as string | null) ?? ""))
+    // 적립(DCA) 회차는 위험 예산에서 뺀다. 손절이 없는 매수라 |진입−손절| 이 의미가 없고,
+    // 주문 경로가 채운 기본 손절(±2%)이 위험으로 잡히면 예산을 헛되이 깎는다.
+    // 적립은 "잃을 수 있는 금액"이 아니라 "쓰기로 한 예산"으로 관리한다(플랜의 총예산).
+    .filter((r) => !(r.context_flags as { dcaPlanId?: string } | null)?.dcaPlanId)
     .map((r) => ({
       id: r.id as string,
       symbol: r.symbol as string,

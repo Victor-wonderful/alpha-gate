@@ -1345,6 +1345,14 @@ function TradeFormInner({
             <div className="text-[11px] text-muted-foreground">
               노출 {money.openExposurePct.toFixed(0)}% (롱 {(money.longExposurePct ?? 0).toFixed(0)}% · 숏 {(money.shortExposurePct ?? 0).toFixed(0)}%)
             </div>
+            {/* 위 %가 무엇의 %인지 명시 — 기준 자금이 안 보이면 숫자를 해석할 수 없다.
+                (가상 지갑 잔액과 다를 수 있다: 기준은 "내 자금" 설정값이다) */}
+            <div className="text-[11px] text-muted-foreground">
+              {t("trade.form.riskBasis", { amount: formatCurrency(Number(accountSize) || 0, currency) })}{" "}
+              <Link href="/app/account" className="underline hover:text-foreground">
+                {t("trade.form.riskBasisChange")}
+              </Link>
+            </div>
             {money.openPositions.length > 0 ? (
               <div className="space-y-1">
                 {money.openPositions.slice(0, 4).map((p) => {

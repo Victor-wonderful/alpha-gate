@@ -119,7 +119,9 @@ export default async function HomePage() {
         .is("closed_at", null)
         .neq("mode", "backtest")
         .order("created_at", { ascending: false })
-        .limit(8),
+        // 표시는 앞의 몇 건만 하지만 개수는 전부 세야 한다 — 8로 자르면 분할 진입
+        // 한 세트(최대 3)만 있어도 홈과 가상거래 화면의 숫자가 어긋난다.
+        .limit(50),
       userId
         ? supabase
             .from("analyses")
@@ -221,7 +223,17 @@ export default async function HomePage() {
             href="/app/wallet"
             label={t("home.metric.balance")}
             value={formatNumber(balance, { maximumFractionDigits: 0 })}
-            sub={balance < 100 ? t("home.metric.balanceNeedCharge") : t("home.metric.balanceAvailable")}
+            // 지갑 잔액과 "기준 자금"은 다를 수 있고, 사이징·위험 %는 기준 자금을 쓴다.
+            // 그 차이를 여기서 알려주지 않으면 화면의 % 를 해석할 수 없다.
+            sub={
+              balance < 100
+                ? t("home.metric.balanceNeedCharge")
+                : Math.round(accountSize) !== Math.round(balance)
+                  ? t("home.metric.basisDiffers", {
+                      amount: formatNumber(accountSize, { maximumFractionDigits: 0 }),
+                    })
+                  : t("home.metric.balanceAvailable")
+            }
             alert={balance < 100}
           />
           <MetricCard

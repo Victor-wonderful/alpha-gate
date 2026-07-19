@@ -654,7 +654,9 @@
       "ladderPlaced": "{n}-tier ladder placed - avg entry {avg}",
       "ladderFailed": "Failed to place the ladder.",
       "ladderBtnImmediate": "{n}-tier ladder - 1st now + {rest} queued (vUSDT)",
-      "ladderImmediateNote": "The first tier fills at market now; the remaining {rest} wait as pullback limit orders. Risk is budgeted once for the whole set."
+      "ladderImmediateNote": "The first tier fills at market now; the remaining {rest} wait as pullback limit orders. Risk is budgeted once for the whole set.",
+      "riskBasis": "Percentages are against your {amount} capital basis.",
+      "riskBasisChange": "Change"
     },
     "expiry": {
       "soonExpire": "Expiring soon",
@@ -1544,7 +1546,8 @@
       "winRateBasis": "Based on {n} closed",
       "winRateNoData": "No closed trades",
       "cumR": "Cumulative R (30d)",
-      "cumRRecord": "{w}W {l}L"
+      "cumRRecord": "{w}W {l}L",
+      "basisDiffers": "Capital basis {amount} - risk and sizing use this"
     },
     "risk": {
       "title": "Today's Risk Limit",

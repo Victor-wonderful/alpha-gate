@@ -654,7 +654,9 @@
       "ladderPlaced": "{n}단 분할 예약 완료 — 평균 진입가 {avg}",
       "ladderFailed": "분할 예약에 실패했습니다.",
       "ladderBtnImmediate": "{n}단 분할 — 1차 지금 + {rest}단 예약 (vUSDT)",
-      "ladderImmediateNote": "1차는 지금 시장가로 들어가고, 나머지 {rest}단은 되돌림 지정가로 예약됩니다. 위험은 세트 전체에 한 번만 잡힙니다."
+      "ladderImmediateNote": "1차는 지금 시장가로 들어가고, 나머지 {rest}단은 되돌림 지정가로 예약됩니다. 위험은 세트 전체에 한 번만 잡힙니다.",
+      "riskBasis": "위 %는 기준 자금 {amount} 대비입니다.",
+      "riskBasisChange": "변경"
     },
     "expiry": {
       "soonExpire": "곧 만료",
@@ -1544,7 +1546,8 @@
       "winRateBasis": "{n}건 청산 기준",
       "winRateNoData": "청산 기록 없음",
       "cumR": "누적 R (30일)",
-      "cumRRecord": "{w}승 {l}패"
+      "cumRRecord": "{w}승 {l}패",
+      "basisDiffers": "운용 기준 자금 {amount} — 위험·사이징은 이 값 기준"
     },
     "risk": {
       "title": "오늘의 리스크 한도",

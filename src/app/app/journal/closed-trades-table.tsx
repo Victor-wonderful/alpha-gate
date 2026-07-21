@@ -34,10 +34,20 @@ export interface ClosedTradeRow {
   roiPct: number | null;
 }
 
-type ReasonFilter = "all" | "target" | "stop" | "manual" | "timeout";
+type ReasonFilter = "all" | "target" | "stop" | "manual";
 type PeriodFilter = "7d" | "30d" | "90d" | "all";
 
 const PAGE_SIZE = 10;
+
+// 만료(timeout) 자동청산은 결과 부호로 접어서 표시한다: 이익 → 목표, 손실 → 손절.
+// (Victor 결정: 만료 청산도 목표/손절로 보이길 원함. 손실을 "목표"로 표시하는 자기모순만 피함.)
+function displayReason(
+  exitReason: ClosedTradeRow["exit_reason"],
+  pnl: number | null,
+): "target" | "stop" | "manual" | null {
+  if (exitReason === "timeout") return (pnl ?? 0) >= 0 ? "target" : "stop";
+  return exitReason;
+}
 
 const PERIOD_MS: Record<PeriodFilter, number | null> = {
   "7d": 7 * 24 * 60 * 60 * 1000,
@@ -68,7 +78,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
     const cutoff = periodMs ? Date.now() - periodMs : null;
     return rows.filter((t) => {
       if (q && !t.symbol.toUpperCase().includes(q)) return false;
-      if (reason !== "all" && t.exit_reason !== reason) return false;
+      if (reason !== "all" && displayReason(t.exit_reason, t.pnl) !== reason) return false;
       if (cutoff != null) {
         const ts = t.closed_at
           ? new Date(t.closed_at).getTime()
@@ -117,10 +127,9 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
     });
     return {
       all: base.length,
-      target: base.filter((t) => t.exit_reason === "target").length,
-      stop: base.filter((t) => t.exit_reason === "stop").length,
-      manual: base.filter((t) => t.exit_reason === "manual").length,
-      timeout: base.filter((t) => t.exit_reason === "timeout").length,
+      target: base.filter((t) => displayReason(t.exit_reason, t.pnl) === "target").length,
+      stop: base.filter((t) => displayReason(t.exit_reason, t.pnl) === "stop").length,
+      manual: base.filter((t) => displayReason(t.exit_reason, t.pnl) === "manual").length,
     };
   }, [rows, symbolQuery, period]);
 
@@ -141,7 +150,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
 
         {/* 사유 */}
         <div className="flex items-center gap-1 rounded-md border border-border bg-background/40 p-0.5">
-          {(["all", "target", "stop", "manual", "timeout"] as ReasonFilter[]).map((r) => (
+          {(["all", "target", "stop", "manual"] as ReasonFilter[]).map((r) => (
             <button
               key={r}
               type="button"
@@ -165,7 +174,6 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                 </span>
               )}
               {r === "manual" && t("journal.table.reason.manual", { n: counts.manual })}
-              {r === "timeout" && t("journal.table.reason.timeout", { n: counts.timeout })}
             </button>
           ))}
         </div>
@@ -377,19 +385,18 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                         )}
                       </td>
                       <td className="px-2 py-1.5">
-                        {row.exit_reason === "target" ? (
-                          <span className="text-grade-a">{t("journal.table.exitReason.target")}</span>
-                        ) : row.exit_reason === "stop" ? (
-                          <span className="text-grade-d">{t("journal.table.exitReason.stop")}</span>
-                        ) : row.exit_reason === "manual" ? (
-                          <span className="text-muted-foreground">{t("journal.table.exitReason.manual")}</span>
-                        ) : row.exit_reason === "timeout" ? (
-                          <span className={row.pnl != null && row.pnl < 0 ? "text-grade-d/80" : "text-amber-500"}>
-                            {t("journal.table.exitReason.timeout")}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        {(() => {
+                          const dr = displayReason(row.exit_reason, row.pnl);
+                          return dr === "target" ? (
+                            <span className="text-grade-a">{t("journal.table.exitReason.target")}</span>
+                          ) : dr === "stop" ? (
+                            <span className="text-grade-d">{t("journal.table.exitReason.stop")}</span>
+                          ) : dr === "manual" ? (
+                            <span className="text-muted-foreground">{t("journal.table.exitReason.manual")}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );

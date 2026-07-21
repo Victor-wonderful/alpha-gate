@@ -545,7 +545,7 @@
       "limitOrder": "지정가",
       "dirUpward": "위로",
       "dirDownward": "아래로",
-      "emptyTitle": "자동매매(봇)는 준비 중 — 지금은 AI 분석 후 수동 실행",
+      "emptyTitle": "수동 실행은 AI 분석 후에 사용합니다 (자동매매는 위 ‘자동매매’ 탭)",
       "emptyDescPre": "이 페이지는 AI가 만든 시나리오의 등급·사이징·시장 구조를 확인하고 가상 트레이딩에 진입하는 화면입니다. 직접 진입하려면 ",
       "virtualTrade": "가상 트레이딩",
       "emptyDescPost": "의 주문 패널을 사용하세요.",

@@ -4,9 +4,18 @@ import { useState } from "react";
 import { ShieldCheck, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** 자동매매 페이지의 수동/자동 전환 탭. 서버에서 렌더한 두 슬롯을 받아 하나만 보여준다. */
-export function TradeModeTabs({ manual, auto }: { manual: React.ReactNode; auto: React.ReactNode }) {
-  const [mode, setMode] = useState<"manual" | "auto">("manual");
+/** 자동매매 페이지의 수동/자동 전환 탭. 서버에서 렌더한 두 슬롯을 받아 하나만 보여준다.
+ *  분석에서 넘어오면(prefill) 수동, 메뉴 직접 클릭이면 자동으로 시작한다. */
+export function TradeModeTabs({
+  manual,
+  auto,
+  defaultMode = "auto",
+}: {
+  manual: React.ReactNode;
+  auto: React.ReactNode;
+  defaultMode?: "manual" | "auto";
+}) {
+  const [mode, setMode] = useState<"manual" | "auto">(defaultMode);
   return (
     <div className="space-y-4">
       <div className="inline-flex gap-1 rounded-lg border border-border bg-background/40 p-0.5">

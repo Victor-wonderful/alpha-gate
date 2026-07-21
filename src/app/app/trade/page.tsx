@@ -12,7 +12,7 @@ import { getT } from "@/lib/i18n/server";
 export default async function TradePage({
   searchParams,
 }: {
-  searchParams: Promise<{ symbol?: string; accountSize?: string; riskPct?: string }>;
+  searchParams: Promise<{ symbol?: string; accountSize?: string; riskPct?: string; entry?: string }>;
 }) {
   const t = await getT();
   const supabase = await getSupabaseServer();
@@ -93,6 +93,7 @@ export default async function TradePage({
         <TradeModeTabs
           manual={manual}
           auto={<AutoTradePanel initialConfig={autoConfig} status={autoStatus} />}
+          defaultMode={sp.entry ? "manual" : "auto"}
         />
       ) : (
         manual

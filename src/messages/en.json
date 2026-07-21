@@ -545,7 +545,7 @@
       "limitOrder": "Limit",
       "dirUpward": "up",
       "dirDownward": "down",
-      "emptyTitle": "Auto-trading (bot) is coming soon — for now, execute manually after AI analysis",
+      "emptyTitle": "Manual execution is used after AI analysis (auto-trading is in the ‘Auto-trade’ tab above)",
       "emptyDescPre": "This page reviews the grade, sizing, and market structure of an AI-generated scenario before entering paper trading. To enter directly, use the order panel in ",
       "virtualTrade": "Virtual Trading",
       "emptyDescPost": ".",

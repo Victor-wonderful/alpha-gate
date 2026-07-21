@@ -40,7 +40,7 @@ interface TradeRow {
   fees_pct: number | null;
   context_flags: { leverage?: number } | null;
   order_type: string | null;
-  exit_reason: "target" | "stop" | "manual" | null;
+  exit_reason: "target" | "stop" | "manual" | "timeout" | null;
   paper_realized_pnl: number | null;
   exit_price: number | null;
   exit_actual: number | null;

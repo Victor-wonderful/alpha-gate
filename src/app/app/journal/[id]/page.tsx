@@ -51,7 +51,11 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
       ? ((Number(trade.target) - Number(trade.entry)) / Number(trade.entry)) * 100
       : 0;
 
-  const autoResolved = Boolean(trade.closed_at) && typeof trade.note === "string" && trade.note.startsWith("자동 정산");
+  // 자동 정산(목표/손절) + 자동 청산(만료) 둘 다 자동 처리로 본다.
+  const autoResolved =
+    Boolean(trade.closed_at) &&
+    (trade.exit_reason === "target" || trade.exit_reason === "stop" || trade.exit_reason === "timeout");
+  const isTimeout = trade.exit_reason === "timeout";
   const isOpen = !trade.closed_at;
   const tfHrs: Record<string, number> = { "15m": 48, "1h": 7 * 24, "4h": 14 * 24, "1D": 30 * 24 };
   const timeoutHours = tfHrs[trade.timeframe] ?? 168;
@@ -86,13 +90,13 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
           />
         </>
       ) : autoResolved ? (
-        <div className={`rounded-lg border px-4 py-2.5 text-sm ${trade.exit_reason === "target" ? "border-grade-a/40 bg-grade-a/10" : "border-grade-d/40 bg-grade-d/10"}`}>
+        <div className={`rounded-lg border px-4 py-2.5 text-sm ${trade.exit_reason === "target" ? "border-grade-a/40 bg-grade-a/10" : isTimeout ? "border-amber-500/40 bg-amber-500/10" : "border-grade-d/40 bg-grade-d/10"}`}>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={trade.exit_reason === "target" ? "text-grade-a" : "text-grade-d"}>
-              {trade.exit_reason === "target" ? "🎯" : "✕"}
+            <span className={trade.exit_reason === "target" ? "text-grade-a" : isTimeout ? "text-amber-500" : "text-grade-d"}>
+              {trade.exit_reason === "target" ? "🎯" : isTimeout ? "⏰" : "✕"}
             </span>
-            <span className={`font-semibold ${trade.exit_reason === "target" ? "text-grade-a" : "text-grade-d"}`}>
-              {trade.exit_reason === "target" ? t("journal.detail.autoResolvedTarget") : t("journal.detail.autoResolvedStop")}
+            <span className={`font-semibold ${trade.exit_reason === "target" ? "text-grade-a" : isTimeout ? "text-amber-500" : "text-grade-d"}`}>
+              {trade.exit_reason === "target" ? t("journal.detail.autoResolvedTarget") : isTimeout ? t("journal.detail.autoResolvedTimeout") : t("journal.detail.autoResolvedStop")}
             </span>
             <span className="text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">
@@ -155,7 +159,7 @@ export default async function JournalDetailPage({ params }: { params: Promise<{ 
               <Row
                 label={t("journal.detail.actualExit")}
                 value={`$${formatNumber(Number(trade.exit_actual))}`}
-                sub={trade.exit_reason === "target" ? t("journal.detail.targetHit") : trade.exit_reason === "stop" ? t("journal.detail.stopHit") : t("journal.detail.manual")}
+                sub={trade.exit_reason === "target" ? t("journal.detail.targetHit") : trade.exit_reason === "stop" ? t("journal.detail.stopHit") : trade.exit_reason === "timeout" ? t("journal.detail.timeoutHit") : t("journal.detail.manual")}
               />
             ) : null}
             <div className="border-t border-border pt-3">

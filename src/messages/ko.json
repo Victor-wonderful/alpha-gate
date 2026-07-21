@@ -1666,6 +1666,7 @@
       "autoResolveHint": "5분마다 자동 확인 / 즉시 확인하려면 우측 버튼. (만료까지 약 {hours}시간)",
       "autoResolvedTarget": "자동 정산됨 — 목표 도달",
       "autoResolvedStop": "자동 정산됨 — 손절 적중",
+      "autoResolvedTimeout": "자동 청산됨 — 만료 (시장가)",
       "resultR": "결과 {value}R",
       "entryEvalTitle": "진입 시 평가",
       "intendedEntry": "의도 진입가",
@@ -1678,6 +1679,7 @@
       "actualExit": "실제 청산가",
       "targetHit": "목표 적중",
       "stopHit": "손절 적중",
+      "timeoutHit": "만료 청산",
       "manual": "수동",
       "entryRR": "진입 R:R",
       "score": "점수",
@@ -1762,7 +1764,8 @@
         "all": "전체 {n}",
         "target": "익절 {n}",
         "stop": "손절 {n}",
-        "manual": "수동 {n}"
+        "manual": "수동 {n}",
+        "timeout": "만료 {n}"
       },
       "empty": "조건에 맞는 거래가 없습니다.",
       "col": {
@@ -1794,7 +1797,8 @@
       "exitReason": {
         "target": "목표",
         "stop": "손절",
-        "manual": "수동"
+        "manual": "수동",
+        "timeout": "만료"
       },
       "pagination": "{from}–{to} / {total}건"
     }

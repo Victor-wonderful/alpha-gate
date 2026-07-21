@@ -28,13 +28,13 @@ export interface ClosedTradeRow {
   fees_pct: number | null;
   leverage: number | null;
   order_type: string | null;
-  exit_reason: "target" | "stop" | "manual" | null;
+  exit_reason: "target" | "stop" | "manual" | "timeout" | null;
   mode?: "live" | "backtest";
   pnl: number | null;
   roiPct: number | null;
 }
 
-type ReasonFilter = "all" | "target" | "stop" | "manual";
+type ReasonFilter = "all" | "target" | "stop" | "manual" | "timeout";
 type PeriodFilter = "7d" | "30d" | "90d" | "all";
 
 const PAGE_SIZE = 10;
@@ -120,6 +120,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
       target: base.filter((t) => t.exit_reason === "target").length,
       stop: base.filter((t) => t.exit_reason === "stop").length,
       manual: base.filter((t) => t.exit_reason === "manual").length,
+      timeout: base.filter((t) => t.exit_reason === "timeout").length,
     };
   }, [rows, symbolQuery, period]);
 
@@ -140,7 +141,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
 
         {/* 사유 */}
         <div className="flex items-center gap-1 rounded-md border border-border bg-background/40 p-0.5">
-          {(["all", "target", "stop", "manual"] as ReasonFilter[]).map((r) => (
+          {(["all", "target", "stop", "manual", "timeout"] as ReasonFilter[]).map((r) => (
             <button
               key={r}
               type="button"
@@ -164,6 +165,7 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                 </span>
               )}
               {r === "manual" && t("journal.table.reason.manual", { n: counts.manual })}
+              {r === "timeout" && t("journal.table.reason.timeout", { n: counts.timeout })}
             </button>
           ))}
         </div>
@@ -381,6 +383,10 @@ export function ClosedTradesTable({ rows }: { rows: ClosedTradeRow[] }) {
                           <span className="text-grade-d">{t("journal.table.exitReason.stop")}</span>
                         ) : row.exit_reason === "manual" ? (
                           <span className="text-muted-foreground">{t("journal.table.exitReason.manual")}</span>
+                        ) : row.exit_reason === "timeout" ? (
+                          <span className={row.pnl != null && row.pnl < 0 ? "text-grade-d/80" : "text-amber-500"}>
+                            {t("journal.table.exitReason.timeout")}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

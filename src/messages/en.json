@@ -1666,6 +1666,7 @@
       "autoResolveHint": "Checked automatically every 5 min / use the button on the right for an instant check. (about {hours}h until expiry)",
       "autoResolvedTarget": "Auto-resolved — target reached",
       "autoResolvedStop": "Auto-resolved — stop hit",
+      "autoResolvedTimeout": "Auto-closed — expired (market)",
       "resultR": "Result {value}R",
       "entryEvalTitle": "Entry Evaluation",
       "intendedEntry": "Intended entry",
@@ -1678,6 +1679,7 @@
       "actualExit": "Actual exit",
       "targetHit": "Target hit",
       "stopHit": "Stop hit",
+      "timeoutHit": "Expired close",
       "manual": "Manual",
       "entryRR": "Entry R:R",
       "score": "Score",
@@ -1762,7 +1764,8 @@
         "all": "All {n}",
         "target": "Take profit {n}",
         "stop": "Stop loss {n}",
-        "manual": "Manual {n}"
+        "manual": "Manual {n}",
+        "timeout": "Expired {n}"
       },
       "empty": "No trades match the filters.",
       "col": {
@@ -1794,7 +1797,8 @@
       "exitReason": {
         "target": "Target",
         "stop": "Stop",
-        "manual": "Manual"
+        "manual": "Manual",
+        "timeout": "Expired"
       },
       "pagination": "{from}–{to} / {total}"
     }

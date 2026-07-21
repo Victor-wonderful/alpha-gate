@@ -2,14 +2,14 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Bot, Eye, ChevronDown, CheckCircle2, XCircle, ShieldCheck, Scale, Flame } from "lucide-react";
+import { Bot, Eye, CheckCircle2, XCircle, ShieldCheck, Scale, Flame } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import {
   saveAutoConfig,
+  saveBotCapitalAction,
   runAutoNowAction,
   type AutoConfigView,
 } from "@/app/app/trade/auto-actions";
@@ -19,16 +19,25 @@ type Cfg = Omit<AutoConfigView, "last_run_at">;
 
 // 강도 프리셋 — 사용자가 결정하는 유일한 것. 나머지 세부는 여기서 한 번에 세팅.
 type PresetKey = "safe" | "normal" | "bold";
+// 강도 프리셋 — 사용자가 정하는 유일한 것. 등급·리스크·개수·레버리지·일일한도를 한 번에.
+// 나머지(신호=레이더, 방향=양방향, 스타일=코인별 자동)는 고정.
 const PRESETS: Record<PresetKey, { label: string; desc: string; icon: typeof ShieldCheck; patch: Partial<Cfg> }> = {
-  safe: { label: "안전", desc: "엄격하게 — A등급만, 작게. 진입 드묾.", icon: ShieldCheck, patch: { min_grade: "A", risk_pct: 0.5, max_concurrent: 2, direction_filter: "both" } },
-  normal: { label: "기본", desc: "균형 — B등급 이상, 보통 크기.", icon: Scale, patch: { min_grade: "B", risk_pct: 1, max_concurrent: 3, direction_filter: "both" } },
-  bold: { label: "공격", desc: "자주 — C등급도, 크게. 진입 잦음.", icon: Flame, patch: { min_grade: "C", risk_pct: 1.5, max_concurrent: 5, direction_filter: "both" } },
+  safe: { label: "안전", desc: "엄격하게 — A등급만, 작게, 저레버리지. 진입 드묾.", icon: ShieldCheck, patch: { min_grade: "A", risk_pct: 0.5, max_concurrent: 2, leverage: 2, daily_loss_limit_r: -1, direction_filter: "both", symbol_source: "radar" } },
+  normal: { label: "기본", desc: "균형 — B등급 이상, 보통 크기.", icon: Scale, patch: { min_grade: "B", risk_pct: 1, max_concurrent: 3, leverage: 3, daily_loss_limit_r: -2, direction_filter: "both", symbol_source: "radar" } },
+  bold: { label: "공격", desc: "자주 — C등급도, 크게, 고레버리지. 진입 잦음.", icon: Flame, patch: { min_grade: "C", risk_pct: 1.5, max_concurrent: 5, leverage: 5, daily_loss_limit_r: -3, direction_filter: "both", symbol_source: "radar" } },
 };
 
 function matchPreset(cfg: Cfg): PresetKey | null {
   for (const k of Object.keys(PRESETS) as PresetKey[]) {
     const p = PRESETS[k].patch;
-    if (cfg.min_grade === p.min_grade && cfg.risk_pct === p.risk_pct && cfg.max_concurrent === p.max_concurrent && cfg.direction_filter === p.direction_filter) return k;
+    if (
+      cfg.min_grade === p.min_grade &&
+      cfg.risk_pct === p.risk_pct &&
+      cfg.max_concurrent === p.max_concurrent &&
+      cfg.leverage === p.leverage &&
+      cfg.daily_loss_limit_r === p.daily_loss_limit_r
+    )
+      return k;
   }
   return null;
 }
@@ -36,19 +45,34 @@ function matchPreset(cfg: Cfg): PresetKey | null {
 export function AutoTradePanel({
   initialConfig,
   status,
+  accountSize,
 }: {
   initialConfig: AutoConfigView;
   status: { openCount: number; pendingCount: number };
+  /** 운영 자금(내 자금) — 봇이 이 금액 × 리스크%로 포지션 크기를 잡는다. */
+  accountSize: number;
 }) {
   const [cfg, setCfg] = useState<Cfg>(() => {
     const { last_run_at: _i, ...rest } = initialConfig;
     void _i;
     return rest;
   });
+  const [capital, setCapital] = useState(String(Math.round(accountSize)));
   const [decisions, setDecisions] = useState<AutoTradeDecision[] | null>(null);
-  const [advOpen, setAdvOpen] = useState(false);
   const [busy, startBusy] = useTransition();
   const [running, startRun] = useTransition();
+
+  const capitalNum = Number(capital) || 0;
+  const perTradeLoss = capitalNum * (cfg.risk_pct / 100);
+
+  function saveCapital() {
+    if (capitalNum <= 0 || capitalNum === Math.round(accountSize)) return;
+    startBusy(async () => {
+      const r = await saveBotCapitalAction(capitalNum);
+      if (!r.ok) toast.error(r.error ?? "저장 실패");
+      else toast.success(`운영 자금 ${capitalNum.toLocaleString()} vUSDT 저장`);
+    });
+  }
 
   const preset = useMemo(() => matchPreset(cfg), [cfg]);
 
@@ -64,12 +88,6 @@ export function AutoTradePanel({
 
   const pickPreset = (k: PresetKey) => persist({ ...cfg, ...PRESETS[k].patch }, `${PRESETS[k].label} 강도로 설정`);
   const toggle = () => persist({ ...cfg, enabled: !cfg.enabled }, cfg.enabled ? "봇 꺼짐" : "봇 켜짐 — 이제 자동으로 살펴봅니다");
-  const setAdv = <K extends keyof Cfg>(k: K, v: Cfg[K]) => setCfg((p) => ({ ...p, [k]: v }));
-  const saveAdv = () =>
-    startBusy(async () => {
-      const r = await saveAutoConfig(cfg);
-      toast[r.ok ? "success" : "error"](r.ok ? "저장됨" : r.error ?? "저장 실패");
-    });
 
   function preview() {
     startRun(async () => {
@@ -80,7 +98,7 @@ export function AutoTradePanel({
       }
       setDecisions(r.decisions ?? []);
       const pass = (r.decisions ?? []).filter((d) => d.skipped === "dry-run").length;
-      toast.success(r.note ? `지금은 진입 없음 (${r.note})` : `지금 켜면 ${pass}건 진입`);
+      toast.success(r.note ? `지금은 진입 없음 — ${noteKo(r.note)}` : `지금 켜면 ${pass}건 진입`);
     });
   }
 
@@ -120,9 +138,33 @@ export function AutoTradePanel({
       {/* 이렇게 동작해요 (1) */}
       <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
         <b className="text-foreground">이렇게 동작해요.</b> 10분마다 대장 코인을 대신 살펴, 조건에 맞는 되돌림 셋업이 나오면
-        <b className="text-foreground"> 가상으로</b> 지정가 주문을 자동으로 넣습니다. 손절·목표·만료는 알아서 관리해요.
-        엣지가 없으면 손실도 자동화되니, 우선 가상으로 며칠 지켜보세요.
+        <b className="text-foreground"> 가상으로</b> 지정가 주문을 자동으로 넣습니다. 코인마다 <b className="text-foreground">임펄스·모멘텀을 알아서</b> 골라요.
+        손절·목표·만료도 자동 관리. <b className="text-foreground">평가손실이 −4%에 닿거나</b> 오늘 손실 한도에 닿으면 새 진입을 멈춰요.
+        그래도 엣지가 없으면 손실이 날 수 있으니, 우선 가상으로 며칠 지켜보세요.
       </div>
+
+      {/* 운영 자금 — 봇이 이 금액 기준으로 사이즈를 잡는다 (내 자금 공유) */}
+      <Card>
+        <CardContent className="space-y-2 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">운영 자금</span>
+            <div className="flex items-center gap-1.5">
+              <Input
+                value={capital}
+                onChange={(e) => setCapital(e.target.value.replace(/[^0-9]/g, ""))}
+                onBlur={saveCapital}
+                inputMode="numeric"
+                className="h-8 w-32 text-right font-mono tabular-nums"
+              />
+              <span className="text-xs text-muted-foreground">vUSDT</span>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            봇은 이 금액의 <b className="text-foreground">{cfg.risk_pct}%</b>씩 거래합니다 — 한 거래 최대 손실 약{" "}
+            <b className="text-foreground">{perTradeLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })} vUSDT</b>. (AI 분석·수동과 공유하는 내 자금)
+          </p>
+        </CardContent>
+      </Card>
 
       {/* 강도 선택 (2) — 사용자가 정하는 유일한 것 */}
       <div className="space-y-2">
@@ -153,7 +195,7 @@ export function AutoTradePanel({
           })}
         </div>
         {preset === null ? (
-          <p className="text-[11px] text-muted-foreground">현재 <b>맞춤 설정</b> 상태입니다 (아래 고급 설정에서 조정됨).</p>
+          <p className="text-[11px] text-muted-foreground">강도 하나를 고르면 표준값으로 맞춰집니다.</p>
         ) : null}
       </div>
 
@@ -197,41 +239,17 @@ export function AutoTradePanel({
           </CardContent>
         </Card>
       ) : null}
-
-      {/* 고급 설정 (접힘) */}
-      <div>
-        <button type="button" onClick={() => setAdvOpen((v) => !v)} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
-          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", advOpen && "rotate-180")} /> 고급 설정
-        </button>
-        {advOpen ? (
-          <Card className="mt-2">
-            <CardContent className="space-y-4 p-4">
-              <Field label="스타일">
-                <Seg options={[["day", "데이"], ["swing", "스윙"]]} value={cfg.style} onChange={(v) => setAdv("style", v as Cfg["style"])} />
-              </Field>
-              <Field label="신호 소스">
-                <Seg options={[["radar", "레이더 후보"], ["fixed", "고정 심볼"]]} value={cfg.symbol_source} onChange={(v) => setAdv("symbol_source", v as Cfg["symbol_source"])} />
-              </Field>
-              {cfg.symbol_source === "fixed" ? (
-                <Field label="고정 심볼" hint="쉼표로 구분 (예: BTCUSDT, ETHUSDT)">
-                  <Input value={cfg.fixed_symbols.join(", ")} onChange={(e) => setAdv("fixed_symbols", e.target.value.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))} placeholder="BTCUSDT, ETHUSDT" className="font-mono text-sm" />
-                </Field>
-              ) : null}
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="최소 등급"><Seg options={[["A", "A"], ["B", "B"], ["C", "C"]]} value={cfg.min_grade} onChange={(v) => setAdv("min_grade", v as Cfg["min_grade"])} /></Field>
-                <Field label="방향"><Seg options={[["both", "양방향"], ["long", "롱"], ["short", "숏"]]} value={cfg.direction_filter} onChange={(v) => setAdv("direction_filter", v as Cfg["direction_filter"])} /></Field>
-                <Field label="동시 포지션 상한"><Input type="number" min={1} max={10} value={cfg.max_concurrent} onChange={(e) => setAdv("max_concurrent", Number(e.target.value) || 1)} className="font-mono" /></Field>
-                <Field label="거래당 리스크 %"><Input type="number" min={0.1} max={5} step={0.1} value={cfg.risk_pct} onChange={(e) => setAdv("risk_pct", Number(e.target.value) || 1)} className="font-mono" /></Field>
-                <Field label="일일 손실 한도 (R)" hint="이 값 이하로 떨어지면 그날 정지"><Input type="number" max={0} step={0.5} value={cfg.daily_loss_limit_r} onChange={(e) => setAdv("daily_loss_limit_r", Number(e.target.value) || -2)} className="font-mono" /></Field>
-                <Field label="레버리지"><Input type="number" min={1} max={20} value={cfg.leverage} onChange={(e) => setAdv("leverage", Number(e.target.value) || 1)} className="font-mono" /></Field>
-              </div>
-              <Button onClick={saveAdv} disabled={busy}>{busy ? "저장 중…" : "고급 설정 저장"}</Button>
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
     </div>
   );
+}
+
+function noteKo(note: string): string {
+  if (note.startsWith("daily loss limit")) return "오늘 손실 한도 도달 (그날 정지)";
+  if (note.startsWith("unrealized loss halt")) return "평가손실이 커서 새 진입 중단";
+  if (note.startsWith("max concurrent")) return "동시 개수 상한 도달";
+  if (note === "no signal symbols") return "레이더 후보 없음 (스캔 대기)";
+  if (note === "disabled") return "봇이 꺼져 있음";
+  return note;
 }
 
 function reasonKo(skip?: string): string {
@@ -254,24 +272,3 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
-    </div>
-  );
-}
-
-function Seg({ options, value, onChange }: { options: [string, string][]; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="inline-flex flex-wrap gap-1 rounded-md border border-border bg-background/40 p-0.5">
-      {options.map(([v, label]) => (
-        <button key={v} type="button" onClick={() => onChange(v)} className={cn("rounded px-3 py-1 text-xs font-semibold transition-colors", value === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent/40")}>
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}

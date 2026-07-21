@@ -8,18 +8,28 @@ import { ArrowDownRight, ArrowUpRight, History, TrendingUp, Wallet } from "lucid
 import type { Grade } from "@/types/trade";
 import { cn } from "@/lib/utils";
 import { FlowStepper } from "@/components/app/flow-stepper";
+import { PerfTabs } from "@/components/app/perf-tabs";
+import { ClosedTradesTable, type ClosedTradeRow } from "../journal/closed-trades-table";
 import { HelpLink } from "@/components/app/help-link";
 import { parseMode, type TradeMode } from "@/components/app/mode-filter";
 import { getT } from "@/lib/i18n/server";
 import type { TFunction } from "@/lib/i18n/messages";
 
 interface ClosedRow {
+  id: string;
+  timeframe: string;
+  pre_rr: number | null;
+  created_at: string;
+  stop: number;
+  account_size: number | null;
+  context_flags: { leverage?: number } | null;
+  order_type: "market" | "limit" | "stop" | null;
   pre_grade: Grade;
   result_r: number;
   closed_at: string;
   symbol: string;
   direction: "long" | "short";
-  exit_reason: "target" | "stop" | "manual" | null;
+  exit_reason: "target" | "stop" | "manual" | "timeout" | null;
   mode: "live" | "backtest" | null;
   paper_realized_pnl: number | null;
   entry: number | null;
@@ -63,7 +73,7 @@ export default async function DashboardPage({
     supabase
       .from("trades")
       .select(
-        "pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
+        "id, timeframe, pre_rr, created_at, stop, account_size, context_flags, order_type, pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
       )
       .not("closed_at", "is", null)
       .order("closed_at", { ascending: true }),
@@ -139,9 +149,51 @@ export default async function DashboardPage({
 
   const hasData = n > 0;
 
+  // 종료된 거래 테이블 — 거래 일지에서 이동. rows는 청산 오름차순이라 최신순으로 뒤집는다.
+  const closedRows: ClosedTradeRow[] = [...rows].reverse().map((t) => {
+    let pnl: number | null = t.paper_realized_pnl != null ? Number(t.paper_realized_pnl) : null;
+    if (pnl == null && t.position_quantity != null) {
+      const e = Number(t.entry_actual ?? t.entry ?? 0);
+      const ex = Number(t.exit_actual ?? t.exit_price ?? 0);
+      const q = Number(t.position_quantity);
+      const fp = Number(t.fees_pct ?? 0.12);
+      if (e > 0 && ex > 0 && q > 0) {
+        const move = t.direction === "long" ? ex - e : e - ex;
+        pnl = move * q - e * (fp / 100) * q;
+      }
+    }
+    const acct = t.account_size != null ? Number(t.account_size) : null;
+    const roiPct = pnl != null && acct && acct > 0 ? (pnl / acct) * 100 : null;
+    return {
+      id: t.id,
+      symbol: t.symbol,
+      direction: t.direction,
+      timeframe: t.timeframe,
+      pre_grade: t.pre_grade,
+      pre_rr: t.pre_rr,
+      result_r: t.result_r,
+      closed_at: t.closed_at,
+      created_at: t.created_at,
+      entry: Number(t.entry ?? 0),
+      entry_actual: t.entry_actual,
+      stop: Number(t.stop ?? 0),
+      exit_actual: t.exit_actual,
+      exit_price: t.exit_price,
+      position_quantity: t.position_quantity,
+      fees_pct: t.fees_pct,
+      leverage: t.context_flags?.leverage ?? null,
+      order_type: t.order_type,
+      exit_reason: t.exit_reason,
+      mode: (t.mode === "backtest" ? "backtest" : "live") as "live" | "backtest",
+      pnl,
+      roiPct,
+    };
+  });
+
   return (
     <div className="space-y-5">
       <FlowStepper current="dashboard" />
+      <PerfTabs current="perf" />
 
       {/* 페이지 헤더 — 제목 + 액션 */}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -351,6 +403,20 @@ export default async function DashboardPage({
           </div>
         </>
       )}
+
+      {/* 종료된 거래 — 거래 일지(현재 상황)에서 이동 */}
+      <section className="space-y-2.5">
+        <h2 className="text-[13px] font-semibold text-muted-foreground">
+          {t("journal.page.closedSectionTitle", { n: closedRows.length })}
+        </h2>
+        {closedRows.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-popover p-10 text-center text-sm text-muted-foreground">
+            {t("journal.page.noClosed")}
+          </div>
+        ) : (
+          <ClosedTradesTable rows={closedRows} />
+        )}
+      </section>
     </div>
   );
 }

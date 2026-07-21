@@ -4,8 +4,8 @@
     "market": "Markets",
     "analyze": "AI Analysis",
     "trade": "Auto-trade",
-    "virtualTrade": "Paper Trading",
-    "journal": "Journal",
+    "virtualTrade": "Trades",
+    "journal": "Current",
     "performance": "Performance",
     "guide": "Guide",
     "settings": "Settings",
@@ -1707,8 +1707,8 @@
       "monteCarloNote": "Simulated {runs} random paths based on {atr}% volatility per bar at save time. The real market may differ from this simulation."
     },
     "page": {
-      "title": "Trade Journal",
-      "subtitle": "Logs real, virtual, and backtest trades separately — includes exit results and AI review",
+      "title": "Current status",
+      "subtitle": "Open positions and pending orders at a glance — closed trades are in Performance",
       "realTrade": "Real Trading",
       "bybitSoon": "Bybit integration coming",
       "virtualTrade": "Virtual Trading",
@@ -3641,8 +3641,8 @@
     }
   },
   "dca": {
-    "title": "Spot DCA",
-    "subtitle": "Should you be accumulating - asset, value zone and plan, checked in code",
+    "title": "Spot DCA bot",
+    "subtitle": "Buys more when cheap, less when pricey — accumulates automatically (spot)",
     "asset": "Asset",
     "universeNote": "Only large-cap majors can be accumulated. Buying more on the way down only works on assets that survive.",
     "loading": "Checking...",
@@ -3664,6 +3664,10 @@
     "pause": "Pause",
     "resume": "Resume",
     "progress": "{spent} / {total} vUSDT",
+    "totalBudget": "Budget",
+    "accumulated": "Invested",
+    "remainingBudget": "Remaining",
+    "heldQty": "{qty} {sym}",
     "executions": "Tranches done",
     "avgPrice": "Avg price",
     "pnl": "vs avg",

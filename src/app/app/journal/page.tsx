@@ -5,13 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { GradeBadge } from "@/components/trade/grade-badge";
 import type { Grade } from "@/types/trade";
 import { FlowStepper } from "@/components/app/flow-stepper";
+import { PerfTabs } from "@/components/app/perf-tabs";
 import { ResolveTradesButton } from "./resolve-button";
 import { CancelPendingButton } from "./cancel-pending-button";
 import { HelpLink } from "@/components/app/help-link";
 import { parseMode, type TradeMode } from "@/components/app/mode-filter";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
 import { Suspense } from "react";
-import { ClosedTradesTable, type ClosedTradeRow } from "./closed-trades-table";
 import { fetchTicker24h } from "@/lib/analysis/binance";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import { getT } from "@/lib/i18n/server";
@@ -110,48 +110,6 @@ export default async function JournalListPage({
   const closed = closedAll.filter((t) => tabOf(t.mode) === activeTab);
   const liveCount = closedAll.filter((t) => t.mode !== "backtest").length;
   const backtestCount = closedAll.filter((t) => t.mode === "backtest").length;
-
-  // Pre-compute pnl + roi for closed trades (used by ClosedTradesTable)
-  const closedRows: ClosedTradeRow[] = closed.map((t) => {
-    let pnl: number | null =
-      t.paper_realized_pnl != null ? Number(t.paper_realized_pnl) : null;
-    if (pnl == null && t.position_quantity != null) {
-      const e = Number(t.entry_actual ?? t.entry ?? 0);
-      const ex = Number(t.exit_actual ?? t.exit_price ?? 0);
-      const q = Number(t.position_quantity);
-      const fp = Number(t.fees_pct ?? 0.12);
-      if (e > 0 && ex > 0 && q > 0) {
-        const move = t.direction === "long" ? ex - e : e - ex;
-        pnl = move * q - e * (fp / 100) * q;
-      }
-    }
-    const acct = t.account_size != null ? Number(t.account_size) : null;
-    const roiPct = pnl != null && acct && acct > 0 ? (pnl / acct) * 100 : null;
-    return {
-      id: t.id,
-      symbol: t.symbol,
-      direction: t.direction,
-      timeframe: t.timeframe,
-      pre_grade: t.pre_grade,
-      pre_rr: t.pre_rr,
-      result_r: t.result_r,
-      closed_at: t.closed_at,
-      created_at: t.created_at,
-      entry: t.entry,
-      entry_actual: t.entry_actual,
-      stop: t.stop,
-      exit_actual: t.exit_actual,
-      exit_price: t.exit_price,
-      position_quantity: t.position_quantity,
-      fees_pct: t.fees_pct,
-      leverage: t.context_flags?.leverage ?? null,
-      order_type: t.order_type,
-      exit_reason: t.exit_reason,
-      mode: (t.mode === "backtest" ? "backtest" : "live") as "live" | "backtest",
-      pnl,
-      roiPct,
-    };
-  });
 
   // Batch fetch current prices for all unique open-position + pending-limit symbols.
   const symbols = Array.from(new Set([...open, ...pendingLimits].map((t) => t.symbol)));
@@ -255,6 +213,7 @@ export default async function JournalListPage({
   return (
     <div className="space-y-5">
       <FlowStepper current="journal" />
+      <PerfTabs current="journal" />
       <Suspense fallback={null}>
         <ExpiryBanner />
       </Suspense>
@@ -447,20 +406,6 @@ export default async function JournalListPage({
           </div>
         </section>
       ) : null}
-
-      {/* Closed trades table */}
-      <section className="space-y-2.5">
-        <h2 className="text-[13px] font-semibold text-muted-foreground">
-          {t("journal.page.closedSectionTitle", { n: closed.length })}
-        </h2>
-        {closed.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-popover p-10 text-center text-sm text-muted-foreground">
-            {t("journal.page.noClosed")}
-          </div>
-        ) : (
-          <ClosedTradesTable rows={closedRows} />
-        )}
-      </section>
 
     </div>
   );

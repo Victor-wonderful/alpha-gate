@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { loadLatestRadar } from "@/lib/analysis/radar-persist";
+import { fetchTicker24h } from "@/lib/analysis/binance";
 import { buildSnapshot } from "@/lib/analysis/analyze";
 import { buildCodeReport } from "@/lib/analysis/code-scenario";
 import { gradeTrade } from "@/lib/grading";
@@ -33,6 +34,57 @@ const STYLE_EXPIRY_MS: Record<"day" | "swing", number> = {
 };
 const PAPER_FEES_PCT = 0.075;
 const MAX_SCAN = 8; // 한 실행에서 스냅샷 조회할 심볼 상한(네트워크 보호).
+// 미실현손실 브레이크 — 진행 중 포지션들의 평가손익 합이 계좌의 이 % 이하로 내려가면
+// 신규 진입 중단(안전장치, 사용자 조절 불가). 위험예산(6%)이 "손절 시 손실"만 보는
+// 사각을 메운다: 동조 급락으로 여러 포지션이 동시에 물려 평가손실이 커지는 상황을 차단.
+const UNREALIZED_HALT_PCT = -4;
+
+/** 진행 중(체결·미마감) 선물 가상 포지션들의 평가손익 합을 계좌 대비 %로. DCA·현물 제외. */
+async function computeUnrealizedPct(
+  svc: ReturnType<typeof getSupabaseService>,
+  userId: string,
+  accountSize: number,
+): Promise<number> {
+  const { data } = await svc
+    .from("trades")
+    .select("symbol, direction, entry, entry_actual, position_quantity, context_flags, market_type")
+    .eq("user_id", userId)
+    .eq("is_paper", true)
+    .is("closed_at", null)
+    .eq("order_status", "filled")
+    .limit(50);
+  const rows = (data ?? []).filter(
+    (r: { context_flags?: { dcaPlanId?: string } | null; market_type?: string | null }) =>
+      !r.context_flags?.dcaPlanId && r.market_type !== "spot",
+  );
+  if (rows.length === 0 || accountSize <= 0) return 0;
+  const symbols = [...new Set(rows.map((r: { symbol: string }) => r.symbol))];
+  const prices: Record<string, number> = {};
+  await Promise.all(
+    symbols.map(async (s) => {
+      try {
+        prices[s] = (await fetchTicker24h(s)).lastPrice;
+      } catch {
+        // 시세 실패 시 해당 심볼은 평가손익 0으로 취급(보수적으로 브레이크 약화 안 함 위해 스킵)
+      }
+    }),
+  );
+  let pnl = 0;
+  for (const r of rows) {
+    const px = prices[r.symbol];
+    if (!px) continue;
+    const entry = Number(r.entry_actual ?? r.entry);
+    const qty = Number(r.position_quantity ?? 0);
+    pnl += (r.direction === "long" ? px - entry : entry - px) * qty;
+  }
+  return (pnl / accountSize) * 100;
+}
+
+/** 레이더 bestStyle(scalp/day/swing/position)을 봇이 지원하는 2종(day/swing)으로 접는다.
+ *  스캘프→데이(임펄스), 포지션→스윙(모멘텀). 코어 페르소나가 임펄스·모멘텀이라 그 둘로 수렴. */
+function normalizeStyle(s: TradingStyle): "day" | "swing" {
+  return s === "swing" || s === "position" ? "swing" : "day";
+}
 
 export interface AutoTradeConfig {
   user_id: string;
@@ -100,6 +152,12 @@ export async function runAutoTradeForUser(
     return { ...result, note: `daily loss limit hit (${money.todayCumulativeR.toFixed(2)}R)` };
   }
 
+  // 게이트 0.5: 미실현손실 브레이크 — 진행 중 포지션 평가손실이 계좌의 -4% 이하면 신규 진입 중단.
+  const unrealizedPct = await computeUnrealizedPct(svc, config.user_id, accountSize);
+  if (unrealizedPct <= UNREALIZED_HALT_PCT) {
+    return { ...result, note: `unrealized loss halt (${unrealizedPct.toFixed(1)}%)` };
+  }
+
   // 게이트 1: 봇의 현재 진행 포지션(오픈+예약) 수 상한.
   const { data: botOpen } = await svc
     .from("trades")
@@ -113,21 +171,26 @@ export async function runAutoTradeForUser(
   let slots = config.max_concurrent - botCount;
   if (slots <= 0) return { ...result, note: `max concurrent reached (${botCount}/${config.max_concurrent})` };
 
-  // 신호 소스 심볼.
-  let symbols: string[];
+  // 신호 소스 — 코인마다 어울리는 스타일을 함께 정한다.
+  // 레이더: 각 후보의 bestStyle(코인별 자동 판정)을 그대로 사용 → 사용자는 스타일 신경 안 씀.
+  // 고정 심볼: 판정 근거가 없어 데이(임펄스) 기본.
+  let targets: { symbol: string; style: "day" | "swing" }[];
   if (config.symbol_source === "fixed") {
-    symbols = config.fixed_symbols.slice(0, MAX_SCAN);
+    targets = config.fixed_symbols.slice(0, MAX_SCAN).map((s) => ({ symbol: s, style: "day" as const }));
   } else {
-    const radar = await loadLatestRadar().catch(() => ({ candidates: [] as { symbol: string }[] }));
-    symbols = radar.candidates.map((c) => c.symbol).slice(0, MAX_SCAN);
+    const radar = await loadLatestRadar().catch(
+      () => ({ candidates: [] as { symbol: string; bestStyle: TradingStyle }[] }),
+    );
+    targets = radar.candidates
+      .slice(0, MAX_SCAN)
+      .map((c) => ({ symbol: c.symbol, style: normalizeStyle(c.bestStyle) }));
   }
-  if (symbols.length === 0) return { ...result, note: "no signal symbols" };
+  if (targets.length === 0) return { ...result, note: "no signal symbols" };
 
-  const style = config.style as TradingStyle;
   const openSymbols = new Set(money.openPositions.map((p) => p.symbol));
   const now = Date.now();
 
-  for (const symbol of symbols) {
+  for (const { symbol, style } of targets) {
     if (slots <= 0) break;
     // 중복 코인 — 이미 (봇이든 수동이든) 진행 중이면 스킵.
     if (openSymbols.has(symbol)) {
@@ -186,7 +249,7 @@ export async function runAutoTradeForUser(
     const input = {
       symbol,
       direction,
-      timeframe: STYLE_TF[config.style],
+      timeframe: STYLE_TF[style],
       entry,
       stop,
       target,
@@ -233,7 +296,7 @@ export async function runAutoTradeForUser(
         user_id: config.user_id,
         symbol,
         direction,
-        timeframe: STYLE_TF[config.style],
+        timeframe: STYLE_TF[style],
         entry,
         stop,
         target,
@@ -242,7 +305,7 @@ export async function runAutoTradeForUser(
         position_quantity: sizing.quantity,
         market_checks: sc.marketAssessment,
         psych_checks: {},
-        context_flags: { leverage: config.leverage, bot: true, limitOrder: true, autoStyle: config.style },
+        context_flags: { leverage: config.leverage, bot: true, limitOrder: true, autoStyle: style },
         pre_grade: graded.grade,
         pre_score: graded.score,
         pre_score_breakdown: graded.reasons ?? [],
@@ -267,7 +330,7 @@ export async function runAutoTradeForUser(
       continue;
     }
 
-    const expiresAt = new Date(now + STYLE_EXPIRY_MS[config.style]).toISOString();
+    const expiresAt = new Date(now + STYLE_EXPIRY_MS[style]).toISOString();
     const { error: ploErr } = await svc.from("pending_limit_orders").insert({
       user_id: config.user_id,
       trade_id: trade.id,

@@ -4,8 +4,8 @@
     "market": "시장 현황",
     "analyze": "AI 분석",
     "trade": "자동매매",
-    "virtualTrade": "가상 거래",
-    "journal": "거래 일지",
+    "virtualTrade": "거래 상황",
+    "journal": "현재 상황",
     "performance": "성과 분석",
     "guide": "가이드",
     "settings": "설정",
@@ -1707,8 +1707,8 @@
       "monteCarloNote": "저장 시점 변동성 {atr}% / 봉 기준 {runs}회 무작위 경로 시뮬. 실제 시장은 본 시뮬과 다를 수 있습니다."
     },
     "page": {
-      "title": "거래 일지",
-      "subtitle": "실거래 · 가상거래 · 백테스트를 분리해 기록합니다 — 청산 결과 · AI 복기 포함",
+      "title": "현재 상황",
+      "subtitle": "진행 중 포지션과 대기 주문을 한눈에 — 종료된 거래는 성과 분석에서",
       "realTrade": "실거래",
       "bybitSoon": "Bybit 연동 예정",
       "virtualTrade": "가상거래",
@@ -3641,8 +3641,8 @@
     }
   },
   "dca": {
-    "title": "현물 적립 (DCA)",
-    "subtitle": "이 매집을 해도 되는가 — 자산·밸류 존·계획을 코드로 점검합니다",
+    "title": "현물 적립 봇",
+    "subtitle": "싼 구간엔 더, 비쌀 땐 덜 — 자동으로 나눠 사 모읍니다 (현물)",
     "asset": "적립 자산",
     "universeNote": "시총 상위 대장주만 적립할 수 있습니다. 내려갈 때 더 사는 전략이라 살아남을 자산에만 씁니다.",
     "loading": "확인 중...",
@@ -3664,6 +3664,10 @@
     "pause": "일시 중지",
     "resume": "다시 시작",
     "progress": "{spent} / {total} vUSDT",
+    "totalBudget": "운영 자금",
+    "accumulated": "모은 금액",
+    "remainingBudget": "남은 잔액",
+    "heldQty": "보유 {qty} {sym}",
     "executions": "실행 회차",
     "avgPrice": "평단",
     "pnl": "평단 대비",

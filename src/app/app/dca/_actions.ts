@@ -5,7 +5,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { fetchSpotKlines } from "@/lib/analysis/binance";
 import { checkAssetGate } from "@/lib/dca/asset-gate";
 import { classifyValueZone, type ValueZoneResult } from "@/lib/dca/value-zone";
-import { placeVirtualOrderAction } from "@/app/app/virtual-trade/order-actions";
+import { placeVirtualOrderAction, closeVirtualPositionAction } from "@/app/app/virtual-trade/order-actions";
 import { summarizePlan, type DcaPlan, type DcaPlanProgress } from "@/lib/dca/plan";
 
 /** 밸류 존 + 자산 게이트를 한 번에 조회 (화면 상단 카드용). */
@@ -73,6 +73,22 @@ export async function createDcaPlanAction(
   if (input.mode === "ladder" && !(Number(input.ladderStepPct) > 0))
     return { ok: false, error: "사다리 간격(%)을 입력하세요." };
 
+  // 중복 방지 — 같은 자산에 이미 진행 중(active/paused)인 플랜이 있으면 새로 못 만든다.
+  // (완료된 플랜은 예외 — 다시 시작 가능.) 실수로 BTC 플랜이 여러 개 생기는 걸 막는다.
+  const { data: existing } = await supabase
+    .from("dca_plans")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("symbol", symbol)
+    .in("status", ["active", "paused"])
+    .limit(1);
+  if (existing && existing.length > 0) {
+    return {
+      ok: false,
+      error: `이미 ${symbol} 적립 플랜이 진행 중입니다. 기존 플랜을 삭제하거나 수정한 뒤 다시 만드세요.`,
+    };
+  }
+
   // 자산 게이트는 서버에서 다시 판정한다 — 화면을 우회해 만들 수 없게.
   const assessment = await loadDcaAssessmentAction(symbol);
   if (!assessment.ok) return { ok: false, error: assessment.error };
@@ -127,9 +143,24 @@ export async function deleteDcaPlanAction(planId: string): Promise<{ ok: boolean
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
 
+  // 이 플랜이 쌓아둔 적립 매수(포지션)를 먼저 시장가로 정리한다.
+  // 안 하면 플랜만 사라지고 매수분은 거래상황에 "진행 중 포지션"으로 유령처럼 남는다.
+  const { data: openTrades } = await supabase
+    .from("trades")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("is_paper", true)
+    .is("closed_at", null)
+    .filter("context_flags->>dcaPlanId", "eq", planId);
+  for (const tr of openTrades ?? []) {
+    await closeVirtualPositionAction(tr.id as string);
+  }
+
   const { error } = await supabase.from("dca_plans").delete().eq("id", planId).eq("user_id", user.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/app/dca");
+  revalidatePath("/app/virtual-trade");
+  revalidatePath("/app");
   return { ok: true };
 }
 

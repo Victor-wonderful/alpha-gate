@@ -60,7 +60,7 @@ export default async function VirtualTradePage({
       return status === "filled" || status == null;
     })
     .map((t) => {
-      const ctx = (t.context_flags ?? {}) as { leverage?: number; dcaPlanId?: string };
+      const ctx = (t.context_flags ?? {}) as { leverage?: number; dcaPlanId?: string; bot?: boolean };
       return {
         id: t.id as string,
         symbol: t.symbol as string,
@@ -80,6 +80,8 @@ export default async function VirtualTradePage({
           | "spot",
         // 적립 회차는 손절·목표·만료가 없는 "모으는" 매수라 표시가 달라야 한다.
         isDca: !!ctx.dcaPlanId,
+        // 자동매매 봇이 낸 포지션인지 — 목록에서 수동과 구분해 보여준다.
+        isBot: !!ctx.bot,
       };
     });
 

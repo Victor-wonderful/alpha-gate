@@ -22,11 +22,11 @@ export type ClusterDef = {
  *  functions exported across that boundary. */
 export const clusters = {
   trading: (opts?: { rightSlot?: ReactNode }): ClusterDef => ({
-    title: "가상 거래",
+    title: "거래 상황",
     description:
-      "가상 자금(vUSDT)으로 거래소 실습. 실제 손실 없이 매매를 연습합니다.",
+      "AI 분석·수동·자동매매로 진입한 포지션과 대기 주문을 한눈에. 가상 자금(vUSDT) 기준.",
     tabs: [
-      { href: "/app/virtual-trade", label: "가상 거래", icon: "💼" },
+      { href: "/app/virtual-trade", label: "거래 상황", icon: "💼" },
     ],
     rightSlot: opts?.rightSlot,
   }),

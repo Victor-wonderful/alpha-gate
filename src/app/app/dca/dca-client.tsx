@@ -37,11 +37,14 @@ export function DcaClient({
   symbols,
   initialPlans,
   zoneBySymbol,
+  stacked = false,
 }: {
   symbols: string[];
   initialPlans: Array<DcaPlan & { progress: DcaPlanProgress }>;
   /** 플랜이 가진 자산별 밸류 존 — 화면에서 뭘 보고 있든 플랜은 자기 판단을 보여준다. */
   zoneBySymbol: Record<string, ValueZoneResult | undefined>;
+  /** 좁은 컬럼(자동매매 페이지 우측)에 넣을 땐 내부 2단을 세로로 쌓는다. */
+  stacked?: boolean;
 }) {
   const t = useT();
   const [symbol, setSymbol] = useState(symbols[0] ?? "BTCUSDT");
@@ -88,7 +91,7 @@ export function DcaClient({
         </ul>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[420px_1fr]">
+      <div className={stacked ? "grid gap-4" : "grid gap-4 lg:grid-cols-[420px_1fr]"}>
       {/* ── 좌: 자산 + 밸류 존 + 플랜 생성 ─────────────────────────── */}
       <div className="space-y-4">
         <Card>
@@ -406,6 +409,30 @@ function PlanCard({
           </div>
         ) : null}
 
+        {/* 운영 자금 / 모은 금액 / 남은 잔액 — "얼마 계획·얼마 모았고·얼마 남았나" 한눈에 */}
+        <div className="grid grid-cols-3 gap-2 text-[11px]">
+          <Stat
+            label={t("dca.totalBudget")}
+            value={`${formatNumber(Number(plan.total_budget), { maximumFractionDigits: 0 })}`}
+          />
+          <Stat
+            label={t("dca.accumulated")}
+            value={`${formatNumber(plan.progress.spent, { maximumFractionDigits: 0 })}`}
+            sub={
+              plan.progress.quantity > 0
+                ? t("dca.heldQty", {
+                    qty: formatNumber(plan.progress.quantity, { maximumFractionDigits: 5 }),
+                    sym: plan.symbol.replace("USDT", ""),
+                  })
+                : undefined
+            }
+          />
+          <Stat
+            label={t("dca.remainingBudget")}
+            value={`${formatNumber(summary.remainingBudget, { maximumFractionDigits: 0 })}`}
+          />
+        </div>
+
         {/* 진행률 */}
         <div>
           <div className="mb-1 flex items-center justify-between text-[10px]">
@@ -473,7 +500,7 @@ function PlanCard({
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
+function Stat({ label, value, tone, sub }: { label: string; value: string; tone?: "good" | "bad"; sub?: string }) {
   return (
     <div className="rounded-md border border-border/30 bg-background/20 p-2">
       <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
@@ -485,6 +512,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "go
       >
         {value}
       </div>
+      {sub ? <div className="mt-0.5 font-mono text-[9px] tabular-nums text-muted-foreground">{sub}</div> : null}
     </div>
   );
 }

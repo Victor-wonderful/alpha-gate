@@ -27,7 +27,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -35,7 +34,6 @@ import {
   Shield,
   ShieldCheck,
   Sparkles,
-  PiggyBank,
   Wallet,
   X,
 } from "lucide-react";
@@ -61,8 +59,6 @@ const NAV: NavItem[] = [
   { href: "/app/analyze", labelKey: "nav.analyze", Icon: Sparkles },
   { href: "/app/trade", labelKey: "nav.trade", Icon: ShieldCheck },
   { href: "/app/virtual-trade", labelKey: "nav.virtualTrade", Icon: Wallet },
-  { href: "/app/dca", labelKey: "nav.dca", Icon: PiggyBank },
-  { href: "/app/journal", labelKey: "nav.journal", Icon: NotebookPen },
   { href: "/app/dashboard", labelKey: "nav.performance", Icon: ChartLine },
 ];
 

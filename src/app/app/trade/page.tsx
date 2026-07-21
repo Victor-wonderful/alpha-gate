@@ -1,7 +1,11 @@
 import { TradeForm } from "@/components/trade/trade-form";
-import { TradeModeTabs } from "@/components/trade/trade-mode-tabs";
 import { AutoTradePanel } from "@/components/trade/auto-trade-panel";
 import { getAutoConfig, getAutoStatus } from "./auto-actions";
+import { DcaClient } from "@/app/app/dca/dca-client";
+import { loadDcaPlansAction, loadDcaAssessmentAction } from "@/app/app/dca/_actions";
+import { dcaCandidateSymbols } from "@/lib/dca/asset-gate";
+import { Card, CardContent } from "@/components/ui/card";
+import { PiggyBank } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
@@ -66,9 +70,6 @@ export default async function TradePage({
     : { usdtBalance: 0, available: 0, usedMargin: 0, startingBalance: 10000 };
 
   const money = await getMoneyContext(accountSize);
-  const [autoConfig, autoStatus] = user
-    ? await Promise.all([getAutoConfig(), getAutoStatus()])
-    : [null, { openCount: 0, pendingCount: 0 }];
 
   const manual = (
     <TradeForm
@@ -86,18 +87,55 @@ export default async function TradePage({
     />
   );
 
+  // AI 분석에서 시나리오를 들고 넘어온 경우(entry 파라미터) → 그 거래를 평가·발주하는
+  // 수동 화면을 그대로 보여준다. (수동 실행은 사이드바 메뉴에선 뺐지만, 분석 흐름에선 유지)
+  if (sp.entry) {
+    return (
+      <div className="space-y-6">
+        <FlowStepper current="trade" />
+        {manual}
+      </div>
+    );
+  }
+
+  // 직접 진입 → [자동매매(봇) | 적립] 탭. (구 "수동 실행" 탭은 제거, 적립 메뉴를 여기로 합침)
+  if (!user) {
+    return <div className="space-y-6">{manual}</div>;
+  }
+
+  const [autoConfig, autoStatus] = await Promise.all([getAutoConfig(), getAutoStatus()]);
+
+  // 적립(DCA) 데이터 — 구 /app/dca 페이지가 하던 로딩을 그대로.
+  const { plans } = await loadDcaPlansAction();
+  const dcaSymbols = [...new Set(plans.map((p) => p.symbol))];
+  const dcaEntries = await Promise.all(
+    dcaSymbols.map(async (s) => [s, (await loadDcaAssessmentAction(s)).valueZone] as const),
+  );
+  const zoneBySymbol = Object.fromEntries(dcaEntries.filter(([, v]) => v?.ok));
+
+  const dca = (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="flex items-center gap-2.5 p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500">
+            <PiggyBank className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold">{t("dca.title")}</h2>
+            <p className="text-xs text-muted-foreground">{t("dca.subtitle")}</p>
+          </div>
+        </CardContent>
+      </Card>
+      <DcaClient symbols={dcaCandidateSymbols()} initialPlans={plans} zoneBySymbol={zoneBySymbol} stacked />
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      <FlowStepper current="trade" />
-      {autoConfig ? (
-        <TradeModeTabs
-          manual={manual}
-          auto={<AutoTradePanel initialConfig={autoConfig} status={autoStatus} />}
-          defaultMode={sp.entry ? "manual" : "auto"}
-        />
-      ) : (
-        manual
-      )}
+    <div className="grid items-start gap-6 lg:grid-cols-2">
+      <section>
+        <AutoTradePanel initialConfig={autoConfig} status={autoStatus} accountSize={accountSize} />
+      </section>
+      <section>{dca}</section>
     </div>
   );
 }

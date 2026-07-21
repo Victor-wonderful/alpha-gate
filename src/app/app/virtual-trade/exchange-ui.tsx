@@ -69,6 +69,8 @@ type Position = {
   marketType: "futures" | "spot";
   /** 적립(DCA) 회차 — 손절·목표·만료 개념이 없다. */
   isDca?: boolean;
+  /** 자동매매 봇이 낸 포지션 — 수동과 구분 표시. */
+  isBot?: boolean;
 };
 
 // resolve-trades/route.ts 의 TIMEOUT_MS 와 반드시 일치.
@@ -2500,6 +2502,11 @@ function PositionRow({ pos }: { pos: Position }) {
             {pos.isDca ? (
               <span className="ml-1.5 rounded bg-primary/15 px-1 py-0.5 text-[9px] font-semibold text-primary">
                 {t("paper.exchange.dcaBadge")}
+              </span>
+            ) : null}
+            {pos.isBot ? (
+              <span className="ml-1.5 rounded bg-violet-500/15 px-1 py-0.5 text-[9px] font-semibold text-violet-500">
+                🤖 봇
               </span>
             ) : null}
           </div>

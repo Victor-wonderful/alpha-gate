@@ -93,6 +93,25 @@ export async function saveAutoConfig(
   return { ok: true };
 }
 
+/** 운영 자금(내 자금 = default_account_size) 저장 — 봇·AI 분석·수동이 공유하는 기준 자금. */
+export async function saveBotCapitalAction(
+  amount: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "운영 자금은 0보다 커야 합니다." };
+
+  const { error } = await supabase.from("profiles").update({ default_account_size: amount }).eq("id", user.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/app/trade");
+  revalidatePath("/app/analyze");
+  revalidatePath("/app");
+  return { ok: true };
+}
+
 /** 봇 현재 상태 — 진행 중 봇 포지션/예약 수. */
 export async function getAutoStatus(): Promise<{ openCount: number; pendingCount: number }> {
   const supabase = await getSupabaseServer();

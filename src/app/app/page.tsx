@@ -15,6 +15,7 @@ import { GradeBadge } from "@/components/trade/grade-badge";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
 import { getMoneyContext } from "@/lib/money-management";
+import { sweepUserExpiries } from "@/lib/expiry-sweep";
 import { loadLatestRadar } from "@/lib/analysis/radar-persist";
 import { entrySuitability } from "@/lib/analysis/sessions";
 import type { TradingStyle } from "@/lib/analysis/style";
@@ -95,6 +96,9 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
   const displayName = user?.email?.split("@")[0] ?? t("home.defaultName");
   const userId = user?.id;
+
+  // 만료된 주문·포지션을 크론을 기다리지 않고 즉시 정리 → 홈 카운트가 항상 최신.
+  if (userId) await sweepUserExpiries(userId).catch(() => ({ expiredOrders: 0, closedPositions: 0 }));
 
   const monthStart = kstMonthStartUtc();
   const d30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();

@@ -8,6 +8,7 @@ import { ClusterTabs } from "@/components/app/cluster-tabs";
 import { clusters } from "@/components/app/cluster-tabs-config";
 import { HelpLink } from "@/components/app/help-link";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
+import { sweepUserExpiries } from "@/lib/expiry-sweep";
 import { getT } from "@/lib/i18n/server";
 import { Suspense } from "react";
 
@@ -24,6 +25,10 @@ export default async function VirtualTradePage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  // 이 사용자의 만료된 주문·포지션을 크론을 기다리지 않고 즉시 정리한다.
+  // (크론은 5분 주기 + Vercel 일시정지 시 지연 → "만료됐는데 안 사라짐"의 원인)
+  await sweepUserExpiries(user.id).catch(() => ({ expiredOrders: 0, closedPositions: 0 }));
 
   const wallet = await getOrCreateWallet(user.id);
 
@@ -93,7 +98,12 @@ export default async function VirtualTradePage({
   // select 컬럼이 없을 때가 대표적. 빈 목록과 실패를 구분할 수 있게 로그를 남긴다.
   if (openOrdersErr) console.error(`[virtual-trade] 미체결 주문 조회 실패: ${openOrdersErr.message}`);
 
-  const pendingOrders = (openOrders ?? []).map((o) => ({
+  // 안전망: 이미 만료 시각이 지난 주문은 표시하지 않는다(스윕/크론이 곧 status를
+  // expired 로 바꾸지만, 그 사이 "만료 0분" 유령 주문이 보이지 않게 한다).
+  const nowMs = Date.now();
+  const pendingOrders = (openOrders ?? [])
+    .filter((o) => !o.expires_at || new Date(o.expires_at as string).getTime() > nowMs)
+    .map((o) => ({
     id: o.id as string,
     symbol: o.symbol as string,
     direction: o.direction as "long" | "short",

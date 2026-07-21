@@ -1,4 +1,7 @@
 import { TradeForm } from "@/components/trade/trade-form";
+import { TradeModeTabs } from "@/components/trade/trade-mode-tabs";
+import { AutoTradePanel } from "@/components/trade/auto-trade-panel";
+import { getAutoConfig, getAutoStatus } from "./auto-actions";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { FlowStepper } from "@/components/app/flow-stepper";
 import { getOrCreateWallet } from "@/lib/paper-wallet";
@@ -63,23 +66,37 @@ export default async function TradePage({
     : { usdtBalance: 0, available: 0, usedMargin: 0, startingBalance: 10000 };
 
   const money = await getMoneyContext(accountSize);
+  const [autoConfig, autoStatus] = user
+    ? await Promise.all([getAutoConfig(), getAutoStatus()])
+    : [null, { openCount: 0, pendingCount: 0 }];
+
+  const manual = (
+    <TradeForm
+      initialAccountSize={accountSize}
+      initialRiskPct={riskPct}
+      currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
+      initialSymbol={symbol}
+      money={money}
+      apiKeys={apiKeys}
+      paperWallet={{
+        balance: wallet.usdtBalance,
+        available: wallet.available,
+        usedMargin: wallet.usedMargin,
+      }}
+    />
+  );
 
   return (
     <div className="space-y-6">
       <FlowStepper current="trade" />
-      <TradeForm
-        initialAccountSize={accountSize}
-        initialRiskPct={riskPct}
-        currency={(profile?.account_currency as "USD" | "KRW") || "USD"}
-        initialSymbol={symbol}
-        money={money}
-        apiKeys={apiKeys}
-        paperWallet={{
-          balance: wallet.usdtBalance,
-          available: wallet.available,
-          usedMargin: wallet.usedMargin,
-        }}
-      />
+      {autoConfig ? (
+        <TradeModeTabs
+          manual={manual}
+          auto={<AutoTradePanel initialConfig={autoConfig} status={autoStatus} />}
+        />
+      ) : (
+        manual
+      )}
     </div>
   );
 }

@@ -2,11 +2,20 @@ import "server-only";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { type MoneyContext, type Direction, TOTAL_RISK_BUDGET_PCT } from "@/types/trade";
 
+/** 최소 supabase 클라이언트 형태(getSupabaseServer/getSupabaseService 둘 다 만족). */
+type SupabaseLike = { from: (table: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
 /**
  * 오늘 마감된 거래의 누적 R + 진행 중(미마감) 포지션 집계.
  * 거래 평가 페이지의 "자금 관리 상태" 블록에서 사용.
+ *
+ * opts 없이 호출하면 현재 로그인 세션(RLS) 기준. 크론·봇처럼 세션이 없는 곳은
+ * opts={ client: service, userId } 를 넘겨 특정 사용자 기준으로 집계한다(동일 로직 재사용).
  */
-export async function getMoneyContext(accountSize: number): Promise<MoneyContext> {
+export async function getMoneyContext(
+  accountSize: number,
+  opts?: { client: SupabaseLike; userId: string },
+): Promise<MoneyContext> {
   const empty: MoneyContext = {
     todayCumulativeR: 0,
     todayClosedCount: 0,
@@ -19,11 +28,20 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
     remainingRiskPct: TOTAL_RISK_BUDGET_PCT,
   };
 
-  const supabase = await getSupabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return empty;
+  let supabase: SupabaseLike;
+  let userId: string;
+  if (opts) {
+    supabase = opts.client;
+    userId = opts.userId;
+  } else {
+    const server = await getSupabaseServer();
+    const {
+      data: { user },
+    } = await server.auth.getUser();
+    if (!user) return empty;
+    supabase = server;
+    userId = user.id;
+  }
 
   // KST 자정 기준 (UTC+9). 사용자가 한국 시간대로 운영한다고 가정.
   const now = new Date();
@@ -32,29 +50,37 @@ export async function getMoneyContext(accountSize: number): Promise<MoneyContext
   const utcStartOfTodayKST = new Date(kstMidnight.getTime() - 9 * 60 * 60 * 1000);
 
   // 백테스트 거래는 일일 손실 한도/노출 집계에서 제외 (시뮬이라 실제 자금 관리와 무관).
-  const { data: closedToday } = await supabase
+  const closedRes = await supabase
     .from("trades")
     .select("result_r")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .neq("mode", "backtest")
     .not("closed_at", "is", null)
     .gte("closed_at", utcStartOfTodayKST.toISOString());
+  const closedToday = (closedRes.data ?? []) as Array<{ result_r: number | null }>;
 
-  const { data: openRows } = await supabase
+  const openRes = await supabase
     .from("trades")
     .select("id, symbol, direction, entry, stop, position_quantity, order_status, context_flags")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .neq("mode", "backtest")
     .is("closed_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
+  const openRows = (openRes.data ?? []) as Array<{
+    id: string; symbol: string; direction: Direction; entry: number | null; stop: number | null;
+    position_quantity: number | null; order_status: string | null; context_flags: { dcaPlanId?: string } | null;
+  }>;
 
   // 예약(pending) 지정가/역지정가 주문 — 아직 체결 전이지만 위험을 미리 예약(차감).
-  const { data: pendingRows } = await supabase
+  const pendingRes = await supabase
     .from("pending_limit_orders")
     .select("limit_price, stop, quantity, direction")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("status", "open");
+  const pendingRows = (pendingRes.data ?? []) as Array<{
+    limit_price: number | null; stop: number | null; quantity: number | null; direction: Direction;
+  }>;
 
   const todayCumulativeR = (closedToday ?? []).reduce(
     (s, r) => s + (Number(r.result_r) || 0),

@@ -182,9 +182,11 @@ export default async function JournalListPage({
   const accountSize = positions[0]?.trade.account_size ? Number(positions[0].trade.account_size) : 0;
   const totalExposurePct = accountSize > 0 ? (totalNotional / accountSize) * 100 : 0;
 
-  // Today's realized R (KST midnight)
-  const kstNow = new Date();
+  // Today's realized R (KST midnight) — getMoneyContext(봇 일일한도)와 동일 기준으로 맞춘다.
+  // ⚠️ 버그였음: new Date()를 KST로 옮기지 않고 UTC 날짜(getUTCDate)를 써서, KST 새벽
+  // (UTC 날짜 < KST 날짜)엔 "오늘"이 하루 일찍 잡혀 어제 거래까지 합산됐다 → 봇과 불일치.
   const kstOffsetMs = 9 * 60 * 60_000;
+  const kstNow = new Date(Date.now() + kstOffsetMs); // KST 시각으로 이동 후 날짜 추출
   const kstStartUtc = new Date(
     Date.UTC(
       kstNow.getUTCFullYear(),

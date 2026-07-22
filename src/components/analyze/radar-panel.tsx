@@ -336,20 +336,20 @@ export function RadarPanel({
     (c) => c.styleAtr && Object.keys(c.styleAtr).length > 0,
   );
 
-  // 선택 스타일로 진입 가능한 코인만. BTC(기준 자산) 맨 앞 →
-  // 스캔 랭킹(c.score = 진입자리 근접→추세강도→BTC정렬) → 스타일 신호 점수 순.
+  // 유니버스 5개 고정 → 거르지 않고 전부 표시. BTC 맨 앞 → 진입 가능한 것 먼저 →
+  // 스캔 랭킹(진입자리 근접→추세강도→BTC정렬) → 스타일 신호 점수 순. (자리 아닌 건 하단에 회색)
   const rows = candidates
     .map((c) => {
       const price = live[c.symbol] ?? c.price;
       return { c, price, p: preview(c, style, price) };
     })
-    .filter((r) => r.p.tradeable)
     .sort((a, b) => {
       const ap = PINNED_SYMBOLS.indexOf(a.c.symbol);
       const bp = PINNED_SYMBOLS.indexOf(b.c.symbol);
       const aPin = ap === -1 ? Number.MAX_SAFE_INTEGER : ap;
       const bPin = bp === -1 ? Number.MAX_SAFE_INTEGER : bp;
       if (aPin !== bPin) return aPin - bPin;
+      if (a.p.tradeable !== b.p.tradeable) return a.p.tradeable ? -1 : 1;
       return b.c.score - a.c.score || b.p.score - a.p.score;
     });
 
@@ -537,7 +537,10 @@ function CandidateRow({
       <button
         type="button"
         onClick={() => onPick(c.symbol, style)}
-        className="group flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left transition-colors hover:bg-accent/50 sm:gap-4"
+        className={
+          "group flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left transition-colors hover:bg-accent/50 sm:gap-4 " +
+          (p.tradeable ? "" : "opacity-55") // 진입 자리 아닌 코인은 흐리게(정보는 다 보여줌)
+        }
       >
         {/* 순위 */}
         <span className="w-5 shrink-0 text-center font-mono text-xs font-bold tabular-nums text-primary">
@@ -593,9 +596,13 @@ function CandidateRow({
           ) : null}
         </span>
 
-        {/* 예상 진입 방향 (추정) + 예상 시나리오 개수 */}
+        {/* 예상 진입 방향 (추정) + 예상 시나리오 개수. 진입 자리 아니면 "자리 아님". */}
         <span className="flex w-[78px] shrink-0 flex-col items-center gap-0.5">
-          {p.bias === "long" ? (
+          {!p.tradeable ? (
+            <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {t("analyze.cmpC.notAtEntry")}
+            </span>
+          ) : p.bias === "long" ? (
             <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-grade-a/40 bg-grade-a/10 px-1.5 py-0.5 text-[10px] font-semibold text-grade-a">
               <TrendingUp className="h-3 w-3" />
               {t("analyze.cmpC.biasLong")}

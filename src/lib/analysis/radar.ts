@@ -465,13 +465,12 @@ export async function runRadarScan(): Promise<RadarCandidate[]> {
       ? btcCand.trend
       : null;
 
-  // BTC 제외 나머지 4칸 — 게이트 통과 + 랭킹 점수 > 0 만 (억지 후보 없음: 4개 미만이면 그대로 적게).
+  // 유니버스가 5개 고정이라 "선별"이 무의미 → 게이트로 거르지 않고 **전부** 랭킹만 매겨 저장한다.
+  // (진입 자리 여부는 UI가 preview.tradeable 로 표시. 게이트는 이제 필터가 아니라 상태 정보.)
   const ranked = candidates
-    .filter((c) => c.symbol !== "BTCUSDT" && passesGates(c))
+    .filter((c) => c.symbol !== "BTCUSDT")
     .map((c) => ({ ...c, score: rankScore(c, btcTrend) }))
-    .filter((c) => c.score > 0)
-    .sort((a, b) => b.score - a.score || b.volume24hUsd - a.volume24hUsd)
-    .slice(0, RADAR_TOP - 1);
+    .sort((a, b) => b.score - a.score || b.volume24hUsd - a.volume24hUsd);
 
   // BTC는 항상 포함 + 최상단 (+1000 오프셋으로 score 정렬에서도 맨 앞 보존).
   return btcCand ? [{ ...btcCand, score: 1000 + rankScore(btcCand, btcTrend) }, ...ranked] : ranked;

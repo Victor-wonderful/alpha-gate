@@ -1213,6 +1213,7 @@
       "biasLong": "롱 예상",
       "biasShort": "숏 예상",
       "biasNeutral": "양방향",
+      "notAtEntry": "자리 아님",
       "biasNeutralTitle": "방향 불명확 — 양방향 셋업 가능 (분석 시 확정)",
       "scenarioCount": "시나리오 ~{n}개",
       "stopLabel": "손절",

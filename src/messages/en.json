@@ -1213,6 +1213,7 @@
       "biasLong": "Long bias",
       "biasShort": "Short bias",
       "biasNeutral": "Both ways",
+      "notAtEntry": "No setup",
       "biasNeutralTitle": "Direction unclear — both-way setup possible (confirmed on analysis)",
       "scenarioCount": "~{n} scenarios",
       "stopLabel": "Stop",

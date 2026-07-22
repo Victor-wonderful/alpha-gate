@@ -407,6 +407,7 @@ function reasonKo(skip?: string): string {
   if (skip.startsWith("grade")) return "등급 미달";
   if (skip === "duplicate symbol") return "이미 보유";
   if (skip === "risk budget exhausted") return "위험 예산 소진";
+  if (skip === "margin cap") return "마진 상한 도달";
   if (skip === "direction filtered" || skip.startsWith("direction")) return "방향 제외";
   if (skip === "not a retracement limit") return "되돌림 자리 아님";
   if (skip === "quantity 0") return "수량 0";

@@ -7,7 +7,7 @@ import { buildCodeReport } from "@/lib/analysis/code-scenario";
 import { gradeTrade } from "@/lib/grading";
 import { sizePosition } from "@/lib/sizing";
 import { getMoneyContext } from "@/lib/money-management";
-import { TRIGGER_CHECK_KEYS, type TradeInput, type Timeframe } from "@/types/trade";
+import { TRIGGER_CHECK_KEYS, TOTAL_RISK_BUDGET_PCT, type TradeInput, type Timeframe } from "@/types/trade";
 import type { TradingStyle } from "@/lib/analysis/style";
 
 /**
@@ -38,6 +38,38 @@ const MAX_SCAN = 8; // 한 실행에서 스냅샷 조회할 심볼 상한(네트
 // 신규 진입 중단(안전장치, 사용자 조절 불가). 위험예산(6%)이 "손절 시 손실"만 보는
 // 사각을 메운다: 동조 급락으로 여러 포지션이 동시에 물려 평가손실이 커지는 상황을 차단.
 const UNREALIZED_HALT_PCT = -4;
+// 합계 마진 상한 — 오픈+예약 포지션의 필요 마진 합이 계좌의 이 %를 넘으면 신규 진입 중단.
+// 가상이라도 "가진 자금 이상으로 마진 못 쓴다"를 실거래처럼 강제(레버리지/노출 폭주 차단).
+// 위험 예산(6%)이 "손절 시 손실"만 보는 사각을 메운다: 타이트한 손절은 6% 위험을
+// 계좌의 수배 노출로 바꾸는데, 그 레버리지 자체는 예산이 안 막았다.
+const MAX_GROSS_MARGIN_PCT = 100;
+
+/** 진행 중(오픈+예약) 선물 포지션의 필요 마진 합(USDT). DCA·현물 제외. */
+async function computeUsedMargin(
+  svc: ReturnType<typeof getSupabaseService>,
+  userId: string,
+): Promise<number> {
+  const { data } = await svc
+    .from("trades")
+    .select("entry, limit_price, position_quantity, context_flags, market_type, order_status")
+    .eq("user_id", userId)
+    .eq("is_paper", true)
+    .is("closed_at", null)
+    .in("order_status", ["filled", "pending"])
+    .limit(100);
+  let margin = 0;
+  for (const r of (data ?? []) as Array<{
+    entry?: number | null; limit_price?: number | null; position_quantity?: number | null;
+    context_flags?: { dcaPlanId?: string; leverage?: number } | null; market_type?: string | null;
+  }>) {
+    if (r.context_flags?.dcaPlanId || r.market_type === "spot") continue;
+    const px = Number(r.entry ?? r.limit_price) || 0;
+    const qty = Number(r.position_quantity) || 0;
+    const lev = Number(r.context_flags?.leverage) || 1;
+    if (px > 0 && qty > 0 && lev > 0) margin += (px * qty) / lev;
+  }
+  return margin;
+}
 
 /** 진행 중(체결·미마감) 선물 가상 포지션들의 평가손익 합을 계좌 대비 %로. DCA·현물 제외. */
 async function computeUnrealizedPct(
@@ -192,6 +224,12 @@ export async function runAutoTradeForUser(
   const openSymbols = new Set(money.openPositions.map((p) => p.symbol));
   const now = Date.now();
 
+  // 위험·마진을 실행 내내 누적 차감한다 — money 는 실행 시작 시점 스냅샷이라,
+  // 한 번의 실행에서 여러 건 넣을 때 예산·마진을 실시간으로 깎지 않으면 상한을 넘긴다.
+  let usedRiskPct = money.usedRiskPct ?? 0;
+  let usedMargin = await computeUsedMargin(svc, config.user_id);
+  const marginCap = accountSize * (MAX_GROSS_MARGIN_PCT / 100);
+
   for (const { symbol, style } of targets) {
     if (slots <= 0) break;
     // 중복 코인 — 이미 (봇이든 수동이든) 진행 중이면 스킵.
@@ -271,18 +309,31 @@ export async function runAutoTradeForUser(
       continue;
     }
 
-    // 게이트 3: 위험 예산 남았는지.
-    if ((money.remainingRiskPct ?? 0) <= 0) {
-      decisions.push({ symbol, direction, grade: graded.grade, entry, stop, target, placed: false, skipped: "risk budget exhausted" });
-      continue;
-    }
-
-    // 사이징.
+    // 사이징 (위험·마진 게이트가 수량을 필요로 해서 먼저 계산).
     const sizing = sizePosition({ accountSize, allowedLossPct: config.risk_pct, entry, stop });
     if (sizing.quantity <= 0) {
       decisions.push({ symbol, direction, grade: graded.grade, entry, stop, target, placed: false, skipped: "quantity 0" });
       continue;
     }
+
+    const posNotional = sizing.quantity * entry;
+    const posMargin = config.leverage > 0 ? posNotional / config.leverage : posNotional;
+    const posRiskPct = accountSize > 0 ? (Math.abs(entry - stop) * sizing.quantity) / accountSize * 100 : 0;
+
+    // 게이트 3: 위험 예산 — 실행 내 차감분까지 반영해 6%를 넘기지 않는다.
+    if (usedRiskPct + posRiskPct > TOTAL_RISK_BUDGET_PCT + 1e-9) {
+      decisions.push({ symbol, direction, grade: graded.grade, entry, stop, target, placed: false, skipped: "risk budget exhausted" });
+      continue;
+    }
+    // 게이트 4: 합계 마진 상한 — 가진 자금 이상으로 마진 못 씀(가상이라도 실거래처럼).
+    if (usedMargin + posMargin > marginCap + 1e-9) {
+      decisions.push({ symbol, direction, grade: graded.grade, entry, stop, target, placed: false, skipped: "margin cap" });
+      continue;
+    }
+
+    // 이 건은 넣기로 확정 → 위험·마진을 즉시 예약(다음 후보 게이트에 반영).
+    usedRiskPct += posRiskPct;
+    usedMargin += posMargin;
 
     if (dryRun) {
       decisions.push({ symbol, direction, grade: graded.grade, entry, stop, target, placed: false, skipped: "dry-run" });
@@ -317,7 +368,7 @@ export async function runAutoTradeForUser(
         entry_actual: null,
         entry_slippage_pct: 0,
         fees_pct: PAPER_FEES_PCT,
-        paper_margin: null,
+        paper_margin: posMargin,
         is_paper: true,
         order_type: "limit",
         limit_price: entry,

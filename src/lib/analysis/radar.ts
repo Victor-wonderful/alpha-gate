@@ -34,6 +34,8 @@ export type StyleFit = Record<TradingStyle, number>;
 export interface RadarCandidate {
   symbol: string;
   score: number;
+  /** 예상 매매 등급(A/B/C/D) — scan-radar 크론이 봇과 동일 경로로 계산. 점수와 별개. */
+  grade?: string | null;
   signals: RadarSignal[];
   /** 셋업이 가장 뚜렷한 트레이딩 스타일. */
   bestStyle: TradingStyle;

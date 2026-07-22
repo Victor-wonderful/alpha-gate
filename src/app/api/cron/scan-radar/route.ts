@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { runRadarScan } from "@/lib/analysis/radar";
+import { attachRadarGrades } from "@/lib/analysis/radar-grade";
 import { saveRadarScan } from "@/lib/analysis/radar-persist";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +18,20 @@ export async function GET(req: NextRequest) {
 
   try {
     const candidates = await runRadarScan();
-    const recorded = await saveRadarScan(candidates);
-    return NextResponse.json({ ok: true, recorded, top: candidates.slice(0, 5).map((c) => ({ s: c.symbol, score: c.score })) });
+    // 후보마다 "예상 등급"을 봇과 동일 경로로 계산해 붙인다(병렬·best-effort).
+    // 등급 계산이 통째로 실패해도 스캔은 저장한다(등급만 null).
+    let graded = candidates;
+    try {
+      graded = await attachRadarGrades(candidates);
+    } catch {
+      graded = candidates;
+    }
+    const recorded = await saveRadarScan(graded);
+    return NextResponse.json({
+      ok: true,
+      recorded,
+      top: graded.slice(0, 5).map((c) => ({ s: c.symbol, score: c.score, grade: c.grade ?? null })),
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

@@ -74,6 +74,14 @@ const STYLE_ORDER: TradingStyle[] = ["day", "swing"];
 
 // 신호 종류별 색상 — "왜 볼 만한지"를 색으로 빠르게 구분.
 // 라이트 배경용 진한 텍스트(-700). 옅은 -300/-200은 다크 테마 잔재라 흰 카드에서 안 보였음.
+// 예상 등급 배지 색 (매매 등급 토큰 재사용).
+const GRADE_BADGE: Record<string, string> = {
+  A: "bg-grade-a/15 text-grade-a",
+  B: "bg-grade-b/15 text-grade-b",
+  C: "bg-grade-c/15 text-grade-c",
+  D: "bg-grade-d/15 text-grade-d",
+};
+
 const SIGNAL_COLOR: Record<string, string> = {
   sweep: "bg-sky-500/15 text-sky-700",
   funding: "bg-amber-500/15 text-amber-700",
@@ -539,6 +547,22 @@ function CandidateRow({
         <span className="flex w-[92px] shrink-0 items-center gap-1">
           <TrendMark trend={c.trend} strength={c.trendStrength} />
           <span className="truncate font-mono text-sm font-semibold text-foreground">{base}</span>
+        </span>
+
+        {/* 예상 등급 (봇과 동일 계산) */}
+        <span className="w-7 shrink-0 text-center" title={t("analyze.cmpC.gradeHint")}>
+          {c.grade ? (
+            <span
+              className={
+                "inline-block rounded px-1 py-0.5 text-[11px] font-bold leading-none " +
+                (GRADE_BADGE[c.grade] ?? "bg-muted text-muted-foreground")
+              }
+            >
+              {c.grade}
+            </span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">–</span>
+          )}
         </span>
 
         {/* 가격 · 변동 */}

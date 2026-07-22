@@ -11,6 +11,7 @@ export async function saveRadarScan(candidates: RadarCandidate[]): Promise<numbe
   const payload = candidates.map((c) => ({
     symbol: c.symbol,
     score: c.score,
+    grade: c.grade ?? null,
     signals: c.signals,
     best_style: c.bestStyle,
     style_fit: c.styleFit,
@@ -66,9 +67,8 @@ export async function loadLatestRadar(client?: SupabaseLike): Promise<RadarSnaps
 
   const { data, error } = await supabase
     .from("radar_candidates")
-    .select(
-      "symbol, score, signals, best_style, style_fit, style_atr, trend, trend_strength, range_low_pct, range_high_pct, price, change24h_pct, funding_rate, volume24h_usd",
-    )
+    // select("*") — grade 컬럼(마이그 0049)이 아직 없어도 로드가 깨지지 않게(=> grade null).
+    .select("*")
     .eq("scanned_at", latest.scanned_at)
     .order("score", { ascending: false });
 
@@ -77,6 +77,7 @@ export async function loadLatestRadar(client?: SupabaseLike): Promise<RadarSnaps
   const candidates: RadarCandidate[] = (data as Record<string, unknown>[]).map((r) => ({
     symbol: r.symbol as string,
     score: Number(r.score),
+    grade: (r.grade as string | null) ?? null,
     signals: (r.signals as RadarSignal[]) ?? [],
     bestStyle: ((r.best_style as TradingStyle) ?? "swing"),
     styleFit: ((r.style_fit as StyleFit) ?? ({} as StyleFit)),

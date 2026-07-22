@@ -1181,6 +1181,7 @@
       },
       "trendUp": "Uptrend",
       "trendDown": "Downtrend",
+      "gradeHint": "Expected trade grade — confirmed when you run the full analysis",
       "trendRange": "Range (no direction)",
       "strengthStrong": "Strong",
       "strengthStrongTitle": "Strong trend — the only backtested edge (trend-following in the trend direction). Priority candidate.",

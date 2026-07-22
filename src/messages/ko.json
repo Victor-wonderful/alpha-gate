@@ -1181,6 +1181,7 @@
       },
       "trendUp": "상승 추세",
       "trendDown": "하락 추세",
+      "gradeHint": "예상 매매 등급 — 클릭해 정밀 분석하면 확정됩니다",
       "trendRange": "박스권 (방향 없음)",
       "strengthStrong": "강",
       "strengthStrongTitle": "강한 추세 — 백테스트상 유일하게 검증된 엣지(추세 방향 추종). 우선 후보.",

@@ -2,6 +2,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { AnalyzeClient } from "./analyze-client";
 import { AnalysisHistory } from "@/components/analyze/analysis-history";
 import { HelpLink } from "@/components/app/help-link";
+import { ResearchHowItWorks } from "@/components/analyze/how-it-works";
 import { getMoneyContext } from "@/lib/money-management";
 import { getEffectiveAccount } from "@/lib/account";
 import { loadLatestRadar, type RadarSnapshot } from "@/lib/analysis/radar-persist";
@@ -51,20 +52,14 @@ export default async function AnalyzePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">{t("analyze.pageh.title")}</h1>
-            <HelpLink href="/app/guide/analyze" label={t("analyze.pageh.help")} />
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("analyze.pageh.intro")}
-          </p>
-          <p className="mt-2 inline-block rounded-md bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground">
-            {t("analyze.pageh.steps")}
-          </p>
+      <div>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight">{t("analyze.pageh.title")}</h1>
+          <HelpLink href="/app/guide/analyze" label={t("analyze.pageh.help")} />
         </div>
+        <p className="mt-1 text-sm text-muted-foreground">{t("analyze.pageh.intro")}</p>
       </div>
+      <ResearchHowItWorks />
       <AnalyzeClient
         accountSize={accountSize}
         riskPct={Number(profile?.default_risk_pct) || 1}

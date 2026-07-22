@@ -1233,6 +1233,16 @@
       "currentSame": "same as current",
       "currentVsEntry": "{pct}% vs current"
     },
+    "how": {
+      "heading": "How it works",
+      "s1title": "Pick a coin",
+      "s1desc": "Choose a coin and a trading style (Impulse / Momentum).",
+      "s2title": "AI research",
+      "s2desc": "It analyzes market structure, flow, and sentiment, then gives scenarios (entry, stop, target) with a grade.",
+      "s3title": "You decide & trade",
+      "s3desc": "Look at the result and decide whether to take the trade — then place it yourself.",
+      "footer": "Unlike Auto-trade, where the bot acts for you, the judgment and execution are yours."
+    },
     "pageh": {
       "title": "AI Research",
       "help": "Help",

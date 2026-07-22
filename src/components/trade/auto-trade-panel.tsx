@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   saveAutoConfig,
-  saveBotCapitalAction,
+  saveBotAllocAction,
   runAutoNowAction,
   type AutoConfigView,
   type AutoStatus,
@@ -47,12 +47,15 @@ function matchPreset(cfg: Cfg): PresetKey | null {
 export function AutoTradePanel({
   initialConfig,
   status,
-  accountSize,
+  total = 0,
+  botAlloc = 0,
 }: {
   initialConfig: AutoConfigView;
   status: AutoStatus;
-  /** 운영 자금(내 자금) — 봇이 이 금액 × 리스크%로 포지션 크기를 잡는다. */
-  accountSize: number;
+  /** 전체 운영 자금(봇+수동). 봉투 모델의 분모. */
+  total: number;
+  /** 봇에 맡긴 금액. 봇은 이 돈만 굴린다. */
+  botAlloc: number;
 }) {
   const [cfg, setCfg] = useState<Cfg>(() => {
     const { last_run_at: _i, ...rest } = initialConfig;
@@ -60,20 +63,23 @@ export function AutoTradePanel({
     return rest;
   });
   const lastRunAt = initialConfig.last_run_at;
-  const [capital, setCapital] = useState(String(Math.round(accountSize)));
+  const [alloc, setAlloc] = useState(String(Math.round(botAlloc)));
   const [decisions, setDecisions] = useState<AutoTradeDecision[] | null>(null);
   const [busy, startBusy] = useTransition();
   const [running, startRun] = useTransition();
 
-  const capitalNum = Number(capital) || 0;
-  const perTradeLoss = capitalNum * (cfg.risk_pct / 100);
+  const allocNum = Number(alloc) || 0;
+  const botCapital = Math.min(allocNum, total); // 봇이 실제 굴리는 돈(전체 초과 못 함)
+  const manualLeft = Math.max(0, total - allocNum); // 분석 후 거래에 남는 돈
+  const overAlloc = allocNum > total; // 전체보다 많이 맡기려 함
+  const perTradeLoss = botCapital * (cfg.risk_pct / 100);
 
-  function saveCapital() {
-    if (capitalNum <= 0 || capitalNum === Math.round(accountSize)) return;
+  function saveAlloc() {
+    if (allocNum < 0 || allocNum === Math.round(botAlloc)) return;
     startBusy(async () => {
-      const r = await saveBotCapitalAction(capitalNum);
+      const r = await saveBotAllocAction(allocNum);
       if (!r.ok) toast.error(r.error ?? "저장 실패");
-      else toast.success(`운영 자금 ${capitalNum.toLocaleString()} vUSDT 저장`);
+      else toast.success(`봇에 ${allocNum.toLocaleString()} vUSDT 맡김`);
     });
   }
 
@@ -166,26 +172,43 @@ export function AutoTradePanel({
         그래도 엣지가 없으면 손실이 날 수 있으니, 우선 가상으로 며칠 지켜보세요.
       </div>
 
-      {/* 운영 자금 — 봇이 이 금액 기준으로 사이즈를 잡는다 (내 자금 공유) */}
+      {/* 봇에 맡긴 돈 (봉투 모델) — 전체 자금 중 봇 몫만. 나머지는 수동 거래 몫. */}
       <Card>
         <CardContent className="space-y-2 p-4">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold">운영 자금</span>
+            <span className="text-sm font-semibold">봇에 맡긴 돈</span>
             <div className="flex items-center gap-1.5">
               <Input
-                value={capital}
-                onChange={(e) => setCapital(e.target.value.replace(/[^0-9]/g, ""))}
-                onBlur={saveCapital}
+                value={alloc}
+                onChange={(e) => setAlloc(e.target.value.replace(/[^0-9]/g, ""))}
+                onBlur={saveAlloc}
                 inputMode="numeric"
                 className="h-8 w-32 text-right font-mono tabular-nums"
               />
               <span className="text-xs text-muted-foreground">vUSDT</span>
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground">
-            봇은 이 금액의 <b className="text-foreground">{cfg.risk_pct}%</b>씩 거래합니다 — 한 거래 최대 손실 약{" "}
-            <b className="text-foreground">{perTradeLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })} vUSDT</b>. (AI 분석·수동과 공유하는 내 자금)
-          </p>
+          {/* 전체 → 봇 / 수동 분배를 한눈에 */}
+          <div className="flex items-center justify-between rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px]">
+            <span className="text-muted-foreground">
+              전체 <b className="font-mono tabular-nums text-foreground">{total.toLocaleString()}</b>
+            </span>
+            <span className="text-muted-foreground">
+              봇 <b className="font-mono tabular-nums text-grade-a">{botCapital.toLocaleString()}</b>
+              {" · "}수동 몫 <b className="font-mono tabular-nums text-foreground">{manualLeft.toLocaleString()}</b>
+            </span>
+          </div>
+          {overAlloc ? (
+            <p className="text-[11px] font-medium text-grade-d">
+              전체 자금({total.toLocaleString()})보다 많이 맡길 수 없습니다 — 봇은 {botCapital.toLocaleString()}만 씁니다. 전체 자금은 &ldquo;내 자금&rdquo; 설정에서 늘리세요.
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              봇은 맡긴 돈의 <b className="text-foreground">{cfg.risk_pct}%</b>씩 거래 — 한 거래 최대 손실 약{" "}
+              <b className="text-foreground">{perTradeLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })} vUSDT</b>.
+              나머지 <b className="text-foreground">{manualLeft.toLocaleString()}</b>는 분석 후 직접 거래 몫입니다.
+            </p>
+          )}
         </CardContent>
       </Card>
 

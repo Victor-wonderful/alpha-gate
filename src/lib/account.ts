@@ -8,8 +8,12 @@ export type AccountMode = "real" | "virtual";
 
 export interface EffectiveAccount {
   mode: AccountMode;
-  /** 위험/등급 계산에 쓸 유효 자금(USDT). 결정 불가 시 fallback 10000. */
+  /** 수동(분석 후 거래)에 쓸 유효 자금 = 전체 - 봇 배정. 결정 불가 시 fallback 10000. */
   accountSize: number;
+  /** 전체 운영 자금(봇 배정 포함). 봉투 모델의 분모. */
+  total: number;
+  /** 자동매매 봇에 맡긴 금액(전체를 넘지 않게 clamp). */
+  botAlloc: number;
   /** accountSize 를 신뢰할 수 있는가(실거래인데 잔액/배정 미설정이면 false). */
   resolved: boolean;
   /** 사용자 안내용 사유(미설정/잔액없음/stale 등). */
@@ -41,19 +45,16 @@ export async function getEffectiveAccount(): Promise<EffectiveAccount> {
   const base: EffectiveAccount = {
     mode: "virtual",
     accountSize: virtualCapital,
+    total: virtualCapital,
+    botAlloc: 0,
     resolved: true,
     real: { allocType: "amount", allocAmount: null, allocPct: null, balanceCached: null, balanceStale: true },
     virtual: { capital: virtualCapital },
   };
   if (!user) return base;
 
-  const { data: p } = await supabase
-    .from("profiles")
-    .select(
-      "account_mode, default_account_size, real_alloc_type, real_alloc_amount, real_alloc_pct, real_balance_cached, real_balance_cached_at",
-    )
-    .eq("id", user.id)
-    .maybeSingle();
+  // select("*") — bot_alloc_amount 컬럼이 아직 없어도(마이그 0048 적용 전) 깨지지 않게.
+  const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
 
   const vCap = Number(p?.default_account_size) || FALLBACK;
   const allocType = (p?.real_alloc_type as "amount" | "pct") ?? "amount";
@@ -67,9 +68,16 @@ export async function getEffectiveAccount(): Promise<EffectiveAccount> {
   const mode = (p?.account_mode as AccountMode) ?? "virtual";
   const real = { allocType, allocAmount, allocPct, balanceCached, balanceStale };
   const virtual = { capital: vCap };
+  const botAllocRaw = Number((p as { bot_alloc_amount?: number | null } | null)?.bot_alloc_amount) || 0;
+
+  // 봉투 모델: 전체(total)를 먼저 구하고, 봇 몫을 뗀 나머지를 수동 자금(accountSize)으로.
+  const split = (total: number, resolved: boolean, note?: string): EffectiveAccount => {
+    const botAlloc = Math.min(Math.max(0, botAllocRaw), total);
+    return { mode, accountSize: Math.max(0, total - botAlloc), total, botAlloc, resolved, note, real, virtual };
+  };
 
   if (mode === "virtual") {
-    return { mode, accountSize: vCap, resolved: true, real, virtual };
+    return split(vCap, true);
   }
 
   // real 모드 — 배정액 계산
@@ -86,7 +94,7 @@ export async function getEffectiveAccount(): Promise<EffectiveAccount> {
   }
 
   if (size == null || !(size > 0)) {
-    return { mode, accountSize: FALLBACK, resolved: false, note: note ?? "실거래 자금 미설정", real, virtual };
+    return split(FALLBACK, false, note ?? "실거래 자금 미설정");
   }
-  return { mode, accountSize: size, resolved: true, note: balanceStale ? "실거래 잔액이 오래됨 — 갱신 권장" : undefined, real, virtual };
+  return split(size, true, balanceStale ? "실거래 잔액이 오래됨 — 갱신 권장" : undefined);
 }

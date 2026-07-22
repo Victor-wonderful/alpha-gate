@@ -93,8 +93,11 @@ export async function saveAutoConfig(
   return { ok: true };
 }
 
-/** 운영 자금(내 자금 = default_account_size) 저장 — 봇·AI 분석·수동이 공유하는 기준 자금. */
-export async function saveBotCapitalAction(
+/**
+ * 봇에 맡길 자금(bot_alloc_amount) 저장 — 봉투 모델. 전체 자금 중 봇 몫만 떼어준다.
+ * 수동(분석 후 거래) 자금 = 전체 − 봇 배정 (자동으로 남는 것). 0 = 봇 미배정(발주 안 함).
+ */
+export async function saveBotAllocAction(
   amount: number,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await getSupabaseServer();
@@ -102,9 +105,9 @@ export async function saveBotCapitalAction(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
-  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "운영 자금은 0보다 커야 합니다." };
+  if (!Number.isFinite(amount) || amount < 0) return { ok: false, error: "봇 배정 금액은 0 이상이어야 합니다." };
 
-  const { error } = await supabase.from("profiles").update({ default_account_size: amount }).eq("id", user.id);
+  const { error } = await supabase.from("profiles").update({ bot_alloc_amount: amount }).eq("id", user.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/app/trade");
   revalidatePath("/app/analyze");

@@ -35,7 +35,9 @@ export default async function TradePage({
   // URL override > 활성 모드 유효 자금(실거래 배정/가상). Guards against junk input.
   const urlAccountSize = sp.accountSize ? Number(sp.accountSize) : NaN;
   const urlRiskPct = sp.riskPct ? Number(sp.riskPct) : NaN;
-  const effectiveSize = user ? (await getEffectiveAccount()).accountSize : 10000;
+  // 봉투 모델: eff.accountSize = 수동 몫(전체 − 봇 배정), eff.total = 전체, eff.botAlloc = 봇 몫.
+  const eff = user ? await getEffectiveAccount() : null;
+  const effectiveSize = eff?.accountSize ?? 10000;
   const accountSize =
     Number.isFinite(urlAccountSize) && urlAccountSize > 0
       ? urlAccountSize
@@ -133,7 +135,12 @@ export default async function TradePage({
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
       <section>
-        <AutoTradePanel initialConfig={autoConfig} status={autoStatus} accountSize={accountSize} />
+        <AutoTradePanel
+          initialConfig={autoConfig}
+          status={autoStatus}
+          total={eff?.total ?? accountSize}
+          botAlloc={eff?.botAlloc ?? 0}
+        />
       </section>
       <section>{dca}</section>
     </div>

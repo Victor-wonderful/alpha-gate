@@ -44,7 +44,7 @@ const UNREALIZED_HALT_PCT = -4;
 // 계좌의 수배 노출로 바꾸는데, 그 레버리지 자체는 예산이 안 막았다.
 const MAX_GROSS_MARGIN_PCT = 100;
 
-/** 진행 중(오픈+예약) 선물 포지션의 필요 마진 합(USDT). DCA·현물 제외. */
+/** 봇이 넣은(오픈+예약) 선물 포지션의 필요 마진 합(USDT). 봉투 모델 — 봇 몫만. */
 async function computeUsedMargin(
   svc: ReturnType<typeof getSupabaseService>,
   userId: string,
@@ -56,6 +56,7 @@ async function computeUsedMargin(
     .eq("is_paper", true)
     .is("closed_at", null)
     .in("order_status", ["filled", "pending"])
+    .filter("context_flags->>bot", "eq", "true")
     .limit(100);
   let margin = 0;
   for (const r of (data ?? []) as Array<{
@@ -69,6 +70,34 @@ async function computeUsedMargin(
     if (px > 0 && qty > 0 && lev > 0) margin += (px * qty) / lev;
   }
   return margin;
+}
+
+/** 봇이 넣은(오픈+예약) 선물 포지션의 위험(|진입-손절|×수량) 합(USDT). 봉투 모델 — 봇 몫만. */
+async function computeBotUsedRisk(
+  svc: ReturnType<typeof getSupabaseService>,
+  userId: string,
+): Promise<number> {
+  const { data } = await svc
+    .from("trades")
+    .select("entry, limit_price, stop, position_quantity, context_flags, market_type, order_status")
+    .eq("user_id", userId)
+    .eq("is_paper", true)
+    .is("closed_at", null)
+    .in("order_status", ["filled", "pending"])
+    .filter("context_flags->>bot", "eq", "true")
+    .limit(100);
+  let risk = 0;
+  for (const r of (data ?? []) as Array<{
+    entry?: number | null; limit_price?: number | null; stop?: number | null;
+    position_quantity?: number | null; context_flags?: { dcaPlanId?: string } | null; market_type?: string | null;
+  }>) {
+    if (r.context_flags?.dcaPlanId || r.market_type === "spot") continue;
+    const px = Number(r.entry ?? r.limit_price) || 0;
+    const stop = Number(r.stop) || 0;
+    const qty = Number(r.position_quantity) || 0;
+    if (px > 0 && stop > 0 && qty > 0) risk += Math.abs(px - stop) * qty;
+  }
+  return risk;
 }
 
 /** 진행 중(체결·미마감) 선물 가상 포지션들의 평가손익 합을 계좌 대비 %로. DCA·현물 제외. */
@@ -163,21 +192,24 @@ export async function runAutoTradeForUser(
 
   if (!config.enabled) return { ...result, note: "disabled" };
 
-  // 계좌 자금 — 프로필 기본값 → 없으면 가상지갑 잔액 → 10000.
+  // 봉투 모델 — 봇은 "맡긴 돈"(bot_alloc_amount)만 굴린다. 전체 자금 중 봇 몫.
+  // select("*") — bot_alloc_amount 컬럼이 아직 없어도(마이그 0048 전) 깨지지 않게.
   const { data: profile } = await svc
     .from("profiles")
-    .select("default_account_size")
+    .select("*")
     .eq("id", config.user_id)
     .maybeSingle();
-  const { data: wallet } = await svc
-    .from("paper_wallets")
-    .select("usdt_balance")
-    .eq("user_id", config.user_id)
-    .maybeSingle();
-  const accountSize =
-    Number(profile?.default_account_size) || Number(wallet?.usdt_balance) || 10_000;
+  const total = Number(profile?.default_account_size) || 10_000;
+  const accountSize = Math.min(Math.max(0, Number(profile?.bot_alloc_amount) || 0), total);
+  // 봇에 배정된 자금이 없으면 발주하지 않는다(수동이 전체를 씀).
+  if (accountSize <= 0) return { ...result, note: "no bot allocation" };
 
   const money = await getMoneyContext(accountSize, { client: svc, userId: config.user_id });
+  // 위험 예산을 "봇 몫" 기준으로 재계산 — money.usedRiskPct 는 계좌 전체(봇+수동) 위험이라
+  // 봇 자금 대비로는 과대집계된다. 봇 포지션만 세어 봇 자금 대비로 덮어쓴다(수동과 분리).
+  const botRisk = await computeBotUsedRisk(svc, config.user_id);
+  money.usedRiskPct = accountSize > 0 ? (botRisk / accountSize) * 100 : 0;
+  money.remainingRiskPct = Math.max(0, TOTAL_RISK_BUDGET_PCT - money.usedRiskPct);
 
   // 게이트 0: 일일 손실 한도 도달 → 그날 봇 정지.
   if (money.todayCumulativeR <= config.daily_loss_limit_r) {

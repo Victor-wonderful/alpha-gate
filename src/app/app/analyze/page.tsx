@@ -60,6 +60,9 @@ export default async function AnalyzePage() {
           <p className="mt-1 text-sm text-muted-foreground">
             {t("analyze.pageh.intro")}
           </p>
+          <p className="mt-2 inline-block rounded-md bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground">
+            {t("analyze.pageh.steps")}
+          </p>
         </div>
       </div>
       <AnalyzeClient

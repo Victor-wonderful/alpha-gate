@@ -1236,7 +1236,8 @@
     "pageh": {
       "title": "AI Research",
       "help": "Help",
-      "intro": "A comprehensive analysis of multi-timeframe structure, liquidity, order flow, and funding bias in the Binance USDT-M futures market. Each scenario automatically computes a trade grade and recommended position.",
+      "intro": "Pick a coin and the AI analyzes the market's structure, flow, and sentiment, then hands you trade scenarios (entry, stop, target) with a grade for each. You look at the result and decide whether to take the trade — and place it yourself. Unlike Auto-trade, where the bot acts for you, the judgment and execution are yours.",
+      "steps": "① Pick coin & style → ② Run research → ③ Decide & place the trade yourself",
       "backToAnalyze": "Back to AI Research",
       "historyTitle": "AI Research History",
       "historyDesc": "All analyses run so far. Click one to restore its result on the analysis page.",

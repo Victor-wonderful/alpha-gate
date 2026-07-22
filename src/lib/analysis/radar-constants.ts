@@ -15,3 +15,12 @@ export const MEGA_CAP_UNIVERSE = [
   "DOGEUSDT", "ADAUSDT", "TRXUSDT", "LINKUSDT", "AVAXUSDT",
   "XLMUSDT", "SUIUSDT", "BCHUSDT", "HBARUSDT", "LTCUSDT",
 ];
+
+/** 레이더/자동매매 스캔 유니버스 — 가장 깨끗한 대장주 5개. DCA(적립, 위 15개)와 분리.
+ *  근거(2026-07-22 결정): ① 크립토는 다 BTC 동조라 breadth가 다양성을 안 준다
+ *  ② 하위권일수록 가짜돌파·조작 노이즈가 많다 ③ 봇이 확실한 엣지가 없는 국면에선
+ *  후보가 적을수록 무엣지 거래(수수료 출혈)가 줄어 오히려 이득. 트레이딩(선물)은
+ *  유동성 최상·밈코인 제외만. cf. current_state 2026-07-22 · backtest_edge_findings */
+export const RADAR_UNIVERSE = [
+  "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
+];

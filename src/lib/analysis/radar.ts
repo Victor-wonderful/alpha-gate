@@ -11,7 +11,7 @@ import { findSwings, detectLiquiditySweeps, classifyTrend } from "./smc";
 import { classifyTrendComposite } from "./trend";
 import { computeVolumeProfile } from "./volume-profile";
 import { simulateRange } from "./monte-carlo";
-import { MEGA_CAP_UNIVERSE, PINNED_SYMBOLS } from "./radar-constants";
+import { RADAR_UNIVERSE, PINNED_SYMBOLS } from "./radar-constants";
 import { STYLE_STANDARDS, MIN_STOP_PCT_VS_FEES } from "./standards";
 import type { TradingStyle } from "./style";
 
@@ -435,7 +435,8 @@ function rankScore(c: RadarCandidate, btcTrend: "up" | "down" | null): number {
   return prox * 100 + trendPts * 10 + align * 5 + Math.min(c.score, 4);
 }
 
-/** 전체 스캔 — 시총 상위 15 대장주를 게이트·랭킹으로 5개 선별 (BTC 고정 + 4).
+/** 전체 스캔 — RADAR_UNIVERSE(대장주 5개)를 게이트·랭킹으로 (BTC 고정 + 나머지 4).
+ *  DCA(15개)와 분리된 트레이딩 전용 유니버스. cf. radar-constants.ts RADAR_UNIVERSE.
  *  score 컬럼에 랭킹 점수를 저장 — DB 로드(score desc)가 곧 선별 순서. */
 export async function runRadarScan(): Promise<RadarCandidate[]> {
   const [tickers, funding] = await Promise.all([
@@ -443,7 +444,7 @@ export async function runRadarScan(): Promise<RadarCandidate[]> {
     fetchAllFunding().catch(() => ({}) as Record<string, number>),
   ]);
   const bySymbol = new Map(tickers.map((t) => [t.symbol, t]));
-  const universe = MEGA_CAP_UNIVERSE.flatMap((s) => {
+  const universe = RADAR_UNIVERSE.flatMap((s) => {
     const m = bySymbol.get(s);
     return m && m.lastPrice > 0 ? [m] : [];
   });

@@ -27,10 +27,29 @@ describe("recommendTradeParams — 위험 예산 상한", () => {
     expect(r.riskPct).toBe(0);
   });
 
-  it("remainingRiskPct 미지정이면 기존 동작(예산 무관, 0.1~3% 밴드)", () => {
+  it("remainingRiskPct 미지정이면 예산 무관, 0.1~1% 밴드", () => {
     const r = recommendTradeParams(baseArgs);
     expect(r.riskPct).toBeGreaterThanOrEqual(0.1);
-    expect(r.riskPct).toBeLessThanOrEqual(3);
+    expect(r.riskPct).toBeLessThanOrEqual(1);
     expect(r.budgetLimited).toBeFalsy();
+  });
+});
+
+describe("recommendTradeParams — 등급 기반 동적 리스크 (최대 1% × 등급배수)", () => {
+  const args = { style: "day" as const, confidence: 0.6, stopPct: 1, userPreferredRiskPct: 1 };
+  it("A = 1% × 1.0 = 1.0%", () => {
+    expect(recommendTradeParams({ ...args, grade: "A" }).riskPct).toBeCloseTo(1.0, 5);
+  });
+  it("B = 1% × 0.5 = 0.5%", () => {
+    expect(recommendTradeParams({ ...args, grade: "B" }).riskPct).toBeCloseTo(0.5, 5);
+  });
+  it("C = 1% × 0.25 = 0.25%", () => {
+    expect(recommendTradeParams({ ...args, grade: "C" }).riskPct).toBeCloseTo(0.25, 5);
+  });
+  it("사용자/강도 상한이 낮으면 그 안에서 (userPref 0.5 → A도 0.5%)", () => {
+    expect(recommendTradeParams({ ...args, grade: "A", userPreferredRiskPct: 0.5 }).riskPct).toBeCloseTo(0.5, 5);
+  });
+  it("1% 하드캡 — userPref가 커도 A는 1% 초과 못 함", () => {
+    expect(recommendTradeParams({ ...args, grade: "A", userPreferredRiskPct: 5 }).riskPct).toBeCloseTo(1.0, 5);
   });
 });

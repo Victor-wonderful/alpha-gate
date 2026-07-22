@@ -1,20 +1,15 @@
 import type { TradingStyle } from "@/lib/analysis/style";
 
-// Base risk per trade by style (% of account).
-// 업계 관행: 데이 트레이더 보통 1%, 스윙 1~2%, 포지션 2%.
-const BASE_RISK_PCT: Record<TradingStyle, number> = {
-  scalp: 0.3,
-  day: 1.0,
-  swing: 1.5,
-  position: 2.0,
-};
+// 거래당 리스크 상한 (계좌 대비 %). Victor 결정: 어떤 셋업도 한 판에 계좌의 1% 넘게 안 건다.
+const MAX_RISK_PCT = 1.0;
 
-// Grade-based risk multiplier — A high-quality setups get full size, lower grades reduced.
-// D는 거래 금지 권장 → override 모달 통과 시에만 진입 허용, 그때도 10%로 작게.
+// 등급 배수 — 좋은 셋업엔 상한까지, 애매할수록 작게. (Victor 결정: A1.0 / B0.5 / C0.25 / D0.1)
+// 거래당 리스크 = min(사용자·강도 설정, 1%) × 이 배수. 등급이 셋업 품질을 이미 반영하므로
+// 스타일 base·신뢰도는 리스크에 곱하지 않는다(등급 하나로 스케일).
 const GRADE_FACTOR: Record<"A" | "B" | "C" | "D", number> = {
   A: 1.0,
-  B: 0.7,
-  C: 0.3,
+  B: 0.5,
+  C: 0.25,
   D: 0.1,
 };
 
@@ -51,28 +46,23 @@ export function recommendTradeParams({
   /** 남은 위험 예산(계좌 대비 %). 주어지면 이 안으로 상한. 오픈·예약 포지션 차감 후 남은 양. */
   remainingRiskPct?: number;
 }): RecommendedTradeParams {
-  // 1) Risk %
-  const base = BASE_RISK_PCT[style] ?? 1.0;
-  const gradeF = GRADE_FACTOR[grade] ?? 0.5;
-  // 신뢰도 0~1 → 0.3~1.0 매핑. AI가 "전혀 모르겠다(0)"고 하면 30%까지 줄임.
-  const confF = Math.max(0.3, Math.min(1.0, confidence));
-  const idealRiskPct = base * gradeF * confF;
+  // 1) Risk % — 거래당 상한(≤1%) 안에서 등급으로 스케일. 사용자/강도 설정을 상한으로 쓰되
+  //    1%를 넘지 못하게 하드 캡. (신뢰도·스타일 base는 리스크에 안 곱함 — 등급 하나로 결정)
+  const gradeF = GRADE_FACTOR[grade] ?? 0.25;
+  const cap = Math.min(userPreferredRiskPct > 0 ? userPreferredRiskPct : MAX_RISK_PCT, MAX_RISK_PCT);
+  const idealRiskPct = cap * gradeF;
   let riskPct = idealRiskPct;
-  // Never exceed user's preference (treat as their personal cap)
-  if (userPreferredRiskPct > 0) {
-    riskPct = Math.min(riskPct, userPreferredRiskPct);
-  }
   // 위험 예산 상한 — 오픈+예약 포지션이 이미 쓴 위험을 뺀 "남은 예산" 안으로 축소.
   let budgetLimited = false;
   if (remainingRiskPct != null) {
     if (riskPct > remainingRiskPct) budgetLimited = true;
     riskPct = Math.min(riskPct, Math.max(0, remainingRiskPct));
   }
-  // Clamp to safety band. 예산이 바닥이면(≈0) 0.1% floor를 두지 않고 실제 0으로 → "보류" 신호.
+  // Clamp. 예산이 바닥이면(≈0) 0.1% floor 없이 실제 0으로 → "보류" 신호.
   const budgetExhausted = remainingRiskPct != null && remainingRiskPct < 0.1;
   riskPct = budgetExhausted
     ? Number(Math.max(0, riskPct).toFixed(2))
-    : Math.max(0.1, Math.min(3, Number(riskPct.toFixed(2))));
+    : Math.max(0.1, Math.min(MAX_RISK_PCT, Number(riskPct.toFixed(2))));
 
   // 2) Leverage — 청산 가격이 손절 가격보다 8배수 이상 떨어진 곳에 오도록.
   //    레버리지 L에서 청산 ≈ 100/L% 적자.
@@ -89,8 +79,8 @@ export function recommendTradeParams({
   lev = Math.max(1, Math.min(styleLevCap[style] ?? 10, lev));
 
   const reasoning = budgetLimited
-    ? `기본 ${base.toFixed(2)}% × 등급 ${grade} × 신뢰도 ${(confF * 100).toFixed(0)}% = ${idealRiskPct.toFixed(2)}% 이나, 남은 위험 예산 ${(remainingRiskPct ?? 0).toFixed(2)}%로 축소 → ${riskPct.toFixed(2)}% (레버리지 ${lev}배)`
-    : `기본 ${base.toFixed(2)}% × 등급 ${grade}(${(gradeF * 100).toFixed(0)}%) × 신뢰도 ${(confF * 100).toFixed(0)}% = ${riskPct.toFixed(2)}%, 손절폭 ${stopPct.toFixed(2)}%에 청산 안전 8배수 → ${lev}배`;
+    ? `상한 ${cap.toFixed(2)}% × 등급 ${grade}(${(gradeF * 100).toFixed(0)}%) = ${idealRiskPct.toFixed(2)}% 이나, 남은 위험 예산 ${(remainingRiskPct ?? 0).toFixed(2)}%로 축소 → ${riskPct.toFixed(2)}% (레버리지 ${lev}배)`
+    : `상한 ${cap.toFixed(2)}% × 등급 ${grade}(${(gradeF * 100).toFixed(0)}%) = ${riskPct.toFixed(2)}%, 손절폭 ${stopPct.toFixed(2)}%에 청산 안전 8배수 → ${lev}배`;
 
   return { riskPct, leverage: lev, reasoning, budgetLimited };
 }

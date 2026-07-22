@@ -5,6 +5,7 @@ import { fetchTicker24h } from "@/lib/analysis/binance";
 import { buildSnapshot } from "@/lib/analysis/analyze";
 import { buildCodeReport } from "@/lib/analysis/code-scenario";
 import { gradeTrade } from "@/lib/grading";
+import { recommendTradeParams } from "@/lib/recommend";
 import { sizePosition } from "@/lib/sizing";
 import { getMoneyContext } from "@/lib/money-management";
 import { TRIGGER_CHECK_KEYS, TOTAL_RISK_BUDGET_PCT, type TradeInput, type Timeframe } from "@/types/trade";
@@ -279,7 +280,7 @@ export async function runAutoTradeForUser(
     }
     result.evaluated++;
 
-    const { report } = buildCodeReport(snapshot);
+    const { strategy: codeStrat, report } = buildCodeReport(snapshot);
     const sc = report.scenarios[0];
     if (!sc) {
       decisions.push({ symbol, direction: "long", grade: "-", entry: 0, stop: 0, target: 0, placed: false, skipped: "no scenario" });
@@ -341,15 +342,29 @@ export async function runAutoTradeForUser(
       continue;
     }
 
+    // 거래당 리스크·레버리지 — 등급 기반 동적(최대 1% × 등급배수: A1.0/B0.5/C0.25) +
+    // 청산 안전 레버리지. 수동(거래 평가)과 동일한 recommendTradeParams 로 통일.
+    // 강도 프리셋의 risk_pct 는 상한으로만 쓰인다(1% 하드캡). 위험 예산은 아래 게이트가 처리.
+    const stopPct = entry > 0 ? (Math.abs(entry - stop) / entry) * 100 : 0;
+    const rec = recommendTradeParams({
+      style,
+      grade: graded.grade as "A" | "B" | "C" | "D",
+      confidence: codeStrat.confidence ?? 0.5,
+      stopPct,
+      userPreferredRiskPct: config.risk_pct,
+    });
+    // 리스크만 등급 기반 동적으로. 레버리지는 강도 프리셋 설정을 유지(Victor 저레버리지 선호).
+    const leverage = config.leverage;
+
     // 사이징 (위험·마진 게이트가 수량을 필요로 해서 먼저 계산).
-    const sizing = sizePosition({ accountSize, allowedLossPct: config.risk_pct, entry, stop });
+    const sizing = sizePosition({ accountSize, allowedLossPct: rec.riskPct, entry, stop });
     if (sizing.quantity <= 0) {
       decisions.push({ symbol, direction, grade: graded.grade, entry, stop, target, placed: false, skipped: "quantity 0" });
       continue;
     }
 
     const posNotional = sizing.quantity * entry;
-    const posMargin = config.leverage > 0 ? posNotional / config.leverage : posNotional;
+    const posMargin = leverage > 0 ? posNotional / leverage : posNotional;
     const posRiskPct = accountSize > 0 ? (Math.abs(entry - stop) * sizing.quantity) / accountSize * 100 : 0;
 
     // 게이트 3: 위험 예산 — 실행 내 차감분까지 반영해 6%를 넘기지 않는다.
@@ -390,7 +405,7 @@ export async function runAutoTradeForUser(
         position_quantity: sizing.quantity,
         market_checks: sc.marketAssessment,
         psych_checks: {},
-        context_flags: { leverage: config.leverage, bot: true, limitOrder: true, autoStyle: style },
+        context_flags: { leverage, bot: true, limitOrder: true, autoStyle: style },
         pre_grade: graded.grade,
         pre_score: graded.score,
         pre_score_breakdown: graded.reasons ?? [],
@@ -423,7 +438,7 @@ export async function runAutoTradeForUser(
       direction,
       limit_price: entry,
       quantity: sizing.quantity,
-      leverage: config.leverage,
+      leverage,
       stop,
       target,
       order_kind: "limit",

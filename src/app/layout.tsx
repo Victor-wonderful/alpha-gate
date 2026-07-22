@@ -26,13 +26,13 @@ export const metadata: Metadata = {
     template: "%s · VECTA",
   },
   description:
-    "진입 버튼을 누르기 전에 이 거래를 해도 되는지 점검하세요. AI 분석 + 매매 등급 + 거래 저널 + AI 복기.",
+    "진입 버튼을 누르기 전에 이 거래를 해도 되는지 점검하세요. AI 리서치 + 매매 등급 + 거래 저널 + AI 복기.",
   openGraph: {
     type: "website",
     siteName: "VECTA",
     title: "VECTA — 매매 전 의사결정 체크",
     description:
-      "진입 버튼을 누르기 전에 이 거래를 해도 되는지 점검하세요. AI 분석 + 매매 등급 + 거래 저널 + AI 복기.",
+      "진입 버튼을 누르기 전에 이 거래를 해도 되는지 점검하세요. AI 리서치 + 매매 등급 + 거래 저널 + AI 복기.",
     locale: "ko_KR",
   },
   twitter: {

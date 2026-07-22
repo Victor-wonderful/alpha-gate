@@ -3,7 +3,7 @@ import { GuideSubpageLayout, GuideSection, GuideFaq, GuideChip } from "@/compone
 import { cn } from "@/lib/utils";
 import { getT } from "@/lib/i18n/server";
 
-export const metadata = { title: "AI 분석 사용법" };
+export const metadata = { title: "AI 리서치 사용법" };
 
 export default async function GuideAnalyzePage() {
   const t = await getT();

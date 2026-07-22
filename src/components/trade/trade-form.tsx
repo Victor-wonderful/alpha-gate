@@ -1624,7 +1624,7 @@ function ScenarioContextCard({
       <CardHeader className="space-y-1 pb-3">
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span className="font-semibold uppercase tracking-wider text-primary">AI 분석에서 가져온 시나리오</span>
+          <span className="font-semibold uppercase tracking-wider text-primary">AI 리서치에서 가져온 시나리오</span>
         </div>
         <CardTitle className="text-base">{scenario.name}</CardTitle>
         <div className="flex flex-wrap items-center gap-2 text-xs">

@@ -24,7 +24,7 @@ export const clusters = {
   trading: (opts?: { rightSlot?: ReactNode }): ClusterDef => ({
     title: "거래 상황",
     description:
-      "AI 분석·수동·자동매매로 진입한 포지션과 대기 주문을 한눈에. 가상 자금(vUSDT) 기준.",
+      "AI 리서치·수동·자동매매로 진입한 포지션과 대기 주문을 한눈에. 가상 자금(vUSDT) 기준.",
     tabs: [
       { href: "/app/virtual-trade", label: "거래 상황", icon: "💼" },
     ],

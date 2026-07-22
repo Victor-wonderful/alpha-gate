@@ -2,7 +2,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "market": "Markets",
-    "analyze": "AI Analysis",
+    "analyze": "AI Research",
     "trade": "Auto-trade",
     "virtualTrade": "Trades",
     "journal": "Current",
@@ -133,7 +133,7 @@
       "colFunding": "Funding",
       "ma200Above": "Above",
       "ma200Below": "Below",
-      "aiAnalyze": "AI Analysis"
+      "aiAnalyze": "AI Research"
     },
     "cards": {
       "noData": "No data",
@@ -545,11 +545,11 @@
       "limitOrder": "Limit",
       "dirUpward": "up",
       "dirDownward": "down",
-      "emptyTitle": "Manual execution is used after AI analysis (auto-trading is in the ‘Auto-trade’ tab above)",
+      "emptyTitle": "Manual execution is used after AI research (auto-trading is in the ‘Auto-trade’ tab above)",
       "emptyDescPre": "This page reviews the grade, sizing, and market structure of an AI-generated scenario before entering paper trading. To enter directly, use the order panel in ",
       "virtualTrade": "Virtual Trading",
       "emptyDescPost": ".",
-      "toAnalysis": "To AI analysis",
+      "toAnalysis": "To AI research",
       "toVirtualTrade": "To virtual trading →",
       "backtestTrade": "Backtest trade",
       "backtestBannerPre": "As of",
@@ -874,11 +874,11 @@
     "buyAiCredits": "Buy AI Credits",
     "aiCredits": "AI Credits",
     "creditsUnit": "credits",
-    "creditPerAnalysis": "1 AI analysis = 1 credit",
+    "creditPerAnalysis": "1 AI research = 1 credit",
     "chargeCredits": "Add Credits",
     "vusdtUsage": "vUSDT Uses",
     "virtualTrading": "Virtual Trading",
-    "aiAnalysisCredits": "AI Analysis Credits",
+    "aiAnalysisCredits": "AI Research Credits",
     "recentTransactions": "Recent Transactions",
     "recent20": "Last 20",
     "noTransactions": "No transactions yet",
@@ -1001,7 +1001,7 @@
         "note": {
           "pre": "Backtest mode: only ",
           "klineOnly": "klines (candle data)",
-          "post": " are fetched for the past time. Live-only data such as the order book, order flow, funding, and BTC dominance are 0/empty. AI analysis proceeds with the available data only."
+          "post": " are fetched for the past time. Live-only data such as the order book, order flow, funding, and BTC dominance are 0/empty. AI research proceeds with the available data only."
         }
       },
       "symbolPlaceholder": "e.g. BTCUSDT",
@@ -1021,7 +1021,7 @@
       "backtestAt": "Backtest — as of {time} KST",
       "scenarioCount": "{n} scenarios",
       "confidence": "Confidence {pct}%",
-      "infoHeading": "What data does the AI analysis look at?",
+      "infoHeading": "What data does the AI research look at?",
       "infoIntro": "Objective data is pulled from Binance's public API, then the AI interprets that data to build scenarios. The AI does not invent prices — it judges only from objective numbers.",
       "bucket1Title": "Price & candles (3 TFs)",
       "bucket1Desc": "Three timeframes are analyzed at once to see the big picture, setup, and trigger together.",
@@ -1234,11 +1234,11 @@
       "currentVsEntry": "{pct}% vs current"
     },
     "pageh": {
-      "title": "AI Market Analysis",
+      "title": "AI Research",
       "help": "Help",
       "intro": "A comprehensive analysis of multi-timeframe structure, liquidity, order flow, and funding bias in the Binance USDT-M futures market. Each scenario automatically computes a trade grade and recommended position.",
-      "backToAnalyze": "Back to AI Analysis",
-      "historyTitle": "AI Analysis History",
+      "backToAnalyze": "Back to AI Research",
+      "historyTitle": "AI Research History",
       "historyDesc": "All analyses run so far. Click one to restore its result on the analysis page.",
       "totalCount": "{n} total",
       "filterSymbol": "Coin",
@@ -1585,7 +1585,7 @@
       "startAnalysis": "Start new analysis"
     },
     "aiRecent": {
-      "title": "Recent AI Analysis",
+      "title": "Recent AI Research",
       "viewAll": "All →",
       "empty": "No analysis records yet.",
       "bothWays": "Both ways"
@@ -1596,7 +1596,7 @@
     },
     "quick": {
       "virtualTrade": "Virtual Trade",
-      "analyze": "AI Analysis",
+      "analyze": "AI Research",
       "journal": "Trade Journal",
       "dashboard": "Performance"
     },
@@ -1829,7 +1829,7 @@
       "days": "days"
     },
     "defaultsTitle": "Defaults",
-    "defaultsDesc": "Values set here are auto-filled as defaults on the AI Analysis and Trade evaluation pages.",
+    "defaultsDesc": "Values set here are auto-filled as defaults on the AI Research and Trade evaluation pages.",
     "securityTitle": "Security",
     "servicesTitle": "Connected Services",
     "service": {
@@ -2093,7 +2093,7 @@
       "aiCredits": "AI credits",
       "credits": {
         "title": "Buy AI credits",
-        "subtitle": "1 AI analysis = 1 credit · paid in vUSDT",
+        "subtitle": "1 AI research = 1 credit · paid in vUSDT",
         "pkg": {
           "starter": "Starter",
           "basic": "Basic",
@@ -2111,7 +2111,7 @@
           "purchaseSuccess": "Added {n} credits"
         },
         "info": {
-          "usage": "The AI analysis tool includes candle/volume/order-book data plus AI scenario generation. 1 use = 1 credit deducted (only on a successful analysis).",
+          "usage": "The AI research tool includes candle/volume/order-book data plus AI scenario generation. 1 use = 1 credit deducted (only on a successful analysis).",
           "topupPrefix": "If you're low on vUSDT,",
           "topupLink": "the top-up page",
           "topupSuffix": " lets you deposit with AAG (1 AAG = 1,000 vUSDT)."
@@ -2141,7 +2141,7 @@
         },
         "rate": {
           "label": "Rate",
-          "body": "1 AAG = 1 USDT (real) = 1,000 vUSDT (platform virtual currency). vUSDT can only be used within the platform (virtual trading, price prediction games, AI analysis credits)."
+          "body": "1 AAG = 1 USDT (real) = 1,000 vUSDT (platform virtual currency). vUSDT can only be used within the platform (virtual trading, price prediction games, AI research credits)."
         },
         "bonusInfo": {
           "label": "Bonus",
@@ -2169,9 +2169,9 @@
       "title": "How to Use VECTA",
       "introLead": "A tool that answers not \"what should I buy\" but",
       "introEmphasis": "\"should I take this trade\"",
-      "introTail": ". It runs as a 4-step cycle, from AI analysis through review.",
+      "introTail": ". It runs as a 4-step cycle, from AI research through review.",
       "cycleLabel": "4-step cycle",
-      "cycle1Title": "AI Analysis",
+      "cycle1Title": "AI Research",
       "cycle1Sub": "Market structure · scenarios",
       "cycle2Title": "Trade Eval",
       "cycle2Sub": "Grade · size",
@@ -2180,7 +2180,7 @@
       "cycle4Title": "Review",
       "cycle4Sub": "Stats · ranking",
       "featureLabel": "Guides by feature",
-      "cardAnalyzeTitle": "Using AI Analysis",
+      "cardAnalyzeTitle": "Using AI Research",
       "cardAnalyzeDesc": "When to analyze, how to read the results, automatic scenario tracking + historical hit rate.",
       "cardTradingTitle": "Using Paper Trading",
       "cardTradingDesc": "Market/limit orders, 5-minute auto-settlement, and trade evaluation's automatic money management + market context aggregation.",
@@ -2193,7 +2193,7 @@
       "aagLead": "The real payment currency. Exchange rate",
       "aagTail": ". You receive a bonus when topping up.",
       "creditTitle": "AI Credits",
-      "creditLead": "1 AI analysis = 1 credit. New signups get a",
+      "creditLead": "1 AI research = 1 credit. New signups get a",
       "creditEmphasis": "5-free",
       "creditTail": " bonus. When exhausted, buy packages with vUSDT.",
       "faqHeading": "Frequently asked questions",
@@ -2209,11 +2209,11 @@
       "faqSignupAssetsA": "10,000 vUSDT and 5 AI credits — enough to start paper trading and analysis right away.",
       "ctaTitle": "You're ready to start",
       "ctaDesc": "Run your first cycle with 5 free AI analyses + 10,000 vUSDT.",
-      "ctaButton": "Start AI Analysis"
+      "ctaButton": "Start AI Research"
     },
     "analyze": {
-      "category": "AI Analysis",
-      "title": "Using AI Analysis",
+      "category": "AI Research",
+      "title": "Using AI Research",
       "description": "When it's best to analyze and how to read the results. It depends on your trading style and the market session.",
       "nextLabel": "Using Paper Trading →",
       "styleScalp": "Scalping",
@@ -2639,7 +2639,7 @@
       "beforeEntry": "Before Entry",
       "afterEntry": "After Entry",
       "analyze": {
-        "title": "AI Analysis",
+        "title": "AI Research",
         "body": "Analyzes market structure, supply/demand, and sentiment from Binance real-time data. Presents 1-3 scenarios with invalidation conditions."
       },
       "trade": {
@@ -2663,7 +2663,7 @@
     },
     "featureItems": {
       "analyze": {
-        "tag": "AI Analysis",
+        "tag": "AI Research",
         "title": "It interprets objective data",
         "body": "It synthesizes 12+ data points from the Binance public API to present 1-3 scenarios. The AI does not invent prices.",
         "bullet1": "Multi-timeframe candles, order book, fills, funding",
@@ -2754,11 +2754,11 @@
   "legal": {
     "faq": {
       "metaTitle": "FAQ",
-      "metaDesc": "Frequently asked questions about VECTA. Find answers about billing, refunds, AI analysis, and data security all in one place.",
+      "metaDesc": "Frequently asked questions about VECTA. Find answers about billing, refunds, AI research, and data security all in one place.",
       "eyebrow": "FAQ",
       "titlePre": "Frequently Asked ",
       "titleHighlight": "Questions",
-      "body": "We've gathered answers about billing, refunds, AI analysis, and data security. For anything else, feel free to reach out.",
+      "body": "We've gathered answers about billing, refunds, AI research, and data security. For anything else, feel free to reach out.",
       "ctaEyebrow": "More questions",
       "ctaTitlePre": "Didn't find ",
       "ctaTitleHighlight": "your answer?",
@@ -2786,7 +2786,7 @@
       "topicsTitleHighlight": "FAQ first",
       "topicRefund": "Refund process after payment",
       "topicPlanChange": "Plan change / upgrade",
-      "topicAiCount": "How AI analysis counts are measured",
+      "topicAiCount": "How AI research counts are measured",
       "topicAccount": "Account / password issues",
       "topicDataDelete": "Data deletion / account closure",
       "topicTerms": "Terms of Service / disclaimer",
@@ -2808,7 +2808,7 @@
       "p1": "These Terms govern the rights, obligations, and responsibilities between the service and members in connection with the use of the trading decision-checking tool and ancillary services provided by VECTA (the \"Service\").",
       "h2": "Article 2 (Definitions)",
       "p2li1": "\"Member\" means a person who agrees to these Terms and registers for and uses the Service.",
-      "p2li2": "\"Content\" means all information generated and provided by the Service, including AI analysis results, scenarios, grades, and coaching comments.",
+      "p2li2": "\"Content\" means all information generated and provided by the Service, including AI research results, scenarios, grades, and coaching comments.",
       "p2li3": "\"Paid Plan\" means a plan such as Standard or Pro that a member uses by paying a fee.",
       "h3": "Article 3 (Effect and Amendment of Terms)",
       "p3": "These Terms take effect upon being posted on the Service's screen. The Service may amend these Terms where reasonable grounds exist, and will give notice from 7 days before the effective date (30 days before for changes unfavorable to members). A member who does not agree to the amended Terms may terminate the service agreement.",
@@ -2843,7 +2843,7 @@
       "p10li5": "The Service is not responsible for outcomes arising from exchange outages, slippage, partial fills, forced liquidation, API rate-limit excess, key permission changes, and the like.",
       "p10li6": "This Live Trading Integration feature may be restricted or discontinued without prior notice in accordance with the Virtual Asset User Protection Act (effective July 19, 2024) and changes to related regulations.",
       "h11": "Article 11 (Limitation of Liability)",
-      "p11li1": "The AI analysis, grades, and comments provided by the Service are for learning and decision-support purposes and do not guarantee accuracy, completeness, or timeliness. The Service is not responsible for losses arising from a member trading in reliance on the Service.",
+      "p11li1": "The AI research, grades, and comments provided by the Service are for learning and decision-support purposes and do not guarantee accuracy, completeness, or timeliness. The Service is not responsible for losses arising from a member trading in reliance on the Service.",
       "p11li2": "The Service is not responsible for damages caused by natural disasters, failures of external APIs (exchanges, LLMs, etc.), or causes attributable to the member.",
       "p11li3": "Even where liability cannot be exempted under applicable law, the Service's liability for damages shall not exceed the amount the member paid to the Service over the preceding 12 months.",
       "h12": "Article 12 (Intellectual Property)",
@@ -2867,7 +2867,7 @@
       "h1sub1li2": "Password (stored hashed; no plaintext storage)",
       "h1sub2": "Automatically collected during use of the Service",
       "h1sub2li1": "Trade inputs (coin, entry price, stop-loss, target, account, risk, etc.)",
-      "h1sub2li2": "AI analysis results and trade outcome records",
+      "h1sub2li2": "AI research results and trade outcome records",
       "h1sub2li3": "Access IP, browser information, access time (cookies/session)",
       "h1sub3": "Upon paid payment (where applicable)",
       "h1sub3li1": "Payment identifier (issued by the payment processor; no direct storage of card numbers)",
@@ -2876,7 +2876,7 @@
       "h1sub4li1": "Telegram chat ID, Discord webhook URL (when notifications are used)",
       "h2": "2. Purpose of Collection and Use",
       "h2li1": "Member identification, account management, identity verification",
-      "h2li2": "Generating AI analysis results and storing trade records",
+      "h2li2": "Generating AI research results and storing trade records",
       "h2li3": "Processing Paid Plan payments and refunds",
       "h2li4": "Responding to customer inquiries",
       "h2li5": "Statistical analysis to improve the Service (in a form that cannot identify individuals)",
@@ -2893,7 +2893,7 @@
       "h5p": "For stable operation, the Service entrusts some tasks to external processors.",
       "h5li1": "Supabase Inc. — database and user authentication (storage location: AWS Tokyo/Seoul regions)",
       "h5li2": "Vercel Inc. — web service hosting",
-      "h5li3": "Anthropic PBC — AI analysis API (zero data retention enabled; analysis request data is not used for training)",
+      "h5li3": "Anthropic PBC — AI research API (zero data retention enabled; analysis request data is not used for training)",
       "h5li4": "Payment processor (planned: Stripe, Toss Payments, etc.) — payment processing",
       "h6": "6. Member Rights",
       "h6p": "Members may exercise the following rights at any time.",
@@ -2925,7 +2925,7 @@
       "intro": "VECTA (the \"Service\") applies the following refund criteria to protect members' reasonable reliance. This policy complies with the Act on Consumer Protection in Electronic Commerce and the Content Industry Promotion Act.",
       "h1": "1. 100% refund within 7 days (including simple change of mind)",
       "h1p": "If requested within 7 days of the payment date, the full payment amount is refunded without asking for a reason. The following cases are excluded, however.",
-      "h1li1": "When 50% of the monthly AI analysis count has already been used",
+      "h1li1": "When 50% of the monthly AI research count has already been used",
       "h1li2": "When more than half of that month's analysis count has already been used",
       "h1note": "Even in the above cases, a full refund applies if there was a service outage or material defect.",
       "h2": "2. Refunds after 8 days",
@@ -2973,7 +2973,7 @@
       "h1li2": "Quasi-investment advisory business",
       "h1li3": "An automated trading system or algorithmic trading system",
       "h1li4": "A return-guarantee service or a signal-selling service",
-      "h2": "2. Limitations of AI Analysis",
+      "h2": "2. Limitations of AI Research",
       "h2li1": "The AI interprets past and present market data (price, order book, fills, funding rates, OI, etc.) but does not predict future prices.",
       "h2li2": "The scenarios (A/B/C) the AI presents are merely possible cases and do not guarantee actual occurrence.",
       "h2li3": "The grade (A/B/C/D) is a score evaluating the consistency between the conditions entered by the user and market data; it is not an indicator that promises returns.",
@@ -3194,7 +3194,7 @@
       "heroBody": "Start free and decide when the tool becomes a must-have. No credit card required.",
       "guarantee": "All plans · 7-day refund guarantee · Cancel anytime",
       "explainerEyebrow": "Note",
-      "explainerTitle": "Only the AI analysis count differs",
+      "explainerTitle": "Only the AI research count differs",
       "explainerBodyBefore": "Trade execution, the trading journal, performance analytics, and AI review comments are available on every plan with",
       "explainerBodyStrong": "no limits",
       "explainerBodyAfter": ". Billing is a subscription that refills your analysis count each month; unused analyses do not roll over.",
@@ -3212,7 +3212,7 @@
         },
         "q2": {
           "q": "What's the difference between plans?",
-          "a": "Only the monthly AI analysis count differs. Trade execution, the trading journal, performance analytics, and AI review comments are unlimited on every plan."
+          "a": "Only the monthly AI research count differs. Trade execution, the trading journal, performance analytics, and AI review comments are unlimited on every plan."
         },
         "q3": {
           "q": "Do unused analyses roll over?",
@@ -3242,7 +3242,7 @@
     },
     "features": {
       "metaTitle": "Features",
-      "metaDescription": "AI analysis / trade execution / trading journal + AI review / performance analytics — take a closer look at VECTA's four core features.",
+      "metaDescription": "AI research / trade execution / trading journal + AI review / performance analytics — take a closer look at VECTA's four core features.",
       "heroTitleBefore": "Built for your",
       "heroTitleAccent": "decisions",
       "heroTitleAfter": ", not the chart",
@@ -3253,7 +3253,7 @@
       "ctaPricing": "See pricing",
       "items": {
         "analyze": {
-          "tag": "AI analysis",
+          "tag": "AI research",
           "title": "Read the market with objective data",
           "body": "Just enter a symbol and style — VECTA auto-collects 12+ data points from the public Binance API and presents 1–3 scenarios. The AI never invents prices; it only interprets real data.",
           "bullet1": "3-stage pipeline: data collection (code) → strategy classification (LLM) → scenario generation (LLM)",
@@ -3289,7 +3289,7 @@
           "bullet1": "Average R / win rate / trade count by grade — A-grade vs C/D-grade comparison",
           "bullet2": "Cumulative P&L by mistake tag + auto-highlight of your \"most frequent losing pattern\"",
           "bullet3": "Track over time with a monthly cumulative R graph",
-          "bullet4": "AI analysis history integrated too — how analysis connected to decisions"
+          "bullet4": "AI research history integrated too — how analysis connected to decisions"
         }
       },
       "mockup": {
@@ -3326,7 +3326,7 @@
     },
     "how": {
       "metaTitle": "How it works",
-      "metaDescription": "How VECTA validates your entry decisions — a 4-step cycle of AI analysis → trade execution → trading journal → performance analytics.",
+      "metaDescription": "How VECTA validates your entry decisions — a 4-step cycle of AI research → trade execution → trading journal → performance analytics.",
       "heroTitleBefore": "4 steps to",
       "heroTitleAccent": "systematize",
       "heroTitleAfter": "your decisions",
@@ -3354,7 +3354,7 @@
       "ctaFeatures": "See features",
       "steps": {
         "analyze": {
-          "title": "AI analysis",
+          "title": "AI research",
           "body": "Just enter a symbol and trading style. The AI reads the market structure from objective data and presents 1–3 scenarios.",
           "bullet1": "Binance real-time data (candles, order book, fills, funding, OI) + ATR, VWAP, BTC dominance, DXY, and Fear & Greed combined",
           "bullet2": "The Strategy Agent picks 1 of 5 strategies (pullback / breakout / range / reversal / wait)",
@@ -3363,7 +3363,7 @@
         },
         "trade": {
           "title": "Trade execution",
-          "body": "Enter the scenario from the AI analysis like an exchange. An A/B/C/D grade instantly judges whether to enter.",
+          "body": "Enter the scenario from the AI research like an exchange. An A/B/C/D grade instantly judges whether to enter.",
           "bullet1": "Auto-detects chasing entries, unconfirmed candles, BTC direction conflicts, and mid-range entries",
           "bullet2": "Risk-%-based auto position sizing + recommended leverage calculation",
           "bullet3": "Effective risk-reward shown after deducting 0.12% in fees",
@@ -3383,7 +3383,7 @@
           "bullet1": "Average R / win rate / trade count stats by grade",
           "bullet2": "Cumulative P&L by mistake tag — your most frequent losing pattern auto-highlighted",
           "bullet3": "Track improvement over time with a monthly cumulative R chart",
-          "bullet4": "AI analysis history integrated too — what you analyzed and how you acted"
+          "bullet4": "AI research history integrated too — what you analyzed and how you acted"
         }
       },
       "pipeline": {

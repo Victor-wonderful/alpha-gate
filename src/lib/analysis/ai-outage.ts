@@ -1,7 +1,7 @@
 import { sendTelegram } from "@/lib/notify";
 
 /**
- * AI 분석 장애 감지 + 운영자 알림.
+ * AI 리서치 장애 감지 + 운영자 알림.
  * 목적: 플랫폼(운영자)의 Anthropic 계정 잔액 소진/한도 초과로 전 사용자 분석이 실패할 때,
  * 구독자에게 정직한 메시지를 주고 운영자에게 즉시 텔레그램 알림을 보낸다.
  * (근본 예방은 Anthropic Console의 Auto-reload — 이건 코드가 아니라 계정 설정.)
@@ -34,9 +34,9 @@ export function classifyAiOutage(e: unknown): AiOutageKind | null {
 /** 구독자에게 보여줄 메시지 — 재시도 유도 대신 운영 이슈임을 정직하게. */
 export function outageUserMessage(kind: AiOutageKind): string {
   if (kind === "rate_limit" || kind === "overloaded")
-    return "지금 AI 분석 요청이 몰려 일시적으로 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
+    return "지금 AI 리서치 요청이 몰려 일시적으로 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
   // billing / server → 운영 개입 필요
-  return "AI 분석 서비스가 일시적으로 중단되었습니다. 운영자에게 자동 알림이 전송되었으며 곧 복구됩니다.";
+  return "AI 리서치 서비스가 일시적으로 중단되었습니다. 운영자에게 자동 알림이 전송되었으며 곧 복구됩니다.";
 }
 
 // 운영자 알림 스로틀 — 인메모리(서버리스 인스턴스별). 장애 중 텔레그램 스팸 방지 best-effort.
@@ -55,7 +55,7 @@ export async function alertOperatorAiOutage(
   if (prev && nowMs - prev < ALERT_THROTTLE_MS) return; // 스로틀
   lastAlertAt[kind] = nowMs;
   const text =
-    `⚠️ <b>AI 분석 장애</b>\n` +
+    `⚠️ <b>AI 리서치 장애</b>\n` +
     `종류: ${OUTAGE_LABEL[kind]}\n` +
     `상세: ${detail.slice(0, 200)}\n\n` +
     `구독자 분석이 실패 중입니다. Anthropic Console에서 잔액·한도를 확인하세요.`;

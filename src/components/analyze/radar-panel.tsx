@@ -459,7 +459,8 @@ export function RadarPanel({
             {/* 컬럼 제목 */}
             <div className="flex items-center gap-3 border-b border-border/50 px-2 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:gap-4">
               <span className="w-5 text-center">#</span>
-              <span className="w-[76px]">{t("analyze.cmpC.colCoin")}</span>
+              <span className="w-[92px]">{t("analyze.cmpC.colCoin")}</span>
+              <span className="w-8 text-center">{t("analyze.cmpC.colGrade")}</span>
               <span className="w-[88px] text-right">{t("analyze.cmpC.colPriceChange")}</span>
               <span className="hidden min-w-0 flex-1 sm:block">{t("analyze.cmpC.colSignal")}</span>
               <span className="w-[78px] text-center">{t("analyze.cmpC.colDirScenario")}</span>
@@ -550,7 +551,7 @@ function CandidateRow({
         </span>
 
         {/* 예상 등급 (봇과 동일 계산) */}
-        <span className="w-7 shrink-0 text-center" title={t("analyze.cmpC.gradeHint")}>
+        <span className="w-8 shrink-0 text-center" title={t("analyze.cmpC.gradeHint")}>
           {c.grade ? (
             <span
               className={

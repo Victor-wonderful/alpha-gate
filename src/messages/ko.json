@@ -1200,6 +1200,7 @@
       "emptyReady": "레이더 준비 중 — [새로고침]을 눌러 바로 스캔할 수 있습니다.",
       "emptyNoRows": "지금은 {style}로 진입 가능한 코인이 없습니다 (변동성 부족).\n더 큰 스타일을 고르거나, 변동성이 살아날 때까지 기다리세요.",
       "colCoin": "코인",
+      "colGrade": "등급",
       "colPriceChange": "가격 · 변동",
       "colSignal": "신호",
       "colDirScenario": "방향 · 시나리오",

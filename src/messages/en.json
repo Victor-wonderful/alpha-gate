@@ -1200,6 +1200,7 @@
       "emptyReady": "Radar getting ready — click [Refresh] to scan right away.",
       "emptyNoRows": "No coins are tradeable in {style} right now (low volatility).\nPick a larger style, or wait until volatility picks up.",
       "colCoin": "Coin",
+      "colGrade": "Grade",
       "colPriceChange": "Price · Change",
       "colSignal": "Signal",
       "colDirScenario": "Direction · Scenarios",

@@ -88,10 +88,16 @@ export function nextTrancheTrigger(
   if (plan.mode === "periodic") {
     const days = Number(plan.period_days);
     if (!(days > 0)) return null;
-    const last = progress.lastExecutedAt ?? plan.last_executed_at ?? plan.created_at;
-    const base = new Date(last).getTime();
-    if (!Number.isFinite(base)) return null;
-    return { kind: "date", at: new Date(base + days * 86_400_000) };
+    // 매수(마지막 trade)와 건너뛰기(plan.last_executed_at) 중 더 나중을 기준으로 다음 예정일을 잡는다.
+    // 둘 다 없으면 = 아직 한 번도 안 샀고 건너뛴 적도 없음 → 예정 트리거 없음 = 지금 바로 첫 회차 가능.
+    const tradeTs = progress.lastExecutedAt ? Date.parse(progress.lastExecutedAt) : NaN;
+    const skipTs = plan.last_executed_at ? Date.parse(plan.last_executed_at) : NaN;
+    const lastTs = Math.max(
+      Number.isFinite(tradeTs) ? tradeTs : 0,
+      Number.isFinite(skipTs) ? skipTs : 0,
+    );
+    if (!lastTs) return null; // 첫 회차 — 지금 시작할 수 있음
+    return { kind: "date", at: new Date(lastTs + days * 86_400_000) };
   }
   const step = Number(plan.ladder_step_pct);
   const basePrice = Number(plan.ladder_base_price);
@@ -109,7 +115,14 @@ export function scheduleDiscipline(
   currentPrice?: number,
 ): { onSchedule: boolean; note: string } {
   const trigger = nextTrancheTrigger(plan, progress);
-  if (!trigger) return { onSchedule: true, note: "예정 시점을 계산할 수 없습니다." };
+  if (!trigger) {
+    // periodic + 유효 주기인데 트리거가 없으면 = 첫 회차(매수·건너뛰기 이력 없음) → 지금 시작 가능.
+    const first = plan.mode === "periodic" && Number(plan.period_days) > 0;
+    return {
+      onSchedule: true,
+      note: first ? "첫 회차입니다 — 지금 시작할 수 있습니다." : "예정 시점을 계산할 수 없습니다.",
+    };
+  }
 
   if (trigger.kind === "date") {
     const due = trigger.at.getTime() <= now.getTime();

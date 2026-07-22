@@ -12,6 +12,8 @@ import {
   saveBotCapitalAction,
   runAutoNowAction,
   type AutoConfigView,
+  type AutoStatus,
+  type BotPosition,
 } from "@/app/app/trade/auto-actions";
 import type { AutoTradeDecision } from "@/lib/auto-trade";
 
@@ -48,7 +50,7 @@ export function AutoTradePanel({
   accountSize,
 }: {
   initialConfig: AutoConfigView;
-  status: { openCount: number; pendingCount: number };
+  status: AutoStatus;
   /** 운영 자금(내 자금) — 봇이 이 금액 × 리스크%로 포지션 크기를 잡는다. */
   accountSize: number;
 }) {
@@ -57,6 +59,7 @@ export function AutoTradePanel({
     void _i;
     return rest;
   });
+  const lastRunAt = initialConfig.last_run_at;
   const [capital, setCapital] = useState(String(Math.round(accountSize)));
   const [decisions, setDecisions] = useState<AutoTradeDecision[] | null>(null);
   const [busy, startBusy] = useTransition();
@@ -99,6 +102,26 @@ export function AutoTradePanel({
       setDecisions(r.decisions ?? []);
       const pass = (r.decisions ?? []).filter((d) => d.skipped === "dry-run").length;
       toast.success(r.note ? `지금은 진입 없음 — ${noteKo(r.note)}` : `지금 켜면 ${pass}건 진입`);
+    });
+  }
+
+  // 크론(프로덕션 10분)을 기다리지 않고 규칙을 지금 1회 실제 실행 — 조건 맞으면 가상 지정가 예약.
+  // 엔진이 끝까지 도는지 즉석 검증용. 가상 전용이라 안전하지만 실제 예약이 생기므로 확인을 받는다.
+  function runReal() {
+    if (!confirm("지금 봇 규칙을 실제로 1회 실행합니다. 조건에 맞으면 가상 지정가 주문이 예약됩니다. 진행할까요?")) return;
+    startRun(async () => {
+      const r = await runAutoNowAction(false);
+      if (!r.ok) {
+        toast.error(r.error ?? "실행 실패");
+        return;
+      }
+      setDecisions(r.decisions ?? []);
+      if (r.placed) {
+        toast.success(`${r.placed}건 실제 예약됨`);
+        window.location.reload(); // 예약 수·마지막 실행 시각 갱신
+      } else {
+        toast.success(r.note ? `진입 없음 — ${noteKo(r.note)}` : "지금은 진입 조건이 없습니다");
+      }
     });
   }
 
@@ -201,14 +224,92 @@ export function AutoTradePanel({
 
       {/* 미리보기 (3) + 상태 */}
       <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div className="flex gap-4 text-xs">
-            <Stat label="진행 중" value={String(status.openCount)} />
-            <Stat label="예약" value={String(status.pendingCount)} />
+        <CardContent className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-4 text-xs">
+              <Stat label="진행 중" value={String(status.openCount)} />
+              <Stat label="예약" value={String(status.pendingCount)} />
+            </div>
+            {cfg.enabled ? (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-grade-a">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-grade-a opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-grade-a" />
+                </span>
+                자동 실행 중
+              </span>
+            ) : (
+              <span className="text-xs font-medium text-muted-foreground">꺼짐</span>
+            )}
           </div>
-          <Button variant="outline" onClick={preview} disabled={running}>
-            <Eye className="mr-1.5 h-4 w-4" /> {running ? "확인 중…" : "지금 켜면 뭘 살까?"}
-          </Button>
+          {/* 자동임을 분명히 — 켜두면 클릭 불필요. */}
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {cfg.enabled ? (
+              <>
+                켜져 있어 <b className="text-foreground">10분마다 자동으로</b> 살펴보고 진입합니다 —{" "}
+                <b className="text-foreground">버튼을 누를 필요가 없습니다.</b> 마지막 자동 실행:{" "}
+                <b className="text-foreground">{lastRunAt ? relTime(lastRunAt) : "아직 없음"}</b>.{" "}
+                (자동 진입은 배포 환경에서만 실행됩니다.)
+              </>
+            ) : (
+              <>봇이 꺼져 있습니다. 위 스위치를 켜면 10분마다 자동으로 살펴봅니다.</>
+            )}
+          </p>
+
+          {/* 예약·진행 중 실제 목록 — 숫자만으론 뭐가 걸렸는지 모른다. */}
+          {status.pending.length > 0 || status.open.length > 0 ? (
+            <div className="space-y-2.5 border-t border-border/50 pt-3">
+              {status.pending.length > 0 ? (
+                <div className="space-y-1">
+                  <div className="text-[11px] font-semibold text-muted-foreground">
+                    예약 대기 {status.pending.length}건 · 되돌림 지정가 체결 대기
+                  </div>
+                  <ul className="space-y-1">
+                    {status.pending.map((p) => (
+                      <PosRow key={p.id} p={p} />
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {status.open.length > 0 ? (
+                <div className="space-y-1">
+                  <div className="text-[11px] font-semibold text-muted-foreground">
+                    진행 중 {status.open.length}건 · 체결되어 손절·목표 관리 중
+                  </div>
+                  <ul className="space-y-1">
+                    {status.open.map((p) => (
+                      <PosRow key={p.id} p={p} />
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <a
+                href="/app/virtual-trade"
+                className="block text-center text-[11px] font-medium text-primary hover:underline"
+              >
+                거래 상황에서 전체 보기 →
+              </a>
+            </div>
+          ) : (
+            <p className="border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+              아직 봇이 넣은 예약·포지션이 없습니다. 조건에 맞는 셋업이 나오면 여기에 표시됩니다.
+            </p>
+          )}
+
+          {/* 확인용(선택) — 봇 작동과 무관, 기다리기 싫을 때만 */}
+          <div className="border-t border-border/50 pt-3">
+            <p className="mb-1.5 text-[10px] text-muted-foreground">
+              지금 바로 확인 (선택 · 봇 작동과 무관)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="ghost" size="sm" onClick={preview} disabled={running}>
+                <Eye className="mr-1.5 h-3.5 w-3.5" /> {running ? "확인 중…" : "미리보기"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={runReal} disabled={running}>
+                {running ? "실행 중…" : "지금 한 번 실행"}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -241,6 +342,55 @@ export function AutoTradePanel({
       ) : null}
     </div>
   );
+}
+
+function PosRow({ p }: { p: BotPosition }) {
+  const long = p.direction === "long";
+  return (
+    <li className="rounded-md border border-border/50 px-2.5 py-1.5 text-xs">
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "rounded px-1 text-[10px] font-bold",
+            long ? "bg-grade-a/15 text-grade-a" : "bg-grade-d/15 text-grade-d",
+          )}
+        >
+          {long ? "롱" : "숏"}
+          {p.grade && p.grade !== "-" ? ` ${p.grade}` : ""}
+        </span>
+        <span className="font-mono font-semibold">{p.symbol.replace("USDT", "")}</span>
+        <span className="font-mono text-muted-foreground">
+          {p.status === "pending" ? "예약가" : "진입"}{" "}
+          {p.price != null ? p.price.toLocaleString() : "—"}
+        </span>
+        <span
+          className={cn(
+            "ml-auto rounded px-1.5 py-0.5 text-[10px] font-medium",
+            p.status === "pending" ? "bg-muted text-muted-foreground" : "bg-grade-a/15 text-grade-a",
+          )}
+        >
+          {p.status === "pending" ? "체결 대기" : "진행 중"}
+        </span>
+      </div>
+      {p.stop != null || p.target != null ? (
+        <div className="mt-1 flex gap-3 font-mono text-[10px] text-muted-foreground">
+          {p.stop != null ? <span>손절 {p.stop.toLocaleString()}</span> : null}
+          {p.target != null ? <span>목표 {p.target.toLocaleString()}</span> : null}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function relTime(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "알 수 없음";
+  const mins = Math.floor((Date.now() - t) / 60_000);
+  if (mins < 1) return "방금";
+  if (mins < 60) return `${mins}분 전`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}시간 전`;
+  return `${Math.floor(hrs / 24)}일 전`;
 }
 
 function noteKo(note: string): string {

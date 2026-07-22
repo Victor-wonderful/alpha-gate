@@ -178,7 +178,9 @@ export async function runAutoTradeForUser(
   if (config.symbol_source === "fixed") {
     targets = config.fixed_symbols.slice(0, MAX_SCAN).map((s) => ({ symbol: s, style: "day" as const }));
   } else {
-    const radar = await loadLatestRadar().catch(
+    // ⚠️ service role(svc)을 주입 — 크론엔 로그인 세션이 없어 기본 경로면 RLS에 막혀
+    // 레이더가 빈 배열로 온다(봇이 조용히 "후보 없음"으로 멈추던 원인). cf. radar-persist.ts
+    const radar = await loadLatestRadar(svc).catch(
       () => ({ candidates: [] as { symbol: string; bestStyle: TradingStyle }[] }),
     );
     targets = radar.candidates

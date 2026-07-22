@@ -74,9 +74,23 @@ describe("다음 회차 시점", () => {
     expect((t as { at: Date }).at.toISOString()).toBe("2026-03-15T00:00:00.000Z");
   });
 
-  it("주기형 — 실행 이력이 없으면 생성일 기준", () => {
-    const t = nextTrancheTrigger(basePlan, noProgress);
-    expect((t as { at: Date }).at.toISOString()).toBe("2026-01-15T00:00:00.000Z");
+  it("주기형 — 매수·건너뛰기 이력이 없으면 첫 회차(즉시 가능, 트리거 없음)", () => {
+    expect(nextTrancheTrigger(basePlan, noProgress)).toBeNull();
+  });
+
+  it("주기형 — 건너뛰기(last_executed_at)만 있어도 예정일을 다음 주기로 민다", () => {
+    const skipped: DcaPlan = { ...basePlan, last_executed_at: "2026-03-01T00:00:00.000Z" };
+    const t = nextTrancheTrigger(skipped, noProgress);
+    expect(t?.kind).toBe("date");
+    expect((t as { at: Date }).at.toISOString()).toBe("2026-03-15T00:00:00.000Z");
+  });
+
+  it("주기형 — 매수와 건너뛰기 중 더 나중을 기준으로 잡는다", () => {
+    const skipped: DcaPlan = { ...basePlan, last_executed_at: "2026-03-10T00:00:00.000Z" };
+    const p: DcaPlanProgress = { ...noProgress, lastExecutedAt: "2026-03-01T00:00:00.000Z" };
+    const t = nextTrancheTrigger(skipped, p);
+    // 건너뛰기(3/10)가 매수(3/1)보다 나중 → 3/10 + 14일
+    expect((t as { at: Date }).at.toISOString()).toBe("2026-03-24T00:00:00.000Z");
   });
 
   it("사다리형 — 실행할수록 한 칸씩 아래", () => {

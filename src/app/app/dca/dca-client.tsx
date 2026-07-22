@@ -9,13 +9,20 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { cn, formatNumber } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
-import { summarizePlan, type DcaPlan, type DcaPlanProgress } from "@/lib/dca/plan";
+import {
+  summarizePlan,
+  scheduleDiscipline,
+  nextTrancheTrigger,
+  type DcaPlan,
+  type DcaPlanProgress,
+} from "@/lib/dca/plan";
 import type { ValueVerdict, ValueZoneResult } from "@/lib/dca/value-zone";
 import type { checkAssetGate } from "@/lib/dca/asset-gate";
 import {
   createDcaPlanAction,
   deleteDcaPlanAction,
   executeDcaTrancheAction,
+  skipDcaTrancheAction,
   loadDcaAssessmentAction,
   updateDcaPlanStatusAction,
 } from "./_actions";
@@ -317,6 +324,16 @@ function PlanCard({
   const summary = summarizePlan(plan, plan.progress, verdict ?? "neutral", zone?.price);
   const isActive = plan.status === "active";
 
+  // 스케줄 상태 — 밸류존이 살 시점을 알려주고, 주기(주 1회)는 최소 간격으로만 쓴다.
+  const now = new Date();
+  const due = scheduleDiscipline(plan, plan.progress, now, zone?.price).onSchedule;
+  const trigger = nextTrancheTrigger(plan, plan.progress);
+  const nextDate = trigger?.kind === "date" ? trigger.at : null;
+  const daysLeft = nextDate
+    ? Math.max(0, Math.ceil((nextDate.getTime() - now.getTime()) / 86_400_000))
+    : 0;
+  const budgetLeft = summary.amountThisTranche > 0;
+
   function run() {
     start(() => {
       void (async () => {
@@ -331,6 +348,20 @@ function PlanCard({
             mult: String(r.multiplier ?? 1),
           }),
         );
+        window.location.reload();
+      })();
+    });
+  }
+
+  function skip() {
+    start(() => {
+      void (async () => {
+        const r = await skipDcaTrancheAction(plan.id);
+        if (!r.ok) {
+          toast.error(r.error ?? t("dca.errSkip"));
+          return;
+        }
+        toast.success(t("dca.toastSkipped"));
         window.location.reload();
       })();
     });
@@ -466,21 +497,67 @@ function PlanCard({
 
         {isActive ? (
           <div className="space-y-1.5">
-            <Button
-              type="button"
-              onClick={run}
-              disabled={pending || summary.amountThisTranche <= 0 || verdict == null}
-              className="w-full font-bold"
-            >
-              {summary.amountThisTranche <= 0
-                ? t("dca.budgetDone")
-                : verdict == null
-                  ? t("dca.selectAssetFirst")
-                  : t("dca.executeBtn", {
-                      amount: formatNumber(summary.amountThisTranche, { maximumFractionDigits: 0 }),
-                      mult: String(summary.multiplier),
-                    })}
-            </Button>
+            {!budgetLeft ? (
+              <Button type="button" disabled className="w-full font-bold">
+                {t("dca.budgetDone")}
+              </Button>
+            ) : verdict == null ? (
+              <Button type="button" disabled className="w-full font-bold">
+                {t("dca.selectAssetFirst")}
+              </Button>
+            ) : !due ? (
+              // 마지막 매수 후 주기(주 1회)가 아직 안 지남 — 겹치기 매수 차단.
+              <Button type="button" disabled className="w-full font-bold">
+                {t("dca.nextDue", { days: daysLeft })}
+              </Button>
+            ) : verdict === "expensive" ? (
+              // 예정일 도래 + 비싼 구간 — 건너뛰기를 권하되, 그래도 담을지는 사용자 선택.
+              <>
+                <p className="text-center text-[11px] font-medium text-grade-d">
+                  {t("dca.expensiveNow")}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={skip}
+                  disabled={pending}
+                  className="w-full font-bold"
+                >
+                  {t("dca.skipRound")}
+                </Button>
+                <button
+                  type="button"
+                  onClick={run}
+                  disabled={pending}
+                  className="w-full text-center text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  {t("dca.buyAnyway", {
+                    amount: formatNumber(summary.amountThisTranche, { maximumFractionDigits: 0 }),
+                    mult: String(summary.multiplier),
+                  })}
+                </button>
+              </>
+            ) : (
+              // 예정일 도래 + 살 만한 구간(싼/보통).
+              <>
+                {verdict === "cheap" ? (
+                  <p className="text-center text-[11px] font-medium text-grade-a">
+                    {t("dca.cheapNow")}
+                  </p>
+                ) : null}
+                <Button type="button" onClick={run} disabled={pending} className="w-full font-bold">
+                  {t("dca.executeBtn", {
+                    amount: formatNumber(summary.amountThisTranche, { maximumFractionDigits: 0 }),
+                    mult: String(summary.multiplier),
+                  })}
+                </Button>
+              </>
+            )}
+            {nextDate && !due ? (
+              <p className="text-center text-[10px] text-muted-foreground">
+                {t("dca.nextDueDate", { date: nextDate.toLocaleDateString() })}
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={toggle}

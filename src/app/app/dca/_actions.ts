@@ -6,7 +6,7 @@ import { fetchSpotKlines } from "@/lib/analysis/binance";
 import { checkAssetGate } from "@/lib/dca/asset-gate";
 import { classifyValueZone, type ValueZoneResult } from "@/lib/dca/value-zone";
 import { placeVirtualOrderAction, closeVirtualPositionAction } from "@/app/app/virtual-trade/order-actions";
-import { summarizePlan, type DcaPlan, type DcaPlanProgress } from "@/lib/dca/plan";
+import { summarizePlan, scheduleDiscipline, type DcaPlan, type DcaPlanProgress } from "@/lib/dca/plan";
 
 /** 밸류 존 + 자산 게이트를 한 번에 조회 (화면 상단 카드용). */
 export async function loadDcaAssessmentAction(symbol: string): Promise<{
@@ -195,6 +195,17 @@ export async function executeDcaTrancheAction(
     return { ok: false, error: assessment.blockReason ?? "적립할 수 없는 자산입니다." };
 
   const progress = await loadPlanProgress(supabase, plan as unknown as DcaPlan);
+
+  // 최소 간격 가드 — 마지막 매수(또는 건너뛰기) 후 주기가 안 지났으면 거부한다.
+  // "주 1회"를 요일 고정이 아니라 최소 간격으로 강제해 겹치기 매수를 막는다.
+  const disc = scheduleDiscipline(
+    plan as unknown as DcaPlan,
+    progress,
+    new Date(),
+    assessment.valueZone.price,
+  );
+  if (!disc.onSchedule) return { ok: false, error: disc.note };
+
   const summary = summarizePlan(plan as unknown as DcaPlan, progress, assessment.valueZone.verdict);
   if (summary.amountThisTranche <= 0)
     return { ok: false, error: "남은 예산이 없습니다. 플랜이 끝났습니다." };
@@ -234,6 +245,42 @@ export async function executeDcaTrancheAction(
     verdict: assessment.valueZone.verdict,
     multiplier: assessment.valueZone.tiltMultiplier,
   };
+}
+
+/**
+ * 이번 회차 건너뛰기 — 비싼 구간에서 매수하지 않고 예정일만 다음 주기로 넘긴다.
+ *
+ * 예산은 소진하지 않고 last_executed_at 만 갱신한다 → 다음 예정일이 지금+주기로 이동.
+ * "안 사고 기다리는" 판단을 앱이 강제하는 게 아니라(검증 안 된 마켓 타이밍),
+ * 비쌀 때 사용자가 직접 고를 수 있게 하는 선택지다.
+ */
+export async function skipDcaTrancheAction(
+  planId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
+
+  const { data: plan, error: planErr } = await supabase
+    .from("dca_plans")
+    .select("status")
+    .eq("id", planId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (planErr || !plan) return { ok: false, error: "플랜을 찾을 수 없습니다." };
+  if (plan.status !== "active") return { ok: false, error: "진행 중인 플랜이 아닙니다." };
+
+  const { error } = await supabase
+    .from("dca_plans")
+    .update({ last_executed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", planId)
+    .eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/app/dca");
+  return { ok: true };
 }
 
 /** 플랜의 회차 실행 기록을 trades 에서 집계 (별도 테이블 없음). */

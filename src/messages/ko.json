@@ -3691,7 +3691,15 @@
     "sentenceMonths": "개월에 걸쳐 모으겠습니다",
     "planPreview": "매주 1번씩 · 총 {n}번 · 회당 약 {base} vUSDT",
     "planPreviewNow": "지금은 {verdict}이라 이번 회차는 {mult}배 — 약 {amount} vUSDT",
-    "summaryWeekly": "매주 · {n}회 분할",
-    "how4": "싼 구간에 들어가면 알림을 보냅니다 — 정기 회차 외에 더 담을지는 직접 정하세요."
+    "summaryWeekly": "주 1회 간격 · {n}회 분할",
+    "how4": "싼 구간에 들어가면 알림을 보냅니다 — 정기 회차 외에 더 담을지는 직접 정하세요.",
+    "nextDue": "다음 적립까지 {days}일",
+    "nextDueDate": "다음 예정일 {date}",
+    "cheapNow": "싼 구간입니다 — 지금이 담을 때",
+    "expensiveNow": "지금은 비싼 구간입니다 — 이번 회차는 건너뛰는 걸 권합니다",
+    "skipRound": "이번 회차 건너뛰기",
+    "buyAnyway": "그래도 담기 {amount} ({mult}배)",
+    "toastSkipped": "이번 회차를 건너뛰고 다음 예정일로 넘겼습니다.",
+    "errSkip": "건너뛰기에 실패했습니다."
   }
 }

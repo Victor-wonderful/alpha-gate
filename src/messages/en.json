@@ -3691,7 +3691,15 @@
     "sentenceMonths": "months to accumulate",
     "planPreview": "Once a week - {n} buys - about {base} vUSDT each",
     "planPreviewNow": "It is {verdict} right now, so this one is {mult}x - about {amount} vUSDT",
-    "summaryWeekly": "weekly - {n} tranches",
-    "how4": "You get an alert when it enters the cheap zone - whether to add beyond the schedule is your call."
+    "summaryWeekly": "min 1 week apart - {n} tranches",
+    "how4": "You get an alert when it enters the cheap zone - whether to add beyond the schedule is your call.",
+    "nextDue": "{days}d until next buy",
+    "nextDueDate": "Next due {date}",
+    "cheapNow": "Cheap zone - a good time to add",
+    "expensiveNow": "Expensive right now - skipping this tranche is recommended",
+    "skipRound": "Skip this tranche",
+    "buyAnyway": "Buy anyway {amount} ({mult}x)",
+    "toastSkipped": "Skipped this tranche - moved to the next due date.",
+    "errSkip": "Failed to skip the tranche."
   }
 }

@@ -43,9 +43,17 @@ export interface RadarSnapshot {
   scannedAt: string | null;
 }
 
-/** 최신 배치를 읽어 점수순으로 반환. 인증 사용자 RLS로 접근. */
-export async function loadLatestRadar(): Promise<RadarSnapshot> {
-  const supabase = await getSupabaseServer();
+type SupabaseLike = { from: (table: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/**
+ * 최신 배치를 읽어 점수순으로 반환.
+ *
+ * 기본은 인증 사용자 세션(쿠키)으로 접근한다(radar_candidates RLS = authenticated 전용).
+ * 세션이 없는 컨텍스트(크론 등)에서는 service role 클라이언트를 주입해야 한다 —
+ * 안 그러면 anon 으로 RLS 에 막혀 빈 결과가 오고, 봇이 "후보 없음"으로 조용히 멈춘다.
+ */
+export async function loadLatestRadar(client?: SupabaseLike): Promise<RadarSnapshot> {
+  const supabase = client ?? (await getSupabaseServer());
 
   const { data: latest } = await supabase
     .from("radar_candidates")
@@ -66,7 +74,7 @@ export async function loadLatestRadar(): Promise<RadarSnapshot> {
 
   if (error || !data) return { candidates: [], scannedAt: latest.scanned_at };
 
-  const candidates: RadarCandidate[] = data.map((r) => ({
+  const candidates: RadarCandidate[] = (data as Record<string, unknown>[]).map((r) => ({
     symbol: r.symbol as string,
     score: Number(r.score),
     signals: (r.signals as RadarSignal[]) ?? [],

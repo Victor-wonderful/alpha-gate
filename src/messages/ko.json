@@ -963,6 +963,7 @@
       "modeLive": "● 라이브",
       "modeBacktest": "⏮ 백테스트",
       "symbolLabel": "분석할 심볼",
+      "styleLabel": "매매 스타일 (얼마나 들고 갈지)",
       "fundsRiskLabel": "💰 운영 자금 · 리스크",
       "reset": "초기화",
       "accountPlaceholder": "자금 (USD) · 기본 {default}",

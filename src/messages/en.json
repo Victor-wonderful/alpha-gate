@@ -963,6 +963,7 @@
       "modeLive": "● Live",
       "modeBacktest": "⏮ Backtest",
       "symbolLabel": "Symbol to analyze",
+      "styleLabel": "Trading style (how long you'll hold)",
       "fundsRiskLabel": "💰 Capital · Risk",
       "reset": "Reset",
       "accountPlaceholder": "Capital (USD) · default {default}",

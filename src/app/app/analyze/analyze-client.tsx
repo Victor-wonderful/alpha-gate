@@ -294,6 +294,47 @@ function AnalyzeClientInner({
                 <SymbolCombobox value={symbol} onChange={setSymbol} />
               </div>
 
+              {/* 매매 스타일 — 직접 분석 시에도 어떤 스타일(임펄스/모멘텀)로 분석되는지
+                  여기서 보이고 고른다. (레이더 픽은 코인별 추천 스타일을 자동 반영) */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">
+                  {t("analyze.client.styleLabel")}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { id: "day", labelKey: "analyze.cmpC.style.day", durKey: "analyze.cmpC.styleDur.day", rec: false },
+                      { id: "swing", labelKey: "analyze.cmpC.style.swing", durKey: "analyze.cmpC.styleDur.swing", rec: true },
+                    ] as const
+                  ).map((o) => {
+                    const active = style === o.id;
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => setStyle(o.id)}
+                        className={
+                          "rounded-lg border px-3 py-2 text-left transition-colors " +
+                          (active
+                            ? "border-primary bg-primary/10 ring-1 ring-primary"
+                            : "border-border bg-card hover:bg-accent/40")
+                        }
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold">{t(o.labelKey)}</span>
+                          {o.rec ? (
+                            <span className="rounded bg-primary/15 px-1 py-0.5 text-[9px] font-medium text-primary">
+                              {t("analyze.client.recommended")}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-muted-foreground">{t(o.durKey)}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <label className="text-sm font-medium text-muted-foreground">

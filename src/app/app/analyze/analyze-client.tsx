@@ -180,14 +180,15 @@ function AnalyzeClientInner({
     else if (hydrated && style === "scalp") setForm({ style: "day" });
   }, [hydrated, style, setForm]);
 
-  // 후보 레이더에서 코인 선택 → 심볼+추천스타일 prefill + 입력창 스크롤/포커스 (수동 실행).
+  // 후보 레이더에서 코인 선택 → 심볼+추천스타일 prefill + 입력창으로 스크롤.
+  // focus 는 하지 않는다 — 콤보박스가 focus 시 목록을 펼쳐(onFocus→setOpen) 산만해지므로,
+  // 고른 심볼만 그대로 표시한다. 목록은 사용자가 원하면 화살표로 연다.
   function pickCandidate(sym: string, pickedStyle: TradingStyle) {
     const target = sym.toUpperCase();
     setForm({ symbol: target, style: pickedStyle });
     if (typeof document !== "undefined") {
       const el = document.getElementById("symbol-input") as HTMLInputElement | null;
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
-      el?.focus({ preventScroll: true });
     }
     toast.success(t("analyze.client.toast.picked", { symbol: target, style: STYLE_PRESETS[pickedStyle].label }));
   }

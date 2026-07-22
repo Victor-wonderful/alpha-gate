@@ -1,15 +1,18 @@
 "use client";
 
-import { Search, Sparkles, Hand, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { Search, Sparkles, Hand, ArrowRight, ChevronDown } from "lucide-react";
 import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 /**
  * AI 리서치 "이렇게 진행돼요" — 코인 선택 → AI 리서치 → 직접 결정·거래.
  * 자동매매(봇이 결정)와 달리 3단계 마지막이 "당신"임을 시각적으로 강조.
+ * 온보딩 설명이라 접이(아코디언)로 — 처음엔 펼쳐 보이고, 익숙해지면 접어둔다.
  */
 export function ResearchHowItWorks() {
   const t = useT();
+  const [open, setOpen] = useState(true);
 
   const steps = [
     {
@@ -37,11 +40,26 @@ export function ResearchHowItWorks() {
 
   return (
     <div className="rounded-xl border border-border/60 bg-card shadow-card p-4">
-      <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {t("analyze.how.heading")}
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t("analyze.how.heading")}
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 flex-none text-muted-foreground transition-transform",
+            open ? "rotate-180" : "",
+          )}
+        />
+      </button>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+      {!open ? null : (
+      <>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
         {steps.map((s, i) => (
           <div key={s.n} className="flex flex-1 items-stretch gap-2">
             <div
@@ -81,6 +99,8 @@ export function ResearchHowItWorks() {
       <p className="mt-3 border-t border-border/40 pt-2.5 text-xs text-muted-foreground">
         {t("analyze.how.footer")}
       </p>
+      </>
+      )}
     </div>
   );
 }

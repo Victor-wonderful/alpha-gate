@@ -5,16 +5,12 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { dispatch } from "@/lib/notify-dispatch";
 import { decryptSecret } from "@/lib/crypto";
-import {
-  cancelOrder,
-  getOrder,
-  placeMarketOrder,
-  placeStopMarketOrder,
-  placeTakeProfitMarketOrder,
-  setLeverage,
-  type BinanceCredentials,
-  type BinanceOrderResult,
-} from "@/lib/exchanges/binance";
+import { getAdapter } from "@/lib/exchanges";
+import type {
+  ExchangeAdapter,
+  ExchangeCredentials,
+  UnifiedOrderResult,
+} from "@/lib/exchanges";
 import { checkLiveGuards } from "@/lib/live-guards";
 import type { GradeResult, SizingResult, TradeInput } from "@/types/trade";
 
@@ -33,7 +29,7 @@ export interface LiveTradeResult {
   /** All exchange orders that were submitted. */
   orders?: Array<{
     kind: "entry" | "stop_loss" | "take_profit";
-    orderId: number;
+    orderId: string;
     status: string;
   }>;
   error?: string;
@@ -41,17 +37,21 @@ export interface LiveTradeResult {
   partial?: boolean;
 }
 
-/** Server-side credential fetch (decrypt). Never expose secrets to the client. */
+/** Server-side credential fetch (decrypt) + adapter resolution.
+ *  Never expose secrets to the client. */
 async function loadCredentials(
   apiKeyId: string,
   userId: string,
 ): Promise<
-  { creds: BinanceCredentials; exchange: "binance" | "upbit" } | { error: string }
+  | { creds: ExchangeCredentials; exchange: string; adapter: ExchangeAdapter }
+  | { error: string }
 > {
   const supabase = await getSupabaseServer();
   const { data, error } = await supabase
     .from("exchange_api_keys")
-    .select("exchange, api_key_encrypted, api_secret_encrypted, verification_status, permissions")
+    .select(
+      "exchange, testnet, api_key_encrypted, api_secret_encrypted, verification_status, permissions",
+    )
     .eq("id", apiKeyId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -66,25 +66,33 @@ async function loadCredentials(
   if (perms.canWithdraw) {
     return { error: "이 키에 출금 권한이 켜져 있어 실거래에 사용할 수 없습니다. 키를 재발급하세요." };
   }
-  if (data.exchange !== "binance") {
-    return { error: "현재는 Binance 키만 실거래 지원합니다." };
+
+  let adapter: ExchangeAdapter;
+  try {
+    adapter = getAdapter(data.exchange as string);
+  } catch {
+    return { error: `${data.exchange} 실거래는 아직 지원하지 않습니다.` };
   }
+
   return {
     creds: {
       apiKey: decryptSecret(data.api_key_encrypted),
       apiSecret: decryptSecret(data.api_secret_encrypted),
+      testnet: Boolean(data.testnet),
     },
-    exchange: data.exchange,
+    exchange: data.exchange as string,
+    adapter,
   };
 }
 
-/** Submit an exchange_orders row. */
+/** Insert an exchange_orders row from a normalized result (or an error). */
 async function logOrder(
   supabase: Awaited<ReturnType<typeof getSupabaseServer>>,
   args: {
     userId: string;
     tradeId: string;
     apiKeyId: string;
+    exchange: string;
     symbol: string;
     kind: "entry" | "stop_loss" | "take_profit";
     side: "buy" | "sell";
@@ -92,7 +100,7 @@ async function logOrder(
     quantity: number;
     stopPrice?: number;
     reduceOnly?: boolean;
-    result?: BinanceOrderResult;
+    result?: UnifiedOrderResult;
     errorMessage?: string;
   },
 ) {
@@ -100,7 +108,7 @@ async function logOrder(
     user_id: args.userId,
     trade_id: args.tradeId,
     api_key_id: args.apiKeyId,
-    exchange: "binance",
+    exchange: args.exchange,
     symbol: args.symbol,
     kind: args.kind,
     side: args.side,
@@ -108,42 +116,25 @@ async function logOrder(
     stop_price: args.stopPrice ?? null,
     quantity: args.quantity,
     reduce_only: args.reduceOnly ?? false,
-    exchange_order_id: args.result ? String(args.result.orderId) : null,
-    status: args.result
-      ? mapBinanceStatus(args.result.status)
-      : args.errorMessage
-        ? "error"
-        : "pending",
-    filled_qty: args.result ? parseFloat(args.result.executedQty) || 0 : 0,
-    avg_fill_price: args.result?.avgPrice ? parseFloat(args.result.avgPrice) : null,
+    exchange_order_id: args.result ? args.result.orderId : null,
+    status: args.result ? args.result.status : args.errorMessage ? "error" : "pending",
+    filled_qty: args.result ? args.result.executedQty : 0,
+    avg_fill_price: args.result?.avgPrice ?? null,
     error_message: args.errorMessage ?? null,
-    raw_response: args.result ? (args.result as unknown as object) : null,
+    raw_response: args.result ? (args.result.raw as object) : null,
   });
 }
 
-function mapBinanceStatus(s: string): string {
-  // Binance: NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, NEW_INSURANCE, NEW_ADL
-  const m: Record<string, string> = {
-    NEW: "open",
-    PARTIALLY_FILLED: "partial",
-    FILLED: "filled",
-    CANCELED: "canceled",
-    REJECTED: "rejected",
-    EXPIRED: "expired",
-  };
-  return m[s] ?? "submitted";
-}
-
 /**
- * Submit a live trade to Binance.
+ * Submit a live trade to the selected exchange (Binance / Bybit).
  *
  * Sequence:
  *  1. Create the trade row (is_paper=false, status=pending)
  *  2. Set leverage
  *  3. Place market entry → record orderId
  *  4. (Best-effort) confirm fill state via getOrder
- *  5. Place stop-loss (STOP_MARKET, reduce_only)
- *  6. Place take-profit (TAKE_PROFIT_MARKET, reduce_only)
+ *  5. Place stop-loss (reduce-only)
+ *  6. Place take-profit (reduce-only)
  *  7. If 5 or 6 fail → close the position (reduce-only market) and mark error
  *  8. Update trade row with final status
  */
@@ -156,7 +147,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
 
   const credResult = await loadCredentials(args.apiKeyId, user.id);
   if ("error" in credResult) return { ok: false, error: credResult.error };
-  const { creds } = credResult;
+  const { creds, exchange, adapter } = credResult;
 
   const { input, grade, sizing, leverage, forecast } = args;
   if (!sizing.valid || sizing.quantity <= 0) {
@@ -209,7 +200,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
             ...(typeof forecast === "object" && forecast !== null ? forecast : {}),
           }
         : null,
-      exchange: "binance",
+      exchange,
       exchange_api_key_id: args.apiKeyId,
       is_paper: false,
       exchange_status: "pending",
@@ -229,7 +220,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
 
   // Step 2: Leverage.
   try {
-    await setLeverage(creds, symbol, leverage);
+    await adapter.setLeverage(creds, symbol, leverage);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase
@@ -240,13 +231,14 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
   }
 
   // Step 3: Entry (market).
-  let entryRes: BinanceOrderResult;
+  let entryRes: UnifiedOrderResult;
   try {
-    entryRes = await placeMarketOrder(creds, { symbol, side: entrySide, quantity: qty });
+    entryRes = await adapter.placeMarketOrder(creds, { symbol, side: entrySide, quantity: qty });
     await logOrder(supabase, {
       userId: user.id,
       tradeId,
       apiKeyId: args.apiKeyId,
+      exchange,
       symbol,
       kind: "entry",
       side: entrySide.toLowerCase() as "buy" | "sell",
@@ -260,6 +252,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
       userId: user.id,
       tradeId,
       apiKeyId: args.apiKeyId,
+      exchange,
       symbol,
       kind: "entry",
       side: entrySide.toLowerCase() as "buy" | "sell",
@@ -276,19 +269,16 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
 
   // Step 4: Confirm fill (best-effort; market orders usually fill immediately).
   try {
-    const confirmed = await getOrder(creds, symbol, entryRes.orderId);
-    if (confirmed.status === "FILLED" || confirmed.status === "PARTIALLY_FILLED") {
-      // OK
-    }
+    await adapter.getOrder(creds, symbol, entryRes.orderId);
   } catch {
-    // Ignore — Binance occasionally lags on the read after a write.
+    // Ignore — venues occasionally lag on the read after a write.
   }
 
   // Step 5: Stop-loss (reduce-only). Failures here are critical → auto-close.
-  let stopRes: BinanceOrderResult | null = null;
+  let stopRes: UnifiedOrderResult | null = null;
   let stopError: string | null = null;
   try {
-    stopRes = await placeStopMarketOrder(creds, {
+    stopRes = await adapter.placeStopMarketOrder(creds, {
       symbol,
       side: exitSide,
       stopPrice: input.stop,
@@ -298,6 +288,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
       userId: user.id,
       tradeId,
       apiKeyId: args.apiKeyId,
+      exchange,
       symbol,
       kind: "stop_loss",
       side: exitSide.toLowerCase() as "buy" | "sell",
@@ -313,6 +304,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
       userId: user.id,
       tradeId,
       apiKeyId: args.apiKeyId,
+      exchange,
       symbol,
       kind: "stop_loss",
       side: exitSide.toLowerCase() as "buy" | "sell",
@@ -325,11 +317,11 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
   }
 
   // Step 6: Take-profit (reduce-only).
-  let tpRes: BinanceOrderResult | null = null;
+  let tpRes: UnifiedOrderResult | null = null;
   let tpError: string | null = null;
   if (!stopError) {
     try {
-      tpRes = await placeTakeProfitMarketOrder(creds, {
+      tpRes = await adapter.placeTakeProfitMarketOrder(creds, {
         symbol,
         side: exitSide,
         stopPrice: input.target,
@@ -339,6 +331,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
         userId: user.id,
         tradeId,
         apiKeyId: args.apiKeyId,
+        exchange,
         symbol,
         kind: "take_profit",
         side: exitSide.toLowerCase() as "buy" | "sell",
@@ -354,6 +347,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
         userId: user.id,
         tradeId,
         apiKeyId: args.apiKeyId,
+        exchange,
         symbol,
         kind: "take_profit",
         side: exitSide.toLowerCase() as "buy" | "sell",
@@ -375,12 +369,12 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
       // If stop succeeded but TP failed, cancel stop first.
       if (stopRes && tpError) {
         try {
-          await cancelOrder(creds, symbol, stopRes.orderId);
+          await adapter.cancelOrder(creds, symbol, stopRes.orderId);
         } catch {
           /* ignore */
         }
       }
-      const closeRes = await placeMarketOrder(creds, {
+      const closeRes = await adapter.placeMarketOrder(creds, {
         symbol,
         side: exitSide,
         quantity: qty,
@@ -406,10 +400,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
   }
 
   // Step 8: All good → mark open.
-  await supabase
-    .from("trades")
-    .update({ exchange_status: "open" })
-    .eq("id", tradeId);
+  await supabase.from("trades").update({ exchange_status: "open" }).eq("id", tradeId);
 
   // Telegram/Discord notification (best-effort).
   await dispatch(user.id, "ai_coach_done", {
@@ -431,7 +422,7 @@ export async function placeLiveTradeAction(args: LiveTradeArgs): Promise<LiveTra
   };
 }
 
-/** Manual sync — refresh order statuses for the current user from Binance.
+/** Manual sync — refresh order statuses for the current user from the venue.
  *  Used by a UI button on the journal page so users can re-check without waiting for cron. */
 export async function syncMyOrdersAction(): Promise<{
   ok: boolean;
@@ -449,7 +440,7 @@ export async function syncMyOrdersAction(): Promise<{
 
   const { data: trades, error } = await service
     .from("trades")
-    .select("id, user_id, symbol, direction, entry, stop, target, exchange_api_key_id")
+    .select("id, user_id, symbol, direction, entry, stop, target, exchange, exchange_api_key_id")
     .eq("user_id", user.id)
     .eq("is_paper", false)
     .eq("exchange_status", "open")
@@ -466,18 +457,27 @@ export async function syncMyOrdersAction(): Promise<{
 
   for (const trade of trades) {
     if (!trade.exchange_api_key_id) continue;
+
+    let adapter: ExchangeAdapter;
+    try {
+      adapter = getAdapter(trade.exchange as string);
+    } catch {
+      continue;
+    }
+
     const { data: keyRow } = await service
       .from("exchange_api_keys")
-      .select("api_key_encrypted, api_secret_encrypted")
+      .select("api_key_encrypted, api_secret_encrypted, testnet")
       .eq("id", trade.exchange_api_key_id)
       .maybeSingle();
     if (!keyRow) continue;
 
-    let creds: BinanceCredentials;
+    let creds: ExchangeCredentials;
     try {
       creds = {
         apiKey: decryptSecret(keyRow.api_key_encrypted as string),
         apiSecret: decryptSecret(keyRow.api_secret_encrypted as string),
+        testnet: Boolean(keyRow.testnet),
       };
     } catch {
       continue;
@@ -492,7 +492,7 @@ export async function syncMyOrdersAction(): Promise<{
     let exitPrice = 0;
     let exitReason: "target" | "stop" | null = null;
     let exitFillAvg = 0;
-    const byKind: Record<string, typeof orders[number]> = {};
+    const byKind: Record<string, (typeof orders)[number]> = {};
     for (const o of orders) byKind[o.kind as string] = o;
 
     for (const kind of ["stop_loss", "take_profit"] as const) {
@@ -500,30 +500,40 @@ export async function syncMyOrdersAction(): Promise<{
       if (!order || !order.exchange_order_id) continue;
       if (["filled", "canceled", "rejected", "expired"].includes(order.status as string)) continue;
       try {
-        const remote = await getOrder(creds, trade.symbol as string, parseInt(order.exchange_order_id as string, 10));
+        const remote = await adapter.getOrder(
+          creds,
+          trade.symbol as string,
+          order.exchange_order_id as string,
+        );
         refreshed++;
-        const newStatus = mapStatus(remote.status);
-        const avgPrice = remote.avgPrice ? parseFloat(remote.avgPrice) : null;
         await service
           .from("exchange_orders")
           .update({
-            status: newStatus,
-            filled_qty: parseFloat(remote.executedQty) || 0,
-            avg_fill_price: avgPrice,
-            raw_response: remote as unknown as object,
+            status: remote.status,
+            filled_qty: remote.executedQty,
+            avg_fill_price: remote.avgPrice ?? null,
+            raw_response: (remote.raw as object) ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", order.id);
-        if (newStatus === "filled") {
-          exitFillAvg = avgPrice ?? (kind === "stop_loss" ? Number(trade.stop) : Number(trade.target));
+        if (remote.status === "filled") {
+          exitFillAvg =
+            remote.avgPrice ?? (kind === "stop_loss" ? Number(trade.stop) : Number(trade.target));
           exitPrice = exitFillAvg;
           exitReason = kind === "stop_loss" ? "stop" : "target";
 
           const otherKind = kind === "stop_loss" ? "take_profit" : "stop_loss";
           const other = byKind[otherKind];
-          if (other?.exchange_order_id && !["filled", "canceled", "rejected", "expired"].includes(other.status as string)) {
+          if (
+            other?.exchange_order_id &&
+            !["filled", "canceled", "rejected", "expired"].includes(other.status as string)
+          ) {
             try {
-              await cancelOrder(creds, trade.symbol as string, parseInt(other.exchange_order_id as string, 10));
+              await adapter.cancelOrder(
+                creds,
+                trade.symbol as string,
+                other.exchange_order_id as string,
+              );
               await service
                 .from("exchange_orders")
                 .update({ status: "canceled", updated_at: new Date().toISOString() })
@@ -535,7 +545,9 @@ export async function syncMyOrdersAction(): Promise<{
 
           const risk = Math.abs(Number(trade.entry) - Number(trade.stop));
           const realizedDelta =
-            trade.direction === "long" ? exitFillAvg - Number(trade.entry) : Number(trade.entry) - exitFillAvg;
+            trade.direction === "long"
+              ? exitFillAvg - Number(trade.entry)
+              : Number(trade.entry) - exitFillAvg;
           const resultR = risk > 0 ? realizedDelta / risk : 0;
 
           await service
@@ -563,16 +575,3 @@ export async function syncMyOrdersAction(): Promise<{
   }
   return { ok: true, closed, refreshed };
 }
-
-function mapStatus(s: string): string {
-  const m: Record<string, string> = {
-    NEW: "open",
-    PARTIALLY_FILLED: "partial",
-    FILLED: "filled",
-    CANCELED: "canceled",
-    REJECTED: "rejected",
-    EXPIRED: "expired",
-  };
-  return m[s] ?? "submitted";
-}
-

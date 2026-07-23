@@ -13,13 +13,15 @@ import {
   registerKeyAction,
   reverifyKeyAction,
   deleteKeyAction,
-  verifyBinanceKeyAction,
+  verifyKeyAction,
   type RegisterKeyResult,
 } from "./_actions";
 
+type ExchangeId = "binance" | "bybit" | "upbit";
+
 type SavedKey = {
   id: string;
-  exchange: "binance" | "upbit";
+  exchange: ExchangeId;
   nickname: string | null;
   api_key_masked: string;
   permissions: Record<string, unknown>;
@@ -27,11 +29,19 @@ type SavedKey = {
   verification_error: string | null;
   last_verified_at: string | null;
   created_at: string;
+  testnet?: boolean;
 };
+
+/** Exchanges with a working live-trading adapter. */
+const SUPPORTED_EXCHANGES: { id: ExchangeId; label: string }[] = [
+  { id: "binance", label: "Binance 선물" },
+  { id: "bybit", label: "Bybit 선물" },
+];
 
 export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
   const t = useT();
-  const [exchange, setExchange] = useState<"binance" | "upbit">("binance");
+  const [exchange, setExchange] = useState<ExchangeId>("binance");
+  const [testnet, setTestnet] = useState(false);
   const [nickname, setNickname] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
@@ -42,15 +52,8 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
   async function handleVerify() {
     setVerifyResult(null);
     setSubmitMsg(null);
-    if (exchange !== "binance") {
-      setVerifyResult({
-        ok: false,
-        error: t("settings.apiKeys.upbitNotYet"),
-      });
-      return;
-    }
     startTransition(async () => {
-      const r = await verifyBinanceKeyAction(apiKey, apiSecret);
+      const r = await verifyKeyAction(exchange, apiKey, apiSecret, testnet);
       setVerifyResult(r);
     });
   }
@@ -58,7 +61,7 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
   async function handleSubmit() {
     setSubmitMsg(null);
     startTransition(async () => {
-      const r = await registerKeyAction({ exchange, nickname, apiKey, apiSecret });
+      const r = await registerKeyAction({ exchange, nickname, apiKey, apiSecret, testnet });
       if (r.ok) {
         setSubmitMsg({ tone: "ok", text: t("settings.apiKeys.registeredMsg") });
         setApiKey("");
@@ -124,27 +127,31 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
             <div>
               <Label className="text-xs text-muted-foreground">{t("settings.apiKeys.exchange")}</Label>
               <div className="mt-1.5 flex gap-2">
-                {(["binance", "upbit"] as const).map((ex) => (
+                {SUPPORTED_EXCHANGES.map((ex) => (
                   <button
-                    key={ex}
+                    key={ex.id}
                     type="button"
-                    onClick={() => setExchange(ex)}
+                    onClick={() => setExchange(ex.id)}
                     className={cn(
                       "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors",
-                      exchange === ex
+                      exchange === ex.id
                         ? "border-primary bg-primary/10 text-primary"
                         : "border-border bg-background hover:border-border/60",
                     )}
                   >
-                    {ex === "binance" ? t("settings.apiKeys.binanceFutures") : t("settings.apiKeys.upbitSpot")}
+                    {ex.label}
                   </button>
                 ))}
               </div>
-              {exchange === "upbit" ? (
-                <p className="mt-1.5 text-[11px] text-amber-400">
-                  {t("settings.apiKeys.upbitComingSoon")}
-                </p>
-              ) : null}
+              <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={testnet}
+                  onChange={(e) => setTestnet(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-primary"
+                />
+                테스트넷 키 (실제 자금 아님 — 연동 검증용)
+              </label>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">{t("settings.apiKeys.nickname")}</Label>
@@ -187,7 +194,7 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
               type="button"
               variant="outline"
               onClick={handleVerify}
-              disabled={pending || !apiKey || !apiSecret || exchange !== "binance"}
+              disabled={pending || !apiKey || !apiSecret}
             >
               <ShieldCheck className="mr-1.5 h-4 w-4" />
               {t("settings.apiKeys.verifyOnly")}
@@ -195,7 +202,7 @@ export function ApiKeysClient({ initial }: { initial: SavedKey[] }) {
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={pending || !apiKey || !apiSecret || exchange !== "binance"}
+              disabled={pending || !apiKey || !apiSecret}
             >
               {pending ? t("settings.apiKeys.processing") : t("settings.apiKeys.verifyAndRegister")}
             </Button>
@@ -290,6 +297,11 @@ function SavedKeyRow({ keyRow: k }: { keyRow: SavedKey }) {
             <Badge className="border border-border bg-background/60 text-[10px] uppercase">
               {k.exchange}
             </Badge>
+            {k.testnet ? (
+              <Badge className="border border-amber-500/40 bg-amber-500/10 text-[10px] uppercase text-amber-400">
+                테스트넷
+              </Badge>
+            ) : null}
             <Badge
               className={cn(
                 "border text-[10px]",

@@ -2,14 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { encryptSecret, maskApiKey } from "@/lib/crypto";
-import { verifyCredentials } from "@/lib/exchanges/binance";
+import { encryptSecret, maskApiKey, decryptSecret } from "@/lib/crypto";
+import { getAdapter } from "@/lib/exchanges";
 
 export interface RegisterKeyInput {
-  exchange: "binance" | "upbit";
+  exchange: "binance" | "bybit" | "upbit";
   nickname: string;
   apiKey: string;
   apiSecret: string;
+  /** Route this key to the venue's testnet instead of mainnet. */
+  testnet?: boolean;
 }
 
 export interface RegisterKeyResult {
@@ -22,15 +24,27 @@ export interface RegisterKeyResult {
   balance?: number;
 }
 
-/** Verify a Binance key (without saving) — used by the UI for live validation. */
-export async function verifyBinanceKeyAction(
+/** Verify a key against its venue (without saving) — used by the UI for live validation. */
+export async function verifyKeyAction(
+  exchange: string,
   apiKey: string,
   apiSecret: string,
+  testnet = false,
 ): Promise<RegisterKeyResult> {
   if (!apiKey?.trim() || !apiSecret?.trim()) {
     return { ok: false, error: "API 키와 시크릿 모두 입력하세요." };
   }
-  const r = await verifyCredentials({ apiKey: apiKey.trim(), apiSecret: apiSecret.trim() });
+  let adapter;
+  try {
+    adapter = getAdapter(exchange);
+  } catch {
+    return { ok: false, error: `${exchange} 연동은 아직 지원하지 않습니다.` };
+  }
+  const r = await adapter.verifyCredentials({
+    apiKey: apiKey.trim(),
+    apiSecret: apiSecret.trim(),
+    testnet,
+  });
   if (!r.valid) {
     return { ok: false, error: r.error ?? "검증 실패" };
   }
@@ -52,35 +66,38 @@ export async function registerKeyAction(input: RegisterKeyInput): Promise<Regist
   const apiKey = input.apiKey.trim();
   const apiSecret = input.apiSecret.trim();
   const nickname = input.nickname.trim() || `${input.exchange}-${Date.now()}`;
+  const testnet = Boolean(input.testnet);
 
   if (!apiKey || !apiSecret) {
     return { ok: false, error: "API 키와 시크릿 모두 입력하세요." };
   }
 
-  if (input.exchange === "upbit") {
-    // Upbit adapter not yet wired (Phase 2 — Binance first).
+  let adapter;
+  try {
+    adapter = getAdapter(input.exchange);
+  } catch {
     return {
       ok: false,
-      error: "Upbit 연동은 다음 단계에서 추가됩니다. 현재는 Binance만 지원합니다.",
+      error: `${input.exchange} 연동은 아직 지원하지 않습니다. 현재는 Binance·Bybit만 지원합니다.`,
     };
   }
 
   // Verify before saving.
-  const v = await verifyCredentials({ apiKey, apiSecret });
+  const v = await adapter.verifyCredentials({ apiKey, apiSecret, testnet });
   if (!v.valid) {
     return { ok: false, error: v.error ?? "키 검증 실패" };
   }
   if (!v.permissions.canTrade) {
     return {
       ok: false,
-      error: "이 키는 거래 권한이 없습니다. Binance에서 'Enable Trading'을 체크하고 재발급하세요.",
+      error: "이 키는 선물 거래 권한이 없습니다. 거래소에서 거래 권한을 켜고 키를 재발급하세요.",
     };
   }
   if (v.permissions.canWithdraw) {
     return {
       ok: false,
       error:
-        "이 키에 출금 권한이 활성화되어 있습니다. 보안상 절대 등록할 수 없습니다. Binance에서 'Enable Withdrawals'를 끄고 키를 재발급하세요.",
+        "이 키에 출금 권한이 활성화되어 있습니다. 보안상 절대 등록할 수 없습니다. 거래소에서 출금 권한을 끄고 키를 재발급하세요.",
     };
   }
 
@@ -92,13 +109,13 @@ export async function registerKeyAction(input: RegisterKeyInput): Promise<Regist
     user_id: user.id,
     exchange: input.exchange,
     nickname,
+    testnet,
     api_key_encrypted: apiKeyEncrypted,
     api_secret_encrypted: apiSecretEncrypted,
     api_key_masked: masked,
     permissions: {
       canTrade: v.permissions.canTrade,
       canWithdraw: v.permissions.canWithdraw,
-      canDeposit: v.permissions.canDeposit,
     },
     last_verified_at: new Date().toISOString(),
     verification_status: "valid",
@@ -129,21 +146,24 @@ export async function reverifyKeyAction(keyId: string): Promise<RegisterKeyResul
 
   const { data: row, error } = await supabase
     .from("exchange_api_keys")
-    .select("id, exchange, api_key_encrypted, api_secret_encrypted")
+    .select("id, exchange, testnet, api_key_encrypted, api_secret_encrypted")
     .eq("id", keyId)
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (error || !row) return { ok: false, error: "키를 찾을 수 없습니다." };
-  if (row.exchange !== "binance") {
-    return { ok: false, error: "Binance 키만 재검증 지원" };
+
+  let adapter;
+  try {
+    adapter = getAdapter(row.exchange as string);
+  } catch {
+    return { ok: false, error: `${row.exchange} 키는 재검증을 지원하지 않습니다.` };
   }
 
-  const { decryptSecret } = await import("@/lib/crypto");
   const apiKey = decryptSecret(row.api_key_encrypted);
   const apiSecret = decryptSecret(row.api_secret_encrypted);
 
-  const v = await verifyCredentials({ apiKey, apiSecret });
+  const v = await adapter.verifyCredentials({ apiKey, apiSecret, testnet: Boolean(row.testnet) });
   const update: Record<string, string | null | object> = {
     last_verified_at: new Date().toISOString(),
     verification_status: v.valid ? "valid" : "invalid",
@@ -153,7 +173,6 @@ export async function reverifyKeyAction(keyId: string): Promise<RegisterKeyResul
     update.permissions = {
       canTrade: v.permissions.canTrade,
       canWithdraw: v.permissions.canWithdraw,
-      canDeposit: v.permissions.canDeposit,
     };
   }
   await supabase.from("exchange_api_keys").update(update).eq("id", keyId);

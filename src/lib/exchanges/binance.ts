@@ -1,5 +1,15 @@
 import "server-only";
 import { createHmac } from "node:crypto";
+import type {
+  AccountInfo,
+  ExchangeAdapter,
+  ExchangeCredentials,
+  KeyVerificationResult,
+  MarketOrderArgs,
+  OrderStatus,
+  ProtectiveOrderArgs,
+  UnifiedOrderResult,
+} from "./types";
 
 /**
  * Binance USDT-M Futures REST client.
@@ -13,15 +23,21 @@ import { createHmac } from "node:crypto";
  * Docs: https://developers.binance.com/docs/derivatives/usds-margined-futures
  *
  * IMPORTANT: This adapter NEVER calls withdraw endpoints. If you ever need to,
- * audit the call site carefully. The whole point of VECTA's positioning is
+ * audit the call site carefully. The whole point of the product's positioning is
  * "we cannot withdraw your funds."
  */
 
-const BASE_URL = "https://fapi.binance.com";
+const MAINNET_URL = "https://fapi.binance.com";
+const TESTNET_URL = "https://testnet.binancefuture.com";
+
+function baseUrl(creds: ExchangeCredentials): string {
+  return creds.testnet ? TESTNET_URL : MAINNET_URL;
+}
 
 export interface BinanceCredentials {
   apiKey: string;
   apiSecret: string;
+  testnet?: boolean;
 }
 
 export interface BinanceOrderResult {
@@ -49,7 +65,7 @@ export interface BinanceAccountInfo {
 
 /** Sign + send an authenticated Binance Futures request. */
 async function signedRequest<T>(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   method: "GET" | "POST" | "DELETE",
   path: string,
   params: Record<string, string | number | boolean> = {},
@@ -68,7 +84,7 @@ async function signedRequest<T>(
   const signature = createHmac("sha256", creds.apiSecret).update(query).digest("hex");
   const fullQuery = `${query}&signature=${signature}`;
 
-  const url = `${BASE_URL}${path}?${fullQuery}`;
+  const url = `${baseUrl(creds)}${path}?${fullQuery}`;
   const res = await fetch(url, {
     method,
     headers: {
@@ -101,12 +117,39 @@ async function signedRequest<T>(
   return JSON.parse(text) as T;
 }
 
+/** Binance order status → normalized OrderStatus. */
+function normStatus(s: string): OrderStatus {
+  const m: Record<string, OrderStatus> = {
+    NEW: "open",
+    PARTIALLY_FILLED: "partial",
+    FILLED: "filled",
+    CANCELED: "canceled",
+    REJECTED: "rejected",
+    EXPIRED: "expired",
+  };
+  return m[s] ?? "submitted";
+}
+
+function toUnified(r: BinanceOrderResult): UnifiedOrderResult {
+  return {
+    orderId: String(r.orderId),
+    symbol: r.symbol,
+    status: normStatus(r.status),
+    side: r.side,
+    type: r.type,
+    origQty: parseFloat(r.origQty) || 0,
+    executedQty: parseFloat(r.executedQty) || 0,
+    avgPrice: r.avgPrice ? parseFloat(r.avgPrice) : undefined,
+    raw: r,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Read endpoints
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Fetch account info — used to verify a freshly-entered key works. */
-export async function getAccount(creds: BinanceCredentials): Promise<BinanceAccountInfo> {
+export async function getAccount(creds: ExchangeCredentials): Promise<BinanceAccountInfo> {
   type AccountResponse = {
     canTrade: boolean;
     canDeposit: boolean;
@@ -128,7 +171,7 @@ export async function getAccount(creds: BinanceCredentials): Promise<BinanceAcco
 
 /** Position info for one or all symbols. */
 export async function getPositions(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   symbol?: string,
 ): Promise<
   Array<{
@@ -163,9 +206,9 @@ export async function getPositions(
     }));
 }
 
-/** Get a single order's current state. */
+/** Get a single order's current state (raw Binance shape). */
 export async function getOrder(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   symbol: string,
   orderId: number,
 ): Promise<BinanceOrderResult> {
@@ -181,7 +224,7 @@ export async function getOrder(
 
 /** Change leverage for a symbol BEFORE placing the entry. */
 export async function setLeverage(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   symbol: string,
   leverage: number,
 ): Promise<{ leverage: number; symbol: string }> {
@@ -197,7 +240,7 @@ export type OrderSide = "BUY" | "SELL";
 
 /** Market entry order. */
 export async function placeMarketOrder(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   args: {
     symbol: string;
     side: OrderSide;
@@ -217,7 +260,7 @@ export async function placeMarketOrder(
 /** Stop-loss order (STOP_MARKET, reduce-only).
  *  When triggered, closes the position at market. */
 export async function placeStopMarketOrder(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   args: {
     symbol: string;
     /** Opposite side of the entry (BUY entry → SELL stop). */
@@ -239,7 +282,7 @@ export async function placeStopMarketOrder(
 
 /** Take-profit order (TAKE_PROFIT_MARKET, reduce-only). */
 export async function placeTakeProfitMarketOrder(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   args: {
     symbol: string;
     side: OrderSide;
@@ -260,7 +303,7 @@ export async function placeTakeProfitMarketOrder(
 
 /** Cancel a single open order. */
 export async function cancelOrder(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   symbol: string,
   orderId: number,
 ): Promise<{ orderId: number; status: string }> {
@@ -272,7 +315,7 @@ export async function cancelOrder(
 
 /** Cancel all open orders for a symbol. */
 export async function cancelAllOrders(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
   symbol: string,
 ): Promise<{ code: number; msg: string }> {
   return signedRequest(creds, "DELETE", "/fapi/v1/allOpenOrders", {
@@ -284,21 +327,10 @@ export async function cancelAllOrders(
 // Verification (used by the key-registration UI)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface KeyVerificationResult {
-  valid: boolean;
-  permissions: {
-    canTrade: boolean;
-    canDeposit: boolean;
-    canWithdraw: boolean;
-  };
-  balance: number; // USDT
-  error?: string;
-}
-
 /** Ping the account endpoint to verify a key works AND surface permissions.
  *  Catches errors and returns them in the result rather than throwing. */
 export async function verifyCredentials(
-  creds: BinanceCredentials,
+  creds: ExchangeCredentials,
 ): Promise<KeyVerificationResult> {
   try {
     const a = await getAccount(creds);
@@ -320,3 +352,52 @@ export async function verifyCredentials(
     };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Adapter — the venue-neutral surface used by call sites via getAdapter()
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const binanceAdapter: ExchangeAdapter = {
+  id: "binance",
+
+  verifyCredentials,
+
+  async getAccount(creds): Promise<AccountInfo> {
+    const a = await getAccount(creds);
+    return {
+      canTrade: a.canTrade,
+      canDeposit: a.canDeposit,
+      canWithdraw: a.canWithdraw,
+      totalWalletBalance: a.totalWalletBalance,
+      availableBalance: a.availableBalance,
+    };
+  },
+
+  async setLeverage(creds, symbol, leverage): Promise<void> {
+    await setLeverage(creds, symbol, leverage);
+  },
+
+  async placeMarketOrder(creds, args: MarketOrderArgs): Promise<UnifiedOrderResult> {
+    return toUnified(await placeMarketOrder(creds, args));
+  },
+
+  async placeStopMarketOrder(creds, args: ProtectiveOrderArgs): Promise<UnifiedOrderResult> {
+    return toUnified(await placeStopMarketOrder(creds, args));
+  },
+
+  async placeTakeProfitMarketOrder(
+    creds,
+    args: ProtectiveOrderArgs,
+  ): Promise<UnifiedOrderResult> {
+    return toUnified(await placeTakeProfitMarketOrder(creds, args));
+  },
+
+  async getOrder(creds, symbol, orderId): Promise<UnifiedOrderResult> {
+    return toUnified(await getOrder(creds, symbol, parseInt(orderId, 10)));
+  },
+
+  async cancelOrder(creds, symbol, orderId) {
+    const r = await cancelOrder(creds, symbol, parseInt(orderId, 10));
+    return { orderId: String(r.orderId), status: normStatus(r.status) };
+  },
+};

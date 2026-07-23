@@ -1,20 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseService } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto";
-import { cancelOrder, getOrder } from "@/lib/exchanges/binance";
+import { getAdapter } from "@/lib/exchanges";
+import type { ExchangeCredentials } from "@/lib/exchanges";
 import { dispatch } from "@/lib/notify-dispatch";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Sync exchange orders with the actual venue.
+ * Sync exchange orders with the actual venue (Binance / Bybit).
  *
  * For every trade that is is_paper=false and exchange_status='open':
  *  1. Decrypt the user's API key
- *  2. For each entry/stop/take_profit order: fetch latest state from Binance
- *  3. Update exchange_orders row
- *  4. If stop_loss FILLED or take_profit FILLED → cancel the other side,
+ *  2. Resolve the venue adapter from trade.exchange
+ *  3. For each stop/take_profit order: fetch latest state
+ *  4. Update exchange_orders row
+ *  5. If stop_loss FILLED or take_profit FILLED → cancel the other side,
  *     close the trade with the actual fill price + R, fire notification.
  *
  * Runs every minute (configured in vercel.json).
@@ -28,6 +30,7 @@ interface TradeRow {
   entry: number;
   stop: number;
   target: number;
+  exchange: string | null;
   exchange_api_key_id: string | null;
 }
 
@@ -44,18 +47,7 @@ interface KeyRow {
   id: string;
   api_key_encrypted: string;
   api_secret_encrypted: string;
-}
-
-function mapBinanceStatus(s: string): string {
-  const m: Record<string, string> = {
-    NEW: "open",
-    PARTIALLY_FILLED: "partial",
-    FILLED: "filled",
-    CANCELED: "canceled",
-    REJECTED: "rejected",
-    EXPIRED: "expired",
-  };
-  return m[s] ?? "submitted";
+  testnet: boolean | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -75,7 +67,7 @@ export async function GET(req: NextRequest) {
   const { data: trades, error } = await supabase
     .from("trades")
     .select(
-      "id, user_id, symbol, direction, entry, stop, target, exchange_api_key_id",
+      "id, user_id, symbol, direction, entry, stop, target, exchange, exchange_api_key_id",
     )
     .eq("is_paper", false)
     .eq("exchange_status", "open")
@@ -91,13 +83,13 @@ export async function GET(req: NextRequest) {
   }
 
   // Cache key decryption per api_key_id to avoid redundant decrypt work.
-  const keyCache = new Map<string, { apiKey: string; apiSecret: string } | null>();
+  const keyCache = new Map<string, ExchangeCredentials | null>();
 
   async function loadCreds(keyId: string) {
     if (keyCache.has(keyId)) return keyCache.get(keyId);
     const { data: k } = await supabase
       .from("exchange_api_keys")
-      .select("id, api_key_encrypted, api_secret_encrypted")
+      .select("id, api_key_encrypted, api_secret_encrypted, testnet")
       .eq("id", keyId)
       .maybeSingle<KeyRow>();
     if (!k) {
@@ -105,9 +97,10 @@ export async function GET(req: NextRequest) {
       return null;
     }
     try {
-      const creds = {
+      const creds: ExchangeCredentials = {
         apiKey: decryptSecret(k.api_key_encrypted),
         apiSecret: decryptSecret(k.api_secret_encrypted),
+        testnet: Boolean(k.testnet),
       };
       keyCache.set(keyId, creds);
       return creds;
@@ -125,6 +118,15 @@ export async function GET(req: NextRequest) {
         log.push(`${trade.id} exchange_api_key_id 없음 (스킵)`);
         continue;
       }
+
+      let adapter;
+      try {
+        adapter = getAdapter(trade.exchange ?? "");
+      } catch {
+        log.push(`${trade.id} 미지원 거래소 ${trade.exchange} (스킵)`);
+        continue;
+      }
+
       const creds = await loadCreds(trade.exchange_api_key_id);
       if (!creds) {
         errors++;
@@ -164,17 +166,16 @@ export async function GET(req: NextRequest) {
           continue;
         }
         try {
-          const remote = await getOrder(creds, trade.symbol, parseInt(order.exchange_order_id, 10));
-          const newStatus = mapBinanceStatus(remote.status);
-          const filledQty = parseFloat(remote.executedQty) || 0;
-          const avgPrice = remote.avgPrice ? parseFloat(remote.avgPrice) : null;
+          const remote = await adapter.getOrder(creds, trade.symbol, order.exchange_order_id);
+          const newStatus = remote.status;
+          const avgPrice = remote.avgPrice ?? null;
           await supabase
             .from("exchange_orders")
             .update({
               status: newStatus,
-              filled_qty: filledQty,
+              filled_qty: remote.executedQty,
               avg_fill_price: avgPrice,
-              raw_response: remote as unknown as object,
+              raw_response: (remote.raw as object) ?? null,
               updated_at: new Date().toISOString(),
             })
             .eq("id", order.id);
@@ -206,7 +207,7 @@ export async function GET(req: NextRequest) {
           !["filled", "canceled", "rejected", "expired"].includes(otherOrder.status)
         ) {
           try {
-            await cancelOrder(creds, trade.symbol, parseInt(otherOrder.exchange_order_id, 10));
+            await adapter.cancelOrder(creds, trade.symbol, otherOrder.exchange_order_id);
             await supabase
               .from("exchange_orders")
               .update({ status: "canceled", updated_at: new Date().toISOString() })

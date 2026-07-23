@@ -13,7 +13,7 @@ export default async function ApiKeysPage() {
   const { data: keys } = await supabase
     .from("exchange_api_keys")
     .select(
-      "id, exchange, nickname, api_key_masked, permissions, verification_status, verification_error, last_verified_at, created_at",
+      "id, exchange, nickname, testnet, api_key_masked, permissions, verification_status, verification_error, last_verified_at, created_at",
     )
     .eq("user_id", user!.id)
     .order("created_at", { ascending: false });

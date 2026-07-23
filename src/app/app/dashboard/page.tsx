@@ -11,7 +11,7 @@ import { FlowStepper } from "@/components/app/flow-stepper";
 import { PerfTabs } from "@/components/app/perf-tabs";
 import { ClosedTradesTable, type ClosedTradeRow } from "../journal/closed-trades-table";
 import { HelpLink } from "@/components/app/help-link";
-import { parseMode, type TradeMode } from "@/components/app/mode-filter";
+import { parseMode, activeBucket, bucketOfTrade, type TradeMode } from "@/components/app/mode-filter";
 import { getT } from "@/lib/i18n/server";
 import type { TFunction } from "@/lib/i18n/messages";
 
@@ -31,6 +31,7 @@ interface ClosedRow {
   direction: "long" | "short";
   exit_reason: "target" | "stop" | "manual" | "timeout" | null;
   mode: "live" | "backtest" | null;
+  is_paper: boolean | null;
   paper_realized_pnl: number | null;
   entry: number | null;
   entry_actual: number | null;
@@ -61,9 +62,8 @@ export default async function DashboardPage({
   const sp = await searchParams;
   const t = await getT();
   const tradeMode: TradeMode = parseMode(sp.mode);
-  // 탭: 가상거래(live) / 백테스트(backtest). 실거래(real exchange)는 아직 없음.
-  const activeTab: "live" | "backtest" = tradeMode === "backtest" ? "backtest" : "live";
-  const tabOf = (m: "live" | "backtest" | null) => (m === "backtest" ? "backtest" : "live");
+  // 탭: 실거래(real, is_paper=false) / 가상거래(paper) / 백테스트(backtest).
+  const activeTab = activeBucket(tradeMode); // "real" | "paper" | "backtest"
   const supabase = await getSupabaseServer();
   const {
     data: { user },
@@ -73,7 +73,7 @@ export default async function DashboardPage({
     supabase
       .from("trades")
       .select(
-        "id, timeframe, pre_rr, created_at, stop, account_size, context_flags, order_type, pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
+        "id, timeframe, pre_rr, created_at, stop, account_size, context_flags, order_type, pre_grade, result_r, closed_at, symbol, direction, exit_reason, mode, is_paper, paper_realized_pnl, entry, entry_actual, exit_price, exit_actual, position_quantity, fees_pct",
       )
       .not("closed_at", "is", null)
       .order("closed_at", { ascending: true }),
@@ -81,9 +81,10 @@ export default async function DashboardPage({
   ]);
 
   const allClosed = ((tradesRes.data ?? []) as unknown as ClosedRow[]).filter((r) => r.result_r != null);
-  const rows = allClosed.filter((r) => tabOf(r.mode) === activeTab);
-  const liveCount = allClosed.filter((r) => r.mode !== "backtest").length;
-  const backtestCount = allClosed.filter((r) => r.mode === "backtest").length;
+  const rows = allClosed.filter((r) => bucketOfTrade(r) === activeTab);
+  const realCount = allClosed.filter((r) => bucketOfTrade(r) === "real").length;
+  const paperCount = allClosed.filter((r) => bucketOfTrade(r) === "paper").length;
+  const backtestCount = allClosed.filter((r) => bucketOfTrade(r) === "backtest").length;
   const startingBalance = wallet?.startingBalance ?? 10000;
 
   // ── Headline KPIs ────────────────────────────────────────
@@ -210,27 +211,34 @@ export default async function DashboardPage({
 
       {/* 실거래 / 가상거래 / 백테스트 탭 */}
       <div className="flex flex-wrap items-center gap-2">
-        <div
-          title={t("dashboard.tab.realSoon")}
-          className="flex cursor-default items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 opacity-50"
+        <Link
+          href="/app/dashboard?mode=real"
+          className={cn(
+            "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
+            activeTab === "real"
+              ? "border-grade-a/60 bg-grade-a/10 font-bold text-grade-a"
+              : "border-border bg-card font-medium text-muted-foreground hover:text-foreground",
+          )}
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-grade-a" />
-          <span className="text-sm font-medium text-muted-foreground">{t("dashboard.tab.real")}</span>
-          <span className="text-[10px] text-muted-foreground/60">{t("dashboard.tab.realSoon")}</span>
-        </div>
+          <span className={cn("h-1.5 w-1.5 rounded-full", activeTab === "real" ? "bg-grade-a" : "bg-grade-a/50")} />
+          {t("dashboard.tab.real")}
+          <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-grade-a/90">
+            {realCount}
+          </span>
+        </Link>
         <Link
           href="/app/dashboard?mode=live"
           className={cn(
             "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
-            activeTab === "live"
+            activeTab === "paper"
               ? "border-ring bg-primary/10 font-bold"
               : "border-border bg-card font-medium text-muted-foreground hover:text-foreground",
           )}
         >
-          <Wallet className={cn("h-3.5 w-3.5", activeTab === "live" && "text-primary")} />
+          <Wallet className={cn("h-3.5 w-3.5", activeTab === "paper" && "text-primary")} />
           {t("dashboard.tab.live")}
           <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-primary">
-            {liveCount}
+            {paperCount}
           </span>
         </Link>
         <Link

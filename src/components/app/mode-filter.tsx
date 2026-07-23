@@ -1,7 +1,25 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type TradeMode = "all" | "live" | "backtest";
+export type TradeMode = "all" | "live" | "backtest" | "real";
+
+/** 성과 화면의 3분류 탭. real=실거래(거래소), paper=가상거래, backtest=백테스트. */
+export type PerfBucket = "real" | "paper" | "backtest";
+
+/** ?mode= 값 → 활성 탭. 기본(없음/live/all)은 가상거래(paper). */
+export function activeBucket(mode: TradeMode): PerfBucket {
+  return mode === "backtest" ? "backtest" : mode === "real" ? "real" : "paper";
+}
+
+/**
+ * 한 거래가 속하는 분류. 백테스트가 우선, 그다음 실거래(is_paper=false), 나머지는 가상거래.
+ * (실거래는 is_paper로만 구분됨 — mode 컬럼엔 안 들어감.)
+ */
+export function bucketOfTrade(t: { mode: string | null; is_paper?: boolean | null }): PerfBucket {
+  if (t.mode === "backtest") return "backtest";
+  if (t.is_paper === false) return "real";
+  return "paper";
+}
 
 /**
  * 거래 모드(실거래/백테스트) 필터 — Journal/Dashboard 상단에 사용.
@@ -16,7 +34,7 @@ export function ModeFilter({
   basePath: string;
   view: string; // 현재 활성 view (?view=) — 링크에 보존
   current: TradeMode;
-  counts?: { all?: number; live?: number; backtest?: number };
+  counts?: { all?: number; live?: number; backtest?: number; real?: number };
 }) {
   const tabs: { key: TradeMode; label: string; icon?: string }[] = [
     { key: "all", label: "전체" },
@@ -72,5 +90,5 @@ export function ModeFilter({
 }
 
 export function parseMode(raw: string | undefined | null): TradeMode {
-  return raw === "live" || raw === "backtest" ? raw : "all";
+  return raw === "live" || raw === "backtest" || raw === "real" ? raw : "all";
 }

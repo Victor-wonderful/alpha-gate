@@ -9,7 +9,7 @@ import { PerfTabs } from "@/components/app/perf-tabs";
 import { ResolveTradesButton } from "./resolve-button";
 import { CancelPendingButton } from "./cancel-pending-button";
 import { HelpLink } from "@/components/app/help-link";
-import { parseMode, type TradeMode } from "@/components/app/mode-filter";
+import { parseMode, activeBucket, bucketOfTrade, type TradeMode } from "@/components/app/mode-filter";
 import { ExpiryBanner } from "@/components/trade/expiry-banner";
 import { Suspense } from "react";
 import { fetchTicker24h } from "@/lib/analysis/binance";
@@ -45,6 +45,7 @@ interface TradeRow {
   exit_price: number | null;
   exit_actual: number | null;
   mode: "live" | "backtest" | null;
+  is_paper: boolean | null;
 }
 
 export default async function JournalListPage({
@@ -59,7 +60,7 @@ export default async function JournalListPage({
   const supabase = await getSupabaseServer();
 
   const TRADE_COLS =
-    "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual, mode";
+    "id, symbol, direction, timeframe, pre_grade, pre_rr, result_r, closed_at, created_at, entry, entry_actual, stop, target, position_quantity, account_size, fees_pct, context_flags, exit_reason, order_type, order_status, limit_price, paper_realized_pnl, exit_price, exit_actual, mode, is_paper";
   // 진행 중/미체결(closed_at null)은 건수가 적어 절대 잘리지 않게, 종료된 거래는 최근 청산 순으로
   // 별도 캡을 둔다. (이전엔 open+pending+closed를 한 쿼리 .limit(100)로 묶어, 종료 거래가
   // 100건을 넘으면 오래된 게 아예 안 불러와지고 탭/섹션 카운트도 틀어졌다.)
@@ -84,18 +85,17 @@ export default async function JournalListPage({
     order_status?: "pending" | "filled" | "canceled" | "expired" | null;
     limit_price?: number | null;
   })[];
-  // 탭: 가상거래(live) / 백테스트(backtest). 실거래(real exchange)는 아직 없음(Bybit 연동 예정).
-  // ?mode=backtest → 백테스트 탭, 그 외(없음/live/all) → 가상거래 탭.
-  const activeTab: "live" | "backtest" = tradeMode === "backtest" ? "backtest" : "live";
-  const tabOf = (m: "live" | "backtest" | null | undefined) => (m === "backtest" ? "backtest" : "live");
+  // 탭: 실거래(real, is_paper=false) / 가상거래(paper) / 백테스트(backtest).
+  // ?mode=real → 실거래, =backtest → 백테스트, 그 외(없음/live/all) → 가상거래.
+  const activeTab = activeBucket(tradeMode); // "real" | "paper" | "backtest"
 
-  // Pending limit/stop orders + 진행 중 포지션은 라이브(가상거래)에만 존재 — 백테스트는 즉시 청산됨.
+  // Pending limit/stop orders + 진행 중 포지션.
   const pendingLimits = trades.filter(
     (t) =>
       !t.closed_at &&
       t.order_status === "pending" &&
       (t.order_type === "limit" || t.order_type === "stop") &&
-      tabOf(t.mode) === activeTab,
+      bucketOfTrade(t) === activeTab,
   );
   const open = trades.filter(
     (t) =>
@@ -103,13 +103,14 @@ export default async function JournalListPage({
       t.order_status !== "pending" &&
       t.order_status !== "canceled" &&
       t.order_status !== "expired" &&
-      tabOf(t.mode) === activeTab,
+      bucketOfTrade(t) === activeTab,
   );
   const closedAll = trades.filter((t) => t.closed_at);
-  // 모든 KPI/통계/리스트는 활성 탭(live/backtest)으로 필터된 데이터 사용.
-  const closed = closedAll.filter((t) => tabOf(t.mode) === activeTab);
-  const liveCount = closedAll.filter((t) => t.mode !== "backtest").length;
-  const backtestCount = closedAll.filter((t) => t.mode === "backtest").length;
+  // 모든 KPI/통계/리스트는 활성 탭(real/paper/backtest)으로 필터된 데이터 사용.
+  const closed = closedAll.filter((t) => bucketOfTrade(t) === activeTab);
+  const realCount = closedAll.filter((t) => bucketOfTrade(t) === "real").length;
+  const paperCount = closedAll.filter((t) => bucketOfTrade(t) === "paper").length;
+  const backtestCount = closedAll.filter((t) => bucketOfTrade(t) === "backtest").length;
 
   // Batch fetch current prices for all unique open-position + pending-limit symbols.
   const symbols = Array.from(new Set([...open, ...pendingLimits].map((t) => t.symbol)));
@@ -236,29 +237,36 @@ export default async function JournalListPage({
 
       {/* 실거래 / 가상거래 / 백테스트 탭 */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* 실거래 — Bybit 연동 예정 (비활성) */}
-        <div
-          title={t("journal.page.bybitSoon")}
-          className="flex cursor-default items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 opacity-50"
+        {/* 실거래 (real, is_paper=false) */}
+        <Link
+          href="/app/journal?mode=real"
+          className={cn(
+            "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
+            activeTab === "real"
+              ? "border-grade-a/60 bg-grade-a/10 font-bold text-grade-a"
+              : "border-border bg-card font-medium text-muted-foreground hover:text-foreground",
+          )}
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-grade-a" />
-          <span className="text-sm font-medium text-muted-foreground">{t("journal.page.realTrade")}</span>
-          <span className="text-[10px] text-muted-foreground/60">{t("journal.page.bybitSoon")}</span>
-        </div>
-        {/* 가상거래 (live) */}
+          <span className={cn("h-1.5 w-1.5 rounded-full", activeTab === "real" ? "bg-grade-a" : "bg-grade-a/50")} />
+          {t("journal.page.realTrade")}
+          <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-grade-a/90">
+            {realCount}
+          </span>
+        </Link>
+        {/* 가상거래 (paper) */}
         <Link
           href="/app/journal?mode=live"
           className={cn(
             "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
-            activeTab === "live"
+            activeTab === "paper"
               ? "border-ring bg-primary/10 font-bold"
               : "border-border bg-card font-medium text-muted-foreground hover:text-foreground",
           )}
         >
-          <Wallet className={cn("h-3.5 w-3.5", activeTab === "live" && "text-primary")} />
+          <Wallet className={cn("h-3.5 w-3.5", activeTab === "paper" && "text-primary")} />
           {t("journal.page.virtualTrade")}
           <span className="rounded-full bg-card-2 px-1.5 py-px font-mono text-[10px] tabular-nums text-primary">
-            {liveCount}
+            {paperCount}
           </span>
         </Link>
         {/* 백테스트 */}

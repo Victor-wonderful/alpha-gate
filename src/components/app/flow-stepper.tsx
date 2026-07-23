@@ -12,7 +12,7 @@ const STEPS: Array<{
   href: string;
 }> = [
   { key: "analyze", labelKey: "nav.analyze", descKey: "flow.analyzeDesc", href: "/app/analyze" },
-  { key: "trade", labelKey: "nav.trade", descKey: "flow.tradeDesc", href: "/app/trade" },
+  { key: "trade", labelKey: "flow.tradeLabel", descKey: "flow.tradeDesc", href: "/app/execute" },
   { key: "journal", labelKey: "nav.journal", descKey: "flow.journalDesc", href: "/app/journal" },
   { key: "dashboard", labelKey: "nav.performance", descKey: "flow.dashboardDesc", href: "/app/dashboard" },
 ];

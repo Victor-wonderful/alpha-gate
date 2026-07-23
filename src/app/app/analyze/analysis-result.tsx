@@ -131,7 +131,7 @@ function tradeFormHref(
   for (const key of MARKET_CHECK_KEYS) {
     if (scenario.marketAssessment[key]) p.set(`m_${key}`, "1");
   }
-  return `/app/trade?${p.toString()}`;
+  return `/app/execute?${p.toString()}`;
 }
 
 function evaluateScenario(

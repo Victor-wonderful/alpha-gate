@@ -2,6 +2,8 @@
 //   • ADX (J. Welles Wilder, "New Concepts in Technical Trading Systems", 1978)
 //   • KER — Kaufman Efficiency Ratio (Perry Kaufman, "Smarter Trading", 1995)
 //   • Choppiness Index (Bill Dreiss)
+//   • Trend Magic — CCI(sign) regime + ATR trailing stop (Kivanc Ozbilgic, MPL-2.0)
+//     ported from Pine v4 "Trend Magic [TM]". Direction engine, not strength.
 //
 // Used to classify market state (trending vs ranging) on a per-style basis.
 
@@ -205,4 +207,123 @@ export function classifyTrendComposite(candles: Candle[]): TrendVerdict {
     choppiness,
     composite: { classification, strength, trendVotes, rangeVotes },
   };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Trend Magic (Kivanc Ozbilgic) — CCI regime + ATR trailing stop.
+// A SuperTrend-family direction engine: sign(CCI) picks the regime,
+// an ATR-based line trails as a stop. Ported from Pine v4 for use as a
+// candidate/confluence direction signal alongside classifyTrendComposite.
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * CCI (Commodity Channel Index), series form, matching Pine `ta.cci`.
+ *   ma  = sma(src, period)
+ *   dev = mean(|src[j] − ma|) over the last `period` bars (ma fixed at current bar)
+ *   cci = (src − ma) / (0.015 · dev)
+ * Returns an array aligned to `values`; entries before warmup are NaN.
+ */
+export function computeCCI(values: number[], period = 20): number[] {
+  const out = new Array<number>(values.length).fill(NaN);
+  for (let i = period - 1; i < values.length; i++) {
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += values[j];
+    const ma = sum / period;
+    let dev = 0;
+    for (let j = i - period + 1; j <= i; j++) dev += Math.abs(values[j] - ma);
+    dev /= period;
+    out[i] = dev === 0 ? 0 : (values[i] - ma) / (0.015 * dev);
+  }
+  return out;
+}
+
+export interface TrendMagicPoint {
+  /** ATR trailing-stop line (support in up-regime, resistance in down-regime). */
+  magic: number;
+  cci: number;
+  direction: "up" | "down";
+  /** true if the regime flipped on this bar vs the previous. */
+  flip: boolean;
+}
+
+export interface TrendMagicOptions {
+  cciPeriod?: number; // Pine default 20
+  atrPeriod?: number; // Pine default 5
+  coeff?: number; // ATR multiplier, Pine default 1
+}
+
+/**
+ * Trend Magic series. Direction = sign(CCI): CCI ≥ 0 → "up", else "down".
+ * The magic line is a monotone ATR trail (raised in up-regime, lowered in down).
+ * Note: this engine is ALWAYS directional (never "range") — that is its trait
+ * and its weakness (it forces a side even in chop). Confluence gating compensates.
+ */
+export function computeTrendMagic(
+  candles: Candle[],
+  opts: TrendMagicOptions = {},
+): TrendMagicPoint[] {
+  const { cciPeriod = 20, atrPeriod = 5, coeff = 1 } = opts;
+  const n = candles.length;
+  const out: TrendMagicPoint[] = [];
+  if (n === 0) return out;
+
+  // ATR = sma(tr, atrPeriod). tr[0] = high−low (Pine convention on first bar).
+  const tr = new Array<number>(n);
+  tr[0] = candles[0].high - candles[0].low;
+  for (let i = 1; i < n; i++) {
+    const c = candles[i];
+    const pc = candles[i - 1].close;
+    tr[i] = Math.max(c.high - c.low, Math.abs(c.high - pc), Math.abs(c.low - pc));
+  }
+  const atr = new Array<number>(n).fill(NaN);
+  for (let i = atrPeriod - 1; i < n; i++) {
+    let s = 0;
+    for (let j = i - atrPeriod + 1; j <= i; j++) s += tr[j];
+    atr[i] = s / atrPeriod;
+  }
+
+  const cci = computeCCI(candles.map((c) => c.close), cciPeriod);
+
+  let prevMagic = 0; // Pine nz(MagicTrend[1]) starts at 0
+  let prevDir: "up" | "down" | null = null;
+  for (let i = 0; i < n; i++) {
+    const a = atr[i];
+    const cv = cci[i];
+    if (Number.isNaN(a) || Number.isNaN(cv)) {
+      // warmup — carry a neutral point so indexing stays aligned
+      out.push({ magic: prevMagic, cci: Number.isNaN(cv) ? 0 : cv, direction: "up", flip: false });
+      continue;
+    }
+    const upT = candles[i].low - a * coeff;
+    const downT = candles[i].high + a * coeff;
+    const dir: "up" | "down" = cv >= 0 ? "up" : "down";
+    const magic =
+      cv >= 0
+        ? upT < prevMagic
+          ? prevMagic
+          : upT
+        : downT > prevMagic
+          ? prevMagic
+          : downT;
+    const flip = prevDir !== null && dir !== prevDir;
+    out.push({ magic, cci: cv, direction: dir, flip });
+    prevMagic = magic;
+    prevDir = dir;
+  }
+  return out;
+}
+
+/**
+ * Convenience: Trend Magic direction on the last bar. Returns null if there is
+ * not enough data to warm up CCI (period + a few bars).
+ */
+export function classifyTrendMagic(
+  candles: Candle[],
+  opts: TrendMagicOptions = {},
+): "up" | "down" | null {
+  const period = opts.cciPeriod ?? 20;
+  if (candles.length < period + 2) return null;
+  const series = computeTrendMagic(candles, opts);
+  const last = series[series.length - 1];
+  return last ? last.direction : null;
 }

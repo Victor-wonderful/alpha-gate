@@ -8,6 +8,7 @@ import type { Locale } from "@/lib/i18n/config";
 
 export type StrategyId =
   | "trend_pullback"
+  | "structure_reversal"
   | "breakout"
   | "range_fade"
   | "reversal"
@@ -18,6 +19,7 @@ export type StrategyId =
 
 export const STRATEGY_LABELS: Record<StrategyId, string> = {
   trend_pullback: "추세 추종 (눌림목 진입)",
+  structure_reversal: "구조 전환 (CHoCH 후 되돌림)",
   breakout: "돌파 추종",
   range_fade: "박스권 매매",
   reversal: "추세 반전",
@@ -29,6 +31,7 @@ export const STRATEGY_LABELS: Record<StrategyId, string> = {
 
 export const STRATEGY_DESCRIPTIONS: Record<StrategyId, string> = {
   trend_pullback: "HTF 추세 방향으로 LTF 되돌림에서 진입",
+  structure_reversal: "스윙 구조 전환(CHoCH) 확정 후 되돌림에서 전환 방향 진입 (백테스트 검증: 1h·4h)",
   breakout: "주요 레벨 돌파 후 재테스트에서 진입",
   range_fade: "박스 상단에서 매도, 박스 하단에서 매수",
   reversal: "추세 종료 신호 후 역방향 진입 (드물고 위험)",

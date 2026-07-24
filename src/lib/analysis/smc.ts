@@ -269,6 +269,98 @@ export function detectLiquiditySweeps(
   return dedup;
 }
 
+/** Minimal candle shape detectStructureBreaks reads — binance Candle and the
+ *  lighter chart candles (once time→openTime mapped) both satisfy it. */
+export interface StructureCandle {
+  high: number;
+  low: number;
+  close: number;
+  openTime: number;
+}
+
+export interface StructureBreak {
+  /** Bar index where close crossed the pivot (the event bar). */
+  index: number;
+  time: number;
+  /** BOS = break with the prevailing structural trend (continuation).
+   *  CHoCH = break against it (character change / potential reversal). */
+  type: "BOS" | "CHoCH";
+  /** bullish = broke a swing high upward → long bias. bearish = broke a swing low downward. */
+  side: "bullish" | "bearish";
+  /** The pivot level that was broken. */
+  level: number;
+}
+
+/**
+ * BOS / CHoCH structure-break detection.
+ *
+ * Ported from LuxAlgo "Smart Money Concepts" (Pine v5, CC BY-NC-SA 4.0) — the
+ * pivot-leg + crossover logic only (all drawing/boxes/labels dropped).
+ *
+ * A pivot high is confirmed `swingSize` bars after the fact (its high exceeds the
+ * highest of the following `swingSize` bars); pivot low symmetric. When close then
+ * crosses the most recent confirmed pivot, that is a structure break — labeled BOS
+ * if it agrees with the current structural trend, CHoCH if it flips it.
+ *
+ *   swingSize = 50 ≈ swing structure (LuxAlgo default), 5 ≈ internal structure.
+ *
+ * No look-ahead: each event uses only bars at or before its index.
+ */
+export function detectStructureBreaks(candles: StructureCandle[], swingSize = 50): StructureBreak[] {
+  const n = candles.length;
+  const out: StructureBreak[] = [];
+  if (n < swingSize + 2) return out;
+
+  let leg = 0; // 0 = bearish leg, 1 = bullish leg (Pine BEARISH_LEG / BULLISH_LEG)
+  let swingHighLevel = NaN;
+  let swingHighCrossed = true;
+  let swingLowLevel = NaN;
+  let swingLowCrossed = true;
+  let trendBias = 0; // +1 bullish, -1 bearish, 0 none
+
+  for (let i = 0; i < n; i++) {
+    // Pivot detection: high[ref] vs highest of the following swingSize bars.
+    if (i >= swingSize) {
+      const ref = i - swingSize;
+      let hh = -Infinity;
+      let ll = Infinity;
+      for (let j = i - swingSize + 1; j <= i; j++) {
+        if (candles[j].high > hh) hh = candles[j].high;
+        if (candles[j].low < ll) ll = candles[j].low;
+      }
+      let newLeg = leg;
+      if (candles[ref].high > hh) newLeg = 0; // pivot high confirmed → bearish leg
+      else if (candles[ref].low < ll) newLeg = 1; // pivot low confirmed → bullish leg
+      const change = newLeg - leg;
+      if (change === 1) {
+        swingLowLevel = candles[ref].low;
+        swingLowCrossed = false;
+      } else if (change === -1) {
+        swingHighLevel = candles[ref].high;
+        swingHighCrossed = false;
+      }
+      leg = newLeg;
+    }
+
+    // Structure break: close crossing the most recent confirmed pivot (once each).
+    if (i >= 1) {
+      const prevClose = candles[i - 1].close;
+      const close = candles[i].close;
+      if (!Number.isNaN(swingHighLevel) && !swingHighCrossed && prevClose <= swingHighLevel && close > swingHighLevel) {
+        out.push({ index: i, time: candles[i].openTime, type: trendBias === -1 ? "CHoCH" : "BOS", side: "bullish", level: swingHighLevel });
+        trendBias = 1;
+        swingHighCrossed = true;
+      }
+      if (!Number.isNaN(swingLowLevel) && !swingLowCrossed && prevClose >= swingLowLevel && close < swingLowLevel) {
+        out.push({ index: i, time: candles[i].openTime, type: trendBias === 1 ? "CHoCH" : "BOS", side: "bearish", level: swingLowLevel });
+        trendBias = -1;
+        swingLowCrossed = true;
+      }
+    }
+  }
+  return out;
+}
+
 /** Simple trend label from last 50 closes via linear slope sign + EMA cross. */
 export function classifyTrend(candles: Candle[]): "up" | "down" | "range" {
   if (candles.length < 50) return "range";

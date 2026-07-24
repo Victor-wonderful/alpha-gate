@@ -4,6 +4,7 @@ import { MAX_LADDER_TIERS } from "@/lib/ladder";
 import type { StrategyResult, StrategyId } from "./strategy";
 import { STYLE_STANDARDS } from "./standards";
 import { computeMarketAssessment } from "./market-assessment";
+import { detectStructureBreaks } from "./smc";
 
 /**
  * 코드 전용 시나리오 생성기 — AI(Strategy/Scenario) 미가용 시 폴백.
@@ -48,10 +49,122 @@ function collectStructuralLevels(snapshot: AnalysisSnapshot, direction: "long" |
   return out.filter((x) => Number.isFinite(x) && x > 0);
 }
 
+// 검증된 구조 전환 셋업 파라미터 — 백테스트(backtest-choch-retest*)에 정확히 맞춤.
+const CHOCH_RECENT_BARS = 3; // 이 봉 수 이내에 발생한 CHoCH만 "활성"(막 전환).
+const STRUCTURE_STOP_MULT = 1.5; // 손절폭 = clamp(1.5×ATR%, 스타일밴드).
+const STRUCTURE_RETRACE_ATR = 0.3; // 얕은 되돌림 = 0.3×ATR (4h/swing에서 최적).
+const CHOCH_MIN_GAP_PCT = 0.15; // 되돌림 최소 갭(즉시체결·트리거 가드 회피).
+
+/**
+ * 스윙 구조 전환(CHoCH) 전용 시나리오 — 백테스트로 검증된 유일한 신호(1h·4h).
+ * 최근 CHoCH가 있으면 trend_pullback보다 우선한다. 진입 되돌림 깊이는 검증 결과대로:
+ *   day(1h) = 돌파레벨 재테스트(+0.118R), swing(4h) = 얕은 ATR 되돌림(+0.109R).
+ * scalp(15m 전멸)·position(미검증)은 대상 아님 → null 반환(trend_pullback로 폴백).
+ */
+function buildStructureReversal(
+  snapshot: AnalysisSnapshot,
+): { strategy: StrategyResult; report: AnalysisReport } | null {
+  const style = snapshot.style;
+  if (style !== "day" && style !== "swing") return null;
+
+  const raw = snapshot.mtfChart?.candles;
+  if (!raw || raw.length < 60) return null;
+  const candles = raw.map((c) => ({ openTime: c.time * 1000, high: c.high, low: c.low, close: c.close }));
+  const chochs = detectStructureBreaks(candles, 50).filter((b) => b.type === "CHoCH");
+  const last = chochs[chochs.length - 1];
+  if (!last) return null;
+  // 너무 오래된 전환은 무시(막 전환한 신호만 진입 자격).
+  if (last.index < candles.length - 1 - CHOCH_RECENT_BARS) return null;
+
+  const std = STYLE_STANDARDS[style];
+  const price = snapshot.ticker.last;
+  const direction: "long" | "short" = last.side === "bullish" ? "long" : "short";
+  const atrPct =
+    snapshot.atr?.find((a) => a.role === "MTF")?.pctOfPrice ??
+    snapshot.atr?.find((a) => a.role === "LTF")?.pctOfPrice ??
+    snapshot.atr?.[0]?.pctOfPrice ??
+    0;
+  const atrAbs = (atrPct / 100) * price;
+
+  // 진입 되돌림: day=돌파레벨 재테스트, swing=얕은 ATR 되돌림. (검증된 TF별 최적)
+  let entry: number;
+  if (style === "day") {
+    entry = last.level;
+    const correctSide = direction === "long" ? entry < price : entry > price;
+    if (!correctSide) entry = direction === "long" ? price - STRUCTURE_RETRACE_ATR * atrAbs : price + STRUCTURE_RETRACE_ATR * atrAbs;
+  } else {
+    entry = direction === "long" ? price - STRUCTURE_RETRACE_ATR * atrAbs : price + STRUCTURE_RETRACE_ATR * atrAbs;
+  }
+  // 되돌림 폭이 너무 얕으면(즉시체결 위험) 최소 갭 강제.
+  if ((Math.abs(entry - price) / price) * 100 < CHOCH_MIN_GAP_PCT) {
+    entry = direction === "long" ? price * (1 - CHOCH_MIN_GAP_PCT / 100) : price * (1 + CHOCH_MIN_GAP_PCT / 100);
+  }
+
+  const stopPct = clamp(STRUCTURE_STOP_MULT * atrPct, std.stopPct.min, std.stopPct.max);
+  const stop = direction === "long" ? entry * (1 - stopPct / 100) : entry * (1 + stopPct / 100);
+  const targetPct = stopPct * std.rr.min;
+  const target = direction === "long" ? entry * (1 + targetPct / 100) : entry * (1 - targetPct / 100);
+
+  const vp = snapshot.volumeProfile;
+  const keyLevels = [
+    { label: "POC", price: vp.poc, note: "거래량 중심" },
+    { label: "VAH", price: vp.vah, note: "밸류 상단" },
+    { label: "VAL", price: vp.val, note: "밸류 하단" },
+  ].filter((l) => Number.isFinite(l.price) && l.price > 0);
+
+  const dirWord = direction === "long" ? "롱" : "숏";
+  const chWord = direction === "long" ? "상승 전환(CHoCH)" : "하락 전환(CHoCH)";
+  const entryNote = style === "day" ? "돌파 레벨 재테스트" : "얕은 되돌림(ATR×0.3)";
+  const gapPct = ((Math.abs(entry - price) / price) * 100).toFixed(2);
+
+  const scenario: AnalysisReport["scenarios"][number] = {
+    name: `구조 전환 ${dirWord} (CHoCH · 코드)`,
+    direction,
+    strategyHint: "structure_reversal" as StrategyId,
+    entryType: "pending",
+    orderHint: "limit",
+    trigger: `스윙 구조 ${chWord} 확정 — ${entryNote} ${round(entry)}(현재가 대비 ${gapPct}%) 도달 시 지정가 진입. 시장가 추격 대신 되돌림을 기다립니다. 반대 방향 CHoCH 발생 시 예약을 취소하세요.`,
+    entryZone: { low: round(entry * 0.999), high: round(entry * 1.001) },
+    invalidation: round(stop),
+    target: round(target),
+    note: `코드 분석 — 스윙 구조(50봉) ${chWord} 후 ${entryNote} 진입. 손절 ATR×${STRUCTURE_STOP_MULT} 밴드, 목표 R:R ${std.rr.min}. 백테스트 검증된 셋업(1h·4h swing/CHoCH).`,
+    marketAssessment: computeMarketAssessment(snapshot, direction, entry),
+  };
+
+  const report: AnalysisReport = {
+    summary: `코드 분석: ${snapshot.symbol} ${snapshot.styleLabel} — 스윙 구조 ${chWord}. 백테스트로 검증된 구조 전환 셋업입니다.`,
+    marketTrend: { direction: direction === "long" ? "up" : "down", strength: "moderate", note: chWord },
+    structure: {
+      htf: `스윙 구조 ${chWord}`,
+      ltf: `현재가 ${round(price)} · 전환 레벨 ${round(last.level)}`,
+      alignment: direction === "long" ? "aligned_up" : "aligned_down",
+    },
+    keyLevels,
+    flow: { bias: "neutral", note: `구조 전환 ${dirWord} 방향` },
+    scenarios: [scenario],
+    actionNow: `스윙 구조 ${chWord}이 확정됐습니다. 시장가 추격 대신 ${entryNote} ${round(entry)} 되돌림 지정가로 대기하고, 반대 CHoCH가 뜨면 취소하세요.`,
+    warnings: ["⚙️ 코드 시나리오(구조 전환) — 진입가·손절은 검증된 규칙 기반입니다. AI 서술은 없습니다."],
+  };
+
+  const strategy: StrategyResult = {
+    primary: "structure_reversal",
+    direction,
+    confidence: 0.6,
+    reasoning: `스윙 구조 ${chWord} 확정 → 되돌림 진입. 백테스트로 검증된 셋업(1h·4h).`,
+    rejected: [],
+  };
+
+  return { strategy, report };
+}
+
 export function buildCodeReport(snapshot: AnalysisSnapshot): {
   strategy: StrategyResult;
   report: AnalysisReport;
 } {
+  // 검증된 구조 전환(CHoCH) 신호가 최근이면 전용 시나리오 우선 (day/swing만).
+  const sr = buildStructureReversal(snapshot);
+  if (sr) return sr;
+
   const price = snapshot.ticker.last;
   const style = snapshot.style;
   const std = STYLE_STANDARDS[style];

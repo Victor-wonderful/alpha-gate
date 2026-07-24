@@ -205,6 +205,7 @@ async function placeBotLadder(
     accountSize: number;
     expiresAt: string;
     marketChecks: Record<string, boolean>;
+    strategyHint: string;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const built = buildLadder({
@@ -245,7 +246,7 @@ async function placeBotLadder(
         position_quantity: t.quantity,
         market_checks: args.marketChecks,
         psych_checks: {},
-        context_flags: { leverage: args.leverage, bot: true, limitOrder: true, ladder: isLadder, autoStyle: args.style },
+        context_flags: { leverage: args.leverage, bot: true, limitOrder: true, ladder: isLadder, autoStyle: args.style, strategy: args.strategyHint },
         pre_grade: args.graded.grade,
         pre_score: args.graded.score,
         pre_score_breakdown: args.graded.reasons ?? [],
@@ -528,6 +529,7 @@ export async function runAutoTradeForUser(
       accountSize,
       expiresAt,
       marketChecks: sc.marketAssessment,
+      strategyHint: sc.strategyHint ?? "trend_pullback",
     });
     if (!placedRes.ok) {
       decisions.push({ symbol, direction, grade: graded.grade, entry, stop, target, placed: false, skipped: placedRes.error ?? "발주 실패" });

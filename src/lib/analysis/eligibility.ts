@@ -20,6 +20,8 @@ import type { StrategyId } from "./strategy";
  */
 export const STRATEGY_STYLE_ELIGIBILITY: Record<StrategyId, TradingStyle[]> = {
   trend_pullback: ["scalp", "day", "swing", "position"],
+  // structure_reversal: 스윙 CHoCH 되돌림. 백테스트 검증 TF만(1h·4h). scalp 15m 전멸, position 미검증.
+  structure_reversal: ["day", "swing"],
   breakout: ["scalp", "day", "swing", "position"],
   range_fade: ["scalp", "day", "swing", "position"],
   reversal: ["scalp", "day", "swing", "position"],
